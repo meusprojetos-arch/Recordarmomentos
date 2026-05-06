@@ -1,0 +1,86 @@
+.banner {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-top: 14px;
+  margin-bottom: 16px;
+  border: 1.5px solid rgba(255, 180, 0, 0.3);
+}
+
+.bannerContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.bannerIcon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.bannerText { flex: 1; }
+
+.bannerTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cinza);
+  line-height: 1.4;
+}
+
+.bannerSub {
+  font-size: 12px;
+  color: var(--cinza-suave);
+  margin-top: 2px;
+}
+
+.bannerBtn {
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--verde);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.bannerBtn:active { transform: scale(0.97); }
+
+.dismissBtn {
+  width: 100%;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: var(--cinza-suave);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+/* Versao minimal (inline) */
+.minimal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bege-claro);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 180, 0, 0.2);
+}
+
+.minimalText {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cinza);
+}
+
+.minimalArrow {
+  font-size: 16px;
+  color: var(--cinza-suave);
+}

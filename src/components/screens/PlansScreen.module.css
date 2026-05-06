@@ -1,0 +1,190 @@
+.screen {
+  height: 100%;
+  overflow-y: auto;
+  background: var(--bege);
+  padding: 24px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.header {
+  margin-bottom: 20px;
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: var(--cinza-suave);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  padding: 4px 0;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--cinza);
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--cinza-suave);
+  margin-top: 4px;
+}
+
+/* Uso de armazenamento */
+.usageCard {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.usageTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cinza-suave);
+  margin-bottom: 8px;
+}
+.usageBar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.usageFill {
+  height: 100%;
+  background: var(--verde);
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.usageText {
+  font-size: 12px;
+  color: var(--cinza-suave);
+}
+
+/* Plano atual */
+.currentCard {
+  background: linear-gradient(135deg, var(--verde), var(--dourado));
+  border-radius: var(--radius-md);
+  padding: 20px;
+  color: white;
+  margin-bottom: 24px;
+}
+.currentBadge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.currentName {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.currentPrice {
+  font-size: 14px;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+
+/* Lista de planos */
+.planList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.planCard {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+  border: 2px solid transparent;
+  transition: var(--transition-fast);
+}
+.planCardActive {
+  border-color: var(--verde);
+}
+
+.planHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.planName {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--cinza);
+}
+.planPrice {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--verde);
+}
+.planPeriod {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--cinza-suave);
+}
+.planStorage {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--azul);
+  margin-bottom: 10px;
+}
+
+.planFeatures {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.planFeature {
+  font-size: 13px;
+  color: var(--cinza-suave);
+  padding: 3px 0;
+}
+.planFeature::before {
+  content: '✓ ';
+  color: var(--verde);
+  font-weight: 700;
+}
+
+.planBtn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--verde);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.planBtn:active { transform: scale(0.97); }
+.planBtn:disabled { opacity: 0.6; }
+
+.planActive {
+  display: block;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--verde);
+}
+
+.disclaimer {
+  font-size: 12px;
+  color: var(--cinza-suave);
+  text-align: center;
+  line-height: 1.5;
+  padding-bottom: 24px;
+}

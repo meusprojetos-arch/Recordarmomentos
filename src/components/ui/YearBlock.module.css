@@ -1,0 +1,98 @@
+.block {
+  margin-top: 24px;
+  animation: fadeIn 0.4s ease;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.year {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--verde);
+}
+
+.countBadge {
+  font-size: 11px;
+  color: var(--verde);
+  font-weight: 600;
+  background: var(--verde-light);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+/* Grade 3 colunas */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 100px);
+  gap: 3px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.cell {
+  background: var(--bege);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: opacity 0.15s;
+}
+
+.cell:active { opacity: 0.85; }
+
+.cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Célula grande: ocupa 2x2 */
+.big {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.cellIcon { font-size: 30px; }
+
+.cellOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.55));
+  padding: 18px 8px 8px;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+/* Célula de overflow */
+.overflow {
+  background: var(--verde);
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.overflowNum {
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+}
+
+.overflowSub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.75);
+  font-weight: 600;
+}

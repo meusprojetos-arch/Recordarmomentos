@@ -1,0 +1,627 @@
+/* TempoScreen — Galeria de Fotos e Vídeos */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--bege);
+}
+
+.scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 100px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Busca ── */
+.searchBar {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  box-shadow: var(--shadow-sm);
+  margin: 16px 0 0;
+}
+
+.searchInput {
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--cinza);
+  flex: 1;
+  background: transparent;
+  min-width: 0;
+}
+
+.searchInput::placeholder { color: var(--cinza-suave); }
+
+.searchClear {
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: var(--cinza-suave);
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* ── Filtros de tipo ── */
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.filters::-webkit-scrollbar { display: none; }
+
+.chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  background: var(--bege-claro);
+  color: var(--cinza-suave);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+  transition: var(--transition-fast);
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+.chip:active { transform: scale(0.95); }
+.chipActive {
+  background: var(--verde);
+  color: white;
+  border-color: var(--verde);
+}
+.chipIcon {
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* ── Filtro de data ── */
+.dateFilterRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.dateFilterBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--cinza-suave);
+  background: transparent;
+  color: var(--cinza-suave);
+  font-family: var(--font-sans);
+  transition: var(--transition-fast);
+}
+.dateFilterBtn:active { transform: scale(0.96); }
+.dateFilterBtnActive {
+  border-color: var(--verde);
+  color: var(--verde);
+  background: var(--verde-light);
+}
+
+.dateFilterClear {
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: var(--cinza-suave);
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.datePicker {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 16px;
+  margin-top: 8px;
+  animation: fadeIn 0.2s ease;
+}
+
+.datePickerSection {
+  margin-bottom: 12px;
+}
+
+.datePickerLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cinza-suave);
+  margin-bottom: 8px;
+}
+
+.datePickerOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dateOption {
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  background: var(--bege);
+  color: var(--cinza);
+  font-family: var(--font-sans);
+  transition: var(--transition-fast);
+}
+.dateOption:active { transform: scale(0.95); }
+.dateOptionActive {
+  background: var(--verde);
+  color: white;
+  border-color: var(--verde);
+}
+
+.datePickerClose {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: var(--bege);
+  color: var(--cinza-suave);
+  font-family: var(--font-sans);
+  margin-top: 4px;
+}
+
+/* ── Resultados de busca ── */
+.searchResults {
+  margin-top: 16px;
+  background: var(--bege-claro);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  animation: fadeIn 0.3s ease;
+}
+
+.searchCount {
+  font-size: 12px;
+  color: var(--cinza-suave);
+  padding: 12px 16px 8px;
+  font-weight: 600;
+}
+
+.searchItem {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.searchItem:hover { background: rgba(0,0,0,0.03); }
+
+.searchThumb {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--verde-light);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.searchThumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.searchTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cinza);
+}
+
+.searchDate {
+  font-size: 12px;
+  color: var(--cinza-suave);
+  margin-top: 2px;
+}
+
+/* ── Barra de seleção múltipla ── */
+.selectionBar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--verde);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-md);
+  animation: slideDown 0.2s ease;
+}
+
+.selectionCount {
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+}
+
+.selectionActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.selectionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid white;
+  background: transparent;
+  color: white;
+  font-family: var(--font-sans);
+  transition: var(--transition-fast);
+}
+.selectionBtn:disabled { opacity: 0.5; cursor: default; }
+.selectionBtn:not(:disabled):active { transform: scale(0.95); }
+
+.selectionBtnCancel {
+  padding: 7px 12px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  font-family: var(--font-sans);
+}
+.selectionBtnCancel:active { transform: scale(0.95); }
+
+/* ── Empty state ── */
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+  font-size: 48px;
+}
+.emptyState p {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cinza);
+  margin-top: 12px;
+  font-family: var(--font-serif);
+}
+.emptySub {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: var(--cinza-suave) !important;
+  font-family: var(--font-sans) !important;
+  margin-top: 6px !important;
+}
+
+/* ── Blocos por período ── */
+.yearBlock {
+  margin-top: 24px;
+}
+
+.yearTitle {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cinza);
+  margin-bottom: 10px;
+}
+
+.yearCount {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--cinza-suave);
+}
+
+/* ── Grid 3 colunas ── */
+.yearGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.memThumb {
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--verde-light);
+  cursor: pointer;
+  position: relative;
+  transition: opacity 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.memThumb:active { opacity: 0.75; }
+
+.memThumbSelected {
+  outline: 3px solid var(--verde);
+  outline-offset: -3px;
+}
+
+.thumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.thumbPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+}
+
+.thumbTitle {
+  font-size: 9px;
+  color: var(--cinza-suave);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* Ícone de play no vídeo */
+.playOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+
+/* Badge de destaque */
+.highlightBadge {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 22px;
+  height: 22px;
+  background: rgba(0,0,0,0.45);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Círculo de seleção */
+.selectCircle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid white;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.selectCircleActive {
+  background: var(--verde);
+  border-color: var(--verde);
+}
+
+/* ── Viewer fullscreen ── */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.viewerBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.95);
+}
+
+.viewerMedia {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  max-height: calc(100vh - 160px);
+  padding: 60px 0 80px;
+}
+
+.viewerImg {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+
+.viewerAudio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.audioPlayer {
+  width: 280px;
+  max-width: 90vw;
+}
+
+/* Botões de navegação lateral */
+.navBtn {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.navBtn:hover { background: rgba(255,255,255,0.25); }
+.navBtn:active { background: rgba(255,255,255,0.35); }
+
+.navBtnLeft  { left: 12px; }
+.navBtnRight { right: 12px; }
+
+/* Barra superior do viewer */
+.viewerTopBar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+}
+
+.viewerTopActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.viewerIconBtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.viewerIconBtn:hover  { background: rgba(255,255,255,0.22); }
+.viewerIconBtn:active { background: rgba(255,255,255,0.35); }
+
+.viewerCounter {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+}
+
+/* Painel de info inferior */
+.viewerInfo {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 20px 20px;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+}
+
+.viewerTitle {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+}
+
+.viewerDate {
+  font-size: 12px;
+  color: rgba(255,255,255,0.65);
+  margin-top: 3px;
+}
+
+.viewerDesc {
+  font-size: 14px;
+  color: rgba(255,255,255,0.85);
+  margin-top: 8px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+/* ── Tags ── */
+.detailTags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.detailTag {
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  background: rgba(255,255,255,0.2);
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+
+/* ── Animações ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

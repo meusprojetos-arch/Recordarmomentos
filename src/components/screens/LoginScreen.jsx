@@ -1,0 +1,79 @@
+/**
+ * LoginScreen — Tela de entrar na conta
+ */
+import React, { useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext.jsx'
+import toast from 'react-hot-toast'
+import styles from './AuthScreen.module.css'
+
+export default function LoginScreen({ onGoSignup, onGoWelcome }) {
+  const { login } = useAuth()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!email || !password) {
+      toast.error('Preencha todos os campos')
+      return
+    }
+    setLoading(true)
+    try {
+      await login(email, password)
+      toast.success('Bem-vindo de volta!')
+    } catch (err) {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        toast.error('Email ou senha incorretos')
+      } else if (err.code === 'auth/too-many-requests') {
+        toast.error('Muitas tentativas. Tente mais tarde.')
+      } else {
+        toast.error('Erro ao entrar. Tente novamente.')
+      }
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.content}>
+        <button className={styles.backBtn} onClick={onGoWelcome}>← Voltar</button>
+        <h1 className={styles.title}>Entrar</h1>
+        <p className={styles.subtitle}>Acesse suas memorias</p>
+
+        <form className={styles.form} onSubmit={handleSubmit}>
+          <div className={styles.field}>
+            <label className={styles.label}>Email</label>
+            <input
+              type="email"
+              className={styles.input}
+              placeholder="seu@email.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              autoComplete="email"
+            />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>Senha</label>
+            <input
+              type="password"
+              className={styles.input}
+              placeholder="Sua senha"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
+          <button type="submit" className={styles.btnSubmit} disabled={loading}>
+            {loading ? 'Entrando...' : 'Entrar'}
+          </button>
+        </form>
+
+        <p className={styles.switchText}>
+          Nao tem conta?{' '}
+          <button className={styles.switchBtn} onClick={onGoSignup}>Criar conta</button>
+        </p>
+      </div>
+    </div>
+  )
+}

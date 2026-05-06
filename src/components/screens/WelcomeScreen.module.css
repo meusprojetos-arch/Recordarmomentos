@@ -1,0 +1,107 @@
+.container {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1A1614;
+  padding: 24px;
+}
+
+.content {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+}
+
+.logoArea {
+  text-align: center;
+}
+
+.icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 36px;
+  font-weight: 600;
+  color: var(--verde);
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: #A89F8C;
+  line-height: 1.5;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255,255,255,0.06);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  backdrop-filter: blur(8px);
+}
+
+.featureIcon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.feature p {
+  font-size: 14px;
+  color: #D4CFC5;
+  line-height: 1.4;
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.btnPrimary {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--verde);
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btnPrimary:active {
+  transform: scale(0.97);
+}
+
+.btnSecondary {
+  width: 100%;
+  padding: 16px;
+  border: 2px solid var(--verde);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--verde);
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: var(--transition);
+}

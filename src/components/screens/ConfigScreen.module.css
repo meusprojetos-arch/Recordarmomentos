@@ -1,0 +1,495 @@
+/* =====================================================
+   ConfigScreen — Tela de Configurações
+   ===================================================== */
+
+/* ── Wrapper principal ── */
+.screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  background: var(--bege);
+}
+
+/* ── Body (scroll) ── */
+.body {
+  flex: 1;
+  padding: 20px 16px;
+}
+
+.scroll {
+  flex: 1;
+  padding: 20px 16px 32px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: var(--verde);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  padding: 8px 0;
+  margin-bottom: 8px;
+}
+
+/* ── Título de seção ── */
+.sectionTitle {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--cinza);
+  margin: 24px 0 10px;
+  letter-spacing: -0.2px;
+}
+
+/* ── Card genérico ── */
+.card {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 4px;
+}
+
+/* Card sem padding interno (para rows com separador) */
+.cardNoPad {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ══ 1. Editar Perfil ══ */
+
+.avatarWrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.avatarCircle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--verde-light);
+  border: 3px solid var(--verde);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(255, 107, 53, 0.18);
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatarDefault {
+  filter: brightness(0) saturate(100%) invert(45%) sepia(80%) saturate(400%) hue-rotate(340deg);
+  width: 48px !important;
+  height: 48px !important;
+}
+
+.avatarChangeBtn {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--verde);
+  color: var(--verde);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  background: transparent;
+}
+
+.avatarChangeBtn:active {
+  background: var(--verde-light);
+}
+
+.hidden {
+  display: none;
+}
+
+.fieldLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cinza-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 6px;
+  margin-top: 14px;
+}
+
+.input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid rgba(255, 107, 53, 0.2);
+  border-radius: var(--radius-sm);
+  background: var(--bege);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--cinza);
+  outline: none;
+  transition: var(--transition-fast);
+}
+
+.input:focus {
+  border-color: var(--verde);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+}
+
+.textarea {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid rgba(255, 107, 53, 0.2);
+  border-radius: var(--radius-sm);
+  background: var(--bege);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--cinza);
+  outline: none;
+  resize: none;
+  line-height: 1.5;
+  transition: var(--transition-fast);
+}
+
+.textarea:focus {
+  border-color: var(--verde);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+}
+
+.saveBtn {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  padding: 13px;
+  background: var(--verde);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  box-shadow: 0 2px 12px rgba(255, 107, 53, 0.28);
+}
+
+.saveBtn:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ══ 2. Armazenamento ══ */
+
+.storageLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cinza);
+  margin-bottom: 4px;
+}
+
+.storageLabel img {
+  filter: brightness(0) saturate(100%) invert(45%) sepia(80%) saturate(400%) hue-rotate(340deg);
+}
+
+.storageValues {
+  font-size: 12px;
+  color: var(--cinza-suave);
+  margin-bottom: 8px;
+}
+
+.progressTrack {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 107, 53, 0.12);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--verde);
+  border-radius: var(--radius-full);
+  transition: width 0.5s ease;
+}
+
+.progressCloud {
+  background: var(--azul);
+}
+
+.storageDivider {
+  height: 1px;
+  background: rgba(255, 107, 53, 0.1);
+  margin: 14px 0;
+}
+
+/* ══ 3 & 4. Rows (Privacidade / Backup) ══ */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-sans);
+}
+
+.row:active {
+  background: rgba(255, 107, 53, 0.04);
+}
+
+.rowDivider {
+  height: 1px;
+  background: rgba(255, 107, 53, 0.08);
+  margin: 0 16px;
+}
+
+.rowIconWrap {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rowIconWrap img {
+  filter: brightness(0) saturate(100%) invert(45%) sepia(80%) saturate(400%) hue-rotate(340deg);
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowLabel {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cinza);
+}
+
+.rowSub {
+  font-size: 12px;
+  color: var(--cinza-suave);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Toggle ── */
+.toggle {
+  width: 46px;
+  height: 26px;
+  background: var(--verde);
+  border-radius: 13px;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  top: 3px;
+  right: 3px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: right 0.2s, left 0.2s;
+}
+
+.toggleOff {
+  background: #DDD;
+}
+
+.toggleOff::after {
+  right: auto;
+  left: 3px;
+}
+
+/* ── Chevron ── */
+.chevron {
+  font-size: 22px;
+  color: var(--verde);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ── Select de frequência ── */
+.freqSelect {
+  padding: 7px 10px;
+  border: 1.5px solid rgba(255, 107, 53, 0.25);
+  border-radius: var(--radius-sm);
+  background: var(--bege);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cinza);
+  cursor: pointer;
+  outline: none;
+  flex-shrink: 0;
+  transition: var(--transition-fast);
+}
+
+.freqSelect:focus {
+  border-color: var(--verde);
+}
+
+/* ══ 5. Termos ══ */
+
+.actionRow {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  margin-bottom: 4px;
+  border: none;
+  width: 100%;
+  font-family: var(--font-sans);
+  text-align: left;
+  transition: var(--transition-fast);
+  overflow: hidden;
+}
+
+.actionRow .rowIconWrap,
+.actionRow .rowText,
+.actionRow .chevron {
+  /* inherit row inner layout */
+}
+
+.actionRow:active {
+  transform: scale(0.99);
+  box-shadow: none;
+}
+
+/* Padding inside actionRow via padding on the flex container */
+.actionRow {
+  padding: 14px 16px;
+}
+
+/* ══ 6. Zona de Perigo ══ */
+
+.dangerDesc {
+  font-size: 13px;
+  color: var(--cinza-suave);
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+
+.dangerBtn {
+  width: 100%;
+  padding: 13px;
+  border: 2px solid var(--erro);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--erro);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.dangerBtn:active {
+  background: rgba(255, 61, 87, 0.06);
+  transform: scale(0.99);
+}
+
+/* ══ 7. FAQ ══ */
+
+.faqList {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.faqItem {
+  border-bottom: 1px solid rgba(255, 107, 53, 0.08);
+}
+
+.faqItem:last-child {
+  border-bottom: none;
+}
+
+.faqQuestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cinza);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  line-height: 1.45;
+}
+
+.faqQuestion:active {
+  background: rgba(255, 107, 53, 0.04);
+}
+
+.faqArrow {
+  font-size: 22px;
+  color: var(--verde);
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: transform 0.22s ease;
+  display: inline-block;
+}
+
+.faqArrowOpen {
+  transform: rotate(90deg);
+}
+
+.faqAnswer {
+  font-size: 13px;
+  color: var(--cinza-suave);
+  line-height: 1.6;
+  padding: 0 16px 14px;
+  animation: fadeIn 0.22s ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

@@ -1,0 +1,390 @@
+/* =============================================
+   FeedScreen — Instagram/Facebook-style feed
+   ============================================= */
+
+/* ── Screen shell ── */
+.screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--bege);
+}
+
+.scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px 32px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Compose button ── */
+.composeBtn {
+  width: 100%;
+  padding: 14px 18px;
+  border: 2px dashed var(--verde);
+  border-radius: var(--radius-md);
+  background: var(--verde-light);
+  color: var(--verde);
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  margin-bottom: 14px;
+  transition: var(--transition-fast);
+  text-align: left;
+  letter-spacing: 0.1px;
+}
+.composeBtn:active      { transform: scale(0.98); }
+.composeBtnActive       { border-style: solid; opacity: 0.85; }
+
+/* ── Compose area ── */
+.composeArea {
+  background: var(--bege-claro);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-md);
+  animation: fadeIn 0.2s ease;
+}
+
+.composeRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.composeAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--verde);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.composeInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  font-family: var(--font-sans);
+  color: var(--cinza);
+  caret-color: var(--verde);
+  background: transparent;
+  resize: none;
+  line-height: 1.65;
+  min-height: 90px;
+}
+.composeInput::placeholder { color: #B8B2A8; }
+
+.composeFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+}
+
+.charCount {
+  font-size: 12px;
+  color: var(--cinza-suave);
+  font-family: var(--font-sans);
+}
+
+.postBtn {
+  padding: 10px 22px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--verde);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  box-shadow: 0 2px 8px rgba(255,107,53,0.3);
+}
+.postBtn:disabled        { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+.postBtn:not(:disabled):active { transform: scale(0.96); }
+
+/* ── Skeleton loading ── */
+.skeletonWrap { display: flex; flex-direction: column; gap: 14px; }
+
+.skeleton {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  padding: 18px 16px;
+  box-shadow: var(--shadow-sm);
+  animation: pulse 1.4s ease infinite;
+}
+
+.skeletonHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.skeletonAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.08);
+  flex-shrink: 0;
+}
+
+.skeletonMeta { flex: 1; }
+
+.skeletonLine {
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: rgba(0,0,0,0.08);
+}
+
+/* ── Empty state ── */
+.empty {
+  text-align: center;
+  padding: 56px 24px;
+  animation: fadeIn 0.4s ease;
+}
+.emptyIcon  { font-size: 52px; display: block; margin-bottom: 14px; }
+.emptyTitle {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--cinza);
+  margin-bottom: 8px;
+}
+.emptySub {
+  font-size: 14px;
+  color: var(--cinza-suave);
+  line-height: 1.6;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+/* ── Post card ── */
+.postCard {
+  background: var(--bege-claro);
+  border-radius: var(--radius-lg);
+  padding: 18px 16px 14px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  animation: fadeIn 0.3s ease;
+  outline: none;
+}
+.postCard:hover  { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.postCard:active { transform: scale(0.99); }
+
+/* ── Post header ── */
+.postHeader {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.postAvatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--verde) 0%, var(--verde-suave) 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(255,107,53,0.22);
+}
+
+.postMeta    { flex: 1; min-width: 0; }
+.postAuthor  {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cinza);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.postDate    {
+  font-size: 11.5px;
+  color: var(--cinza-suave);
+  margin-top: 2px;
+}
+
+/* ── Post content ── */
+.postText {
+  font-size: 15px;
+  color: var(--cinza);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-sans);
+}
+
+.readMore {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--verde);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── Post actions ── */
+.postActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0,0,0,0.055);
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1.5px solid rgba(0,0,0,0.09);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--cinza-suave);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.actionBtn:active           { transform: scale(0.95); }
+.actionBtnLiked             { border-color: #FF3D57; color: #FF3D57; background: #FFF0F2; }
+
+.actionIcon  { font-size: 15px; line-height: 1; }
+.actionLabel { font-size: 13px; }
+
+.shareBtn {
+  margin-left: auto;
+  border-color: var(--verde);
+  color: var(--verde);
+}
+.shareBtn:active { background: var(--verde-light); }
+
+/* ── Modal overlay ── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.18s ease;
+}
+
+/* ── Modal sheet ── */
+.modal {
+  width: 100%;
+  max-width: 520px;
+  max-height: 82vh;
+  background: var(--bege-claro);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Modal gradient header ── */
+.modalHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 18px 16px;
+  background: linear-gradient(135deg, var(--verde) 0%, var(--verde-suave) 100%);
+  flex-shrink: 0;
+}
+
+.modalAvatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 2px solid rgba(255,255,255,0.5);
+}
+
+.modalMeta   { flex: 1; min-width: 0; }
+.modalAuthor {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+.modalDate   {
+  font-size: 12px;
+  color: rgba(255,255,255,0.82);
+  margin-top: 2px;
+}
+
+.modalClose {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: var(--transition-fast);
+}
+.modalClose:active { background: rgba(255,255,255,0.35); }
+
+/* ── Modal body ── */
+.modalBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modalText {
+  font-size: 16px;
+  color: var(--cinza);
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-sans);
+}
+
+/* ── Modal footer ── */
+.modalFooter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px 22px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  flex-shrink: 0;
+}

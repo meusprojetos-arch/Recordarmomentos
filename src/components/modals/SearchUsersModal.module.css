@@ -1,0 +1,133 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(28,26,22,0.68);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  background: var(--bege-claro);
+  border-radius: 24px 24px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 12px 20px max(28px, env(safe-area-inset-bottom));
+  max-height: 80dvh;
+  overflow-y: auto;
+}
+
+.handle {
+  width: 42px;
+  height: 4px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 2px;
+  margin: 0 auto 20px;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--cinza);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.searchBox {
+  margin-bottom: 16px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #E8E4DD;
+  border-radius: var(--radius-full);
+  font-size: 16px;
+  font-family: var(--font-sans);
+  color: var(--cinza);
+  background: var(--bege-claro);
+  outline: none;
+  transition: var(--transition-fast);
+}
+.searchInput:focus {
+  border-color: var(--verde);
+}
+
+.results {
+  min-height: 100px;
+  margin-bottom: 16px;
+}
+
+.loadingText,
+.emptyText {
+  text-align: center;
+  color: var(--cinza-suave);
+  font-size: 14px;
+  padding: 20px;
+}
+
+.userRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  background: var(--bege-claro);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  margin-bottom: 8px;
+  font-family: var(--font-sans);
+}
+.userRow:active {
+  background: var(--verde-light);
+}
+
+.userAvatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--verde-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--verde);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.userAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.userInfo {
+  text-align: left;
+}
+.userName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cinza);
+}
+.userUsername {
+  font-size: 13px;
+  color: var(--cinza-suave);
+}
+
+.cancelBtn {
+  width: 100%;
+  background: var(--bege);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 14px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cinza-suave);
+  cursor: pointer;
+}

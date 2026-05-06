@@ -1,0 +1,48 @@
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.item {
+  background: white;
+  border-radius: var(--radius-md);
+  padding: 16px 14px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  border: 1.5px solid transparent;
+}
+
+.item:active {
+  transform: scale(0.97);
+  border-color: var(--verde);
+}
+
+.emoji {
+  font-size: 30px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cinza);
+}
+
+.count {
+  font-size: 11px;
+  color: var(--cinza-suave);
+  margin-top: 3px;
+}
+
+/* Nova pasta */
+.addItem {
+  border: 2px dashed rgba(79,124,82,0.3);
+  box-shadow: none;
+  background: transparent;
+}
+
+.addName { color: var(--verde); }

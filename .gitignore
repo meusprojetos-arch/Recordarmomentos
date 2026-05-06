@@ -1,0 +1,23 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+
+# Variaveis de ambiente (NUNCA subir)
+.env
+.env.local
+.env.production
+
+# Capacitor builds
+android/
+ios/
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# IDE
+.vscode/
+.idea/

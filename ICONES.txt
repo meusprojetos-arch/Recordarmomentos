@@ -1,0 +1,90 @@
+# GUIA DE ICONES — Recordar
+# Substitua cada URL pela sua imagem personalizada
+
+# ════════════════════════════════════════════════════
+# COMO USAR
+# ════════════════════════════════════════════════════
+# 1. Crie ou fotografe as imagens nos tamanhos indicados
+# 2. Salve na pasta: /public/icons/ do projeto
+# 3. O nome do arquivo ja esta definido em cada URL abaixo
+# 4. Formatos aceitos: PNG (com fundo transparente) ou SVG
+# ════════════════════════════════════════════════════
+
+
+# ── NAVEGACAO INFERIOR (Navbar) ──────────────────────
+# Arquivo                      Tamanho   Descricao
+/icons/nav-hoje.png             24x24    Icone de "Inicio / Hoje" (ex: sol, estrela, coracao)
+/icons/nav-tempo.png            24x24    Icone de "Memorias / Linha do Tempo" (ex: calendario, relogio)
+/icons/nav-perfil.png           24x24    Icone de "Perfil" (ex: silhueta de pessoa)
+/icons/nav-config.png           24x24    Icone de "Configuracoes" (ex: engrenagem)
+/icons/fab-mais.png             28x28    Icone do botao central grande "+" (ex: sinal de mais, camera)
+
+
+# ── TELA HOJE — Acoes Rapidas ────────────────────────
+/icons/notificacao.png          24x24    Sino / notificacao (topbar direita)
+/icons/lembrete.png             40x40    Relogio / lembrete de aniversario de memoria
+/icons/fotovideo.png            32x32    Camera — botao "Foto ou Video"
+/icons/escrever.png             32x32    Lapis / caneta — botao "Escrever"
+/icons/audio.png                32x32    Microfone — botao "Audio"
+/icons/local.png                32x32    Pin de localizacao — botao "Local"
+
+
+# ── MODAL "NOVA MEMORIA" ─────────────────────────────
+/icons/modal-foto.png           48x48    Camera (opcao Foto no modal)
+/icons/modal-video.png          48x48    Filmadora (opcao Video no modal)
+/icons/modal-audio.png          48x48    Microfone (opcao Audio no modal)
+/icons/modal-texto.png          48x48    Lapis ou bloco de notas (opcao Texto no modal)
+
+
+# ── TELA MEMORIAS — Filtros ──────────────────────────
+/icons/filtro-foto.png          16x16    Camera (chip de filtro "Fotos")
+/icons/filtro-video.png         16x16    Filmadora (chip de filtro "Videos")
+/icons/filtro-audio.png         16x16    Microfone (chip de filtro "Audios")
+/icons/filtro-texto.png         16x16    Lapis (chip de filtro "Textos")
+/icons/filtro-destaque.png      16x16    Estrela (chip de filtro "Destaques")
+
+
+# ── GRADE DE FOTOS — Icones por Tipo ────────────────
+# (aparecem quando a memoria nao tem thumbnail)
+/icons/tipo-foto.png            40x40    Camera (placeholder de foto sem imagem)
+/icons/tipo-video.png           40x40    Filmadora (placeholder de video)
+/icons/tipo-audio.png           40x40    Microfone (placeholder de audio)
+/icons/tipo-texto.png           40x40    Lapis ou bloco de notas (placeholder de texto)
+
+
+# ── TELA PERFIL ──────────────────────────────────────
+/icons/config.png               22x22    Engrenagem (botao de configuracoes)
+/icons/avatar-padrao.png        90x90    Silhueta de pessoa (placeholder do avatar do usuario)
+/icons/circulo-familiar.png     22x22    Familia / grupo de pessoas (titulo da secao)
+/icons/privado.png              22x22    Cadeado fechado (titulo e linha "Perfil privado")
+/icons/biometria.png            22x22    Impressao digital (linha "Biometria")
+/icons/pastas.png               22x22    Pasta de arquivos (titulo "Minhas Pastas")
+/icons/exportar.png             22x22    Seta para baixo / caixa (titulo "Exportar e Backup")
+/icons/salvar.png               28x28    Disquete ou seta (botao "Exportar tudo ZIP")
+/icons/nuvem.png                28x28    Nuvem (botao "Backup na nuvem")
+/icons/adicionar.png            16x16    Sinal de + (botoes "Convidar familiar", "Nova pasta")
+
+
+# ── PASTAS PADRAO ────────────────────────────────────
+# (aparecem na grade de pastas do perfil)
+/icons/pasta-familia.png        30x30    Familia (pasta Familia)
+/icons/pasta-aniversarios.png   30x30    Bolo de aniversario (pasta Aniversarios)
+/icons/pasta-natal.png          30x30    Arvore de natal (pasta Natal)
+/icons/pasta-anonovo.png        30x30    Taca de champanhe (pasta Ano Novo)
+/icons/pasta-viagens.png        30x30    Aviao ou mala (pasta Viagens)
+/icons/pasta-historias.png      30x30    Livro aberto (pasta Historias)
+/icons/pasta-destaques.png      30x30    Estrela (pasta Destaques)
+/icons/pasta-generica.png       30x30    Pasta generica (pastas criadas pelo usuario)
+
+
+# ════════════════════════════════════════════════════
+# RESUMO RAPIDO — total de icones: 40
+# ════════════════════════════════════════════════════
+# Navegacao:       5 icones  (24-28px)
+# Tela Hoje:       6 icones  (24-40px)
+# Modal:           4 icones  (48px — os maiores, para toque facil)
+# Filtros:         5 icones  (16px — os menores)
+# Grade de fotos:  4 icones  (40px)
+# Perfil:         10 icones  (16-90px)
+# Pastas:          8 icones  (30px)
+# ════════════════════════════════════════════════════

@@ -1,0 +1,178 @@
+/* =====================================================
+   RECORDAR — Design System Global
+   Paleta "Memórias Vivas" — tons vibrantes e alegres
+   ===================================================== */
+
+/* ─── Google Fonts fallback ─── */
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Nunito:wght@300;400;500;600;700&display=swap');
+
+/* ─── CSS Variables ─── */
+:root {
+  /* Paleta Principal — Cores Vivas */
+  --verde:          #FF6B35;
+  --verde-suave:    #FF8C5A;
+  --verde-light:    #FFF0EB;
+  --bege:           #FFFBF7;
+  --bege-claro:     #FFFFFF;
+  --dourado:        #FFB400;
+  --dourado-suave:  #FFA200;
+  --dourado-light:  #FFF6DB;
+  --azul:           #7C4DFF;
+  --azul-light:     #F3EDFF;
+
+  /* Texto */
+  --cinza:          #2D2A26;
+  --cinza-suave:    #6B6560;
+  --branco:         #FFFBF7;
+
+  /* Status */
+  --sucesso:        #00C853;
+  --erro:           #FF3D57;
+  --aviso:          #FFB400;
+
+  /* Tipografia */
+  --font-serif:     'Lora', Georgia, serif;
+  --font-sans:      'Nunito', -apple-system, sans-serif;
+
+  /* Raios */
+  --radius-xs:      6px;
+  --radius-sm:      10px;
+  --radius-md:      14px;
+  --radius-lg:      18px;
+  --radius-xl:      24px;
+  --radius-full:    9999px;
+
+  /* Sombras */
+  --shadow-sm:      0 1px 8px rgba(255,107,53,0.08);
+  --shadow-md:      0 2px 16px rgba(255,107,53,0.12);
+  --shadow-lg:      0 4px 32px rgba(255,107,53,0.18);
+
+  /* Transições */
+  --transition:     all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: all 0.15s ease;
+
+  /* Tamanhos */
+  --topbar-height:  72px;
+  --navbar-height:  72px;
+}
+
+/* ─── Dark Mode ─── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bege:          #1A1614;
+    --bege-claro:    #252019;
+    --cinza:         #F5F0E8;
+    --cinza-suave:   #B8B0A0;
+    --branco:        #1A1614;
+    --verde:         #FF8C5A;
+    --verde-suave:   #FFA070;
+    --verde-light:   #2A1810;
+    --dourado:       #FFC940;
+    --dourado-light: #2A2310;
+    --azul:          #A07EFF;
+    --azul-light:    #1A0F2E;
+    --shadow-sm:     0 1px 8px rgba(0,0,0,0.3);
+    --shadow-md:     0 2px 16px rgba(0,0,0,0.4);
+    --shadow-lg:     0 4px 32px rgba(0,0,0,0.5);
+  }
+
+  /* Forcar texto escuro em cards brancos dentro do dark mode */
+  .privacyCard, .circleCard, .exportBtn {
+    color: #2D2A26;
+  }
+
+  /* Inverter ícones SVG em fundos escuros no dark mode */
+  img[src*="/icons/"] {
+    filter: brightness(0) invert(1);
+  }
+
+  /* Manter ícones escuros em containers com fundo claro */
+  [class*="iconWrap"] img[src*="/icons/"],
+  [class*="card"] img[src*="/icons/"],
+  [class*="row"] img[src*="/icons/"] {
+    filter: none;
+  }
+}
+
+/* ─── Reset ─── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  color: var(--cinza);
+  background: var(--bege);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+/* ─── Scrollbar oculta ─── */
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; }
+
+/* ─── Seleção ─── */
+::selection {
+  background: var(--verde-light);
+  color: var(--verde);
+}
+
+/* ─── Acessibilidade ─── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ─── Utilitários ─── */
+.text-serif    { font-family: var(--font-serif); }
+.text-verde    { color: var(--verde); }
+.text-dourado  { color: var(--dourado); }
+.text-muted    { color: var(--cinza-suave); }
+.text-center   { text-align: center; }
+
+/* ─── Animações globais ─── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes slideDown {
+  from { transform: translateY(-20px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.animate-fadeIn   { animation: fadeIn 0.35s ease forwards; }
+.animate-slideUp  { animation: slideUp 0.32s cubic-bezier(0.4,0,0.2,1) forwards; }
+.animate-scaleIn  { animation: scaleIn 0.25s ease forwards; }
