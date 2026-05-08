@@ -162,10 +162,9 @@ export async function initDefaultFolders() {
     { name: 'Dia dos Pais',   emoji: '/icons/pasta-pais.svg',           isAuto: true,  autoRule: 'date:08-second-sun', order: 6 },
     { name: 'Dia dos Namorados', emoji: '/icons/pasta-namorados.svg',   isAuto: true,  autoRule: 'date:06-12',       order: 7 },
     { name: 'Páscoa',         emoji: '/icons/pasta-pascoa.svg',         isAuto: true,  autoRule: 'date:easter',      order: 8 },
-    { name: 'São João',       emoji: '/icons/pasta-saojoao.svg',        isAuto: true,  autoRule: 'date:06-24',       order: 9 },
-    { name: 'Viagens',        emoji: '/icons/pasta-viagens.svg',        isAuto: true,  autoRule: 'tag:viagem',       order: 10 },
-    { name: 'Histórias',      emoji: '/icons/pasta-historias.svg',      isAuto: false, autoRule: null,               order: 11 },
-    { name: 'Destaques',      emoji: '/icons/pasta-destaques.svg',      isAuto: true,  autoRule: 'isHighlight:true', order: 12 },
+    { name: 'Viagens',        emoji: '/icons/pasta-viagens.svg',        isAuto: true,  autoRule: 'tag:viagem',       order: 9 },
+    { name: 'Histórias',      emoji: '/icons/pasta-historias.svg',      isAuto: false, autoRule: null,               order: 10 },
+    { name: 'Destaques',      emoji: '/icons/pasta-destaques.svg',      isAuto: true,  autoRule: 'isHighlight:true', order: 11 },
   ];
 
   // Adicionar apenas pastas que ainda não existem (por nome)
