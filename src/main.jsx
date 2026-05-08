@@ -8,6 +8,12 @@ import { initDefaultFolders } from './db/database.js'
 // Inicializa pastas padrão na primeira execução
 initDefaultFolders().catch(console.error)
 
+// Aplica tema salvo
+const savedTheme = localStorage.getItem('recordar_theme') || 'dark'
+if (savedTheme === 'light') {
+  document.documentElement.setAttribute('data-theme', 'light')
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

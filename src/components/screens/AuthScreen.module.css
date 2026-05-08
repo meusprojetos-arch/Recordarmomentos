@@ -115,3 +115,9 @@
   cursor: pointer;
   text-decoration: underline;
 }
+
+.hint {
+  font-size: 11px;
+  color: #999;
+  margin-top: -2px;
+}

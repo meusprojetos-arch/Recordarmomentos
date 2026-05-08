@@ -2,7 +2,7 @@
  * FeedScreen — Feed social tipo Instagram/Facebook
  * Mostra posts (reflexões/frases) em estilo de feed sequencial
  */
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { getMemories, addMemory } from '../../services/memoriesService.js'
@@ -19,6 +19,11 @@ export default function FeedScreen() {
   const [likedIds, setLikedIds]       = useState([])
   const [selectedPost, setSelectedPost] = useState(null)
   const [loading, setLoading]         = useState(true)
+
+  // Filtro por data
+  const [dateFrom, setDateFrom]       = useState('')
+  const [dateTo, setDateTo]           = useState('')
+  const [showDateFilter, setShowDateFilter] = useState(false)
 
   useEffect(() => { loadFeed() }, [])
 
@@ -124,6 +129,24 @@ export default function FeedScreen() {
   const authorName = (post) =>
     post.fromUser?.name || user?.displayName || 'Você'
 
+  /* ── Posts filtrados por data ── */
+  const filteredPosts = useMemo(() => {
+    let list = posts
+    if (dateFrom) {
+      list = list.filter(p => {
+        const d = p.date || (p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000).toISOString().substring(0, 10) : '')
+        return d >= dateFrom
+      })
+    }
+    if (dateTo) {
+      list = list.filter(p => {
+        const d = p.date || (p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000).toISOString().substring(0, 10) : '')
+        return d <= dateTo
+      })
+    }
+    return list
+  }, [posts, dateFrom, dateTo])
+
   /* ── Render ── */
   return (
     <div className={styles.screen}>
@@ -138,6 +161,49 @@ export default function FeedScreen() {
         >
           {showCompose ? '✕ Fechar' : '✏️ Escrever uma reflexão'}
         </button>
+
+        {/* ── Filtro por data ── */}
+        <div className={styles.dateFilterRow}>
+          <button
+            className={`${styles.dateFilterBtn} ${(dateFrom || dateTo) ? styles.dateFilterBtnActive : ''}`}
+            onClick={() => setShowDateFilter(v => !v)}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            {dateFrom || dateTo
+              ? `${dateFrom || '...'} até ${dateTo || '...'}`
+              : 'Filtrar por data'}
+          </button>
+          {(dateFrom || dateTo) && (
+            <button
+              className={styles.dateFilterClear}
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              aria-label="Limpar filtro"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        {showDateFilter && (
+          <div className={styles.dateFilterPanel}>
+            <label className={styles.dateLabel}>
+              De:
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={styles.dateInput} />
+            </label>
+            <label className={styles.dateLabel}>
+              Até:
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={styles.dateInput} />
+            </label>
+            <button className={styles.dateFilterClose} onClick={() => setShowDateFilter(false)}>
+              Aplicar
+            </button>
+          </div>
+        )}
 
         {/* ── Compose area ── */}
         {showCompose && (
@@ -189,7 +255,7 @@ export default function FeedScreen() {
         )}
 
         {/* ── Empty state ── */}
-        {!loading && posts.length === 0 && (
+        {!loading && filteredPosts.length === 0 && (
           <div className={styles.empty}>
             <span className={styles.emptyIcon}>💭</span>
             <p className={styles.emptyTitle}>Nenhuma reflexão ainda</p>
@@ -200,7 +266,7 @@ export default function FeedScreen() {
         )}
 
         {/* ── Feed cards ── */}
-        {!loading && posts.map(post => {
+        {!loading && filteredPosts.map(post => {
           const liked = likedIds.includes(post.id)
           const text  = post.description || post.title || ''
           const preview = text.length > 280 ? text.substring(0, 280) + '…' : text

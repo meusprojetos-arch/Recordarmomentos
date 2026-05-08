@@ -388,3 +388,84 @@
   border-top: 1px solid rgba(0,0,0,0.06);
   flex-shrink: 0;
 }
+
+/* ── Date Filter ── */
+.dateFilterRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.dateFilterBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid #ddd;
+  background: white;
+  color: #555;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dateFilterBtnActive {
+  background: var(--verde-light);
+  border-color: var(--verde);
+  color: var(--verde);
+}
+
+.dateFilterClear {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #eee;
+  color: #666;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dateFilterPanel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px;
+  background: white;
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  margin-bottom: 12px;
+  align-items: flex-end;
+}
+
+.dateLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+
+.dateInput {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.dateFilterClose {
+  padding: 8px 16px;
+  background: var(--verde);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}

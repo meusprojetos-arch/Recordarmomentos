@@ -14,6 +14,8 @@
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext.jsx'
+import { getUserPlan, getStorageUsage, formatBytes } from '../../services/planService.js'
+import db from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import styles from './ConfigScreen.module.css'
 
@@ -67,6 +69,9 @@ export default function ConfigScreen({ onClose }) {
 
   // ── FAQ ──
   const [openFaq, setOpenFaq] = useState(null)
+
+  // ── Tema ──
+  const [theme, setTheme] = useState(() => localStorage.getItem('recordar_theme') || 'dark')
 
   // ── Carregar configurações persistidas ──
   useEffect(() => {
@@ -149,13 +154,68 @@ export default function ConfigScreen({ onClose }) {
   // ── Abrir/fechar FAQ ──
   const toggleFaq = (idx) => setOpenFaq(prev => (prev === idx ? null : idx))
 
-  // ── Armazenamento (dados simulados) ──
-  const localUsedMB  = 45
-  const localTotalMB = 500
-  const cloudUsedMB  = 120
-  const cloudTotalMB = 1000
-  const localPct  = Math.round((localUsedMB  / localTotalMB)  * 100)
-  const cloudPct  = Math.round((cloudUsedMB  / cloudTotalMB)  * 100)
+  // ── Trocar tema ──
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme)
+    localStorage.setItem('recordar_theme', newTheme)
+    if (newTheme === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light')
+    } else {
+      document.documentElement.removeAttribute('data-theme')
+    }
+    toast.success(newTheme === 'light' ? 'Modo claro ativado' : 'Modo escuro ativado')
+  }
+
+  // ── Armazenamento (dados reais) ──
+  const [localUsedMB, setLocalUsedMB] = useState(0)
+  const [localTotalMB, setLocalTotalMB] = useState(1000)
+  const [cloudUsedMB, setCloudUsedMB] = useState(0)
+  const [cloudTotalMB, setCloudTotalMB] = useState(1000)
+
+  useEffect(() => {
+    // Calcular uso local real (soma dos blobs no IndexedDB)
+    const calcLocal = async () => {
+      try {
+        const memories = await db.memories.toArray()
+        let totalBytes = 0
+        for (const m of memories) {
+          if (m.fileBlob) totalBytes += m.fileBlob.size || 0
+          if (m.thumbnail) totalBytes += m.thumbnail.size || 0
+        }
+        const plan = await getUserPlan()
+        const localLimitBytes = plan.localStorageBytes || plan.storageBytes || (1 * 1024 * 1024 * 1024)
+        setLocalUsedMB(Math.round(totalBytes / (1024 * 1024)))
+        setLocalTotalMB(Math.round(localLimitBytes / (1024 * 1024)))
+      } catch {
+        setLocalUsedMB(0)
+        setLocalTotalMB(1000)
+      }
+    }
+
+    // Calcular uso na nuvem real (do Firestore)
+    const calcCloud = async () => {
+      try {
+        const { used, limit, plan } = await getStorageUsage()
+        if (plan && plan.cloud) {
+          setCloudUsedMB(Math.round(used / (1024 * 1024)))
+          setCloudTotalMB(Math.round(limit / (1024 * 1024)))
+        } else {
+          // Plano grátis: nuvem não disponível
+          setCloudUsedMB(0)
+          setCloudTotalMB(0)
+        }
+      } catch {
+        setCloudUsedMB(0)
+        setCloudTotalMB(0)
+      }
+    }
+
+    calcLocal()
+    calcCloud()
+  }, [])
+
+  const localPct  = localTotalMB > 0 ? Math.round((localUsedMB / localTotalMB) * 100) : 0
+  const cloudPct  = cloudTotalMB > 0 ? Math.round((cloudUsedMB / cloudTotalMB) * 100) : 0
 
   return (
     <div className={styles.screen}>
@@ -198,6 +258,16 @@ export default function ConfigScreen({ onClose }) {
             onChange={e => setName(e.target.value)}
             placeholder="Seu nome"
             maxLength={60}
+          />
+
+          {/* Username (não editável) */}
+          <label className={styles.fieldLabel}>Nome de usuário</label>
+          <input
+            className={styles.input}
+            type="text"
+            value={user?.username ? `@${user.username}` : ''}
+            disabled
+            style={{ opacity: 0.6, cursor: 'not-allowed' }}
           />
 
           {/* Bio */}
@@ -358,7 +428,45 @@ export default function ConfigScreen({ onClose }) {
           )}
         </div>
 
-        {/* ══ 5. Termos e Política de Privacidade ══ */}
+        {/* ══ 5. Aparência ══ */}
+        <h2 className={styles.sectionTitle}>Aparência</h2>
+        <div className={styles.card + ' ' + styles.cardNoPad}>
+          <div
+            className={styles.row}
+            onClick={() => handleThemeChange('dark')}
+            role="button"
+            tabIndex={0}
+          >
+            <div className={styles.rowIconWrap} style={{ background: '#1A1614' }}>
+              <span style={{ fontSize: 16 }}>🌙</span>
+            </div>
+            <div className={styles.rowText}>
+              <p className={styles.rowLabel}>Modo Escuro</p>
+              <p className={styles.rowSub}>Tema padrão</p>
+            </div>
+            <div className={`${styles.toggle} ${theme === 'dark' ? '' : styles.toggleOff}`} aria-hidden="true" />
+          </div>
+
+          <div className={styles.rowDivider} />
+
+          <div
+            className={styles.row}
+            onClick={() => handleThemeChange('light')}
+            role="button"
+            tabIndex={0}
+          >
+            <div className={styles.rowIconWrap} style={{ background: '#FFF0EB' }}>
+              <span style={{ fontSize: 16 }}>☀️</span>
+            </div>
+            <div className={styles.rowText}>
+              <p className={styles.rowLabel}>Modo Claro</p>
+              <p className={styles.rowSub}>Fundo branco com cores suaves</p>
+            </div>
+            <div className={`${styles.toggle} ${theme === 'light' ? '' : styles.toggleOff}`} aria-hidden="true" />
+          </div>
+        </div>
+
+        {/* ══ 6. Termos e Política de Privacidade ══ */}
         <h2 className={styles.sectionTitle}>Termos e Política</h2>
         <button className={styles.actionRow} onClick={handleTerms}>
           <div className={styles.rowIconWrap} style={{ background: '#E3F2FD' }}>
@@ -371,18 +479,7 @@ export default function ConfigScreen({ onClose }) {
           <span className={styles.chevron} aria-hidden="true">›</span>
         </button>
 
-        {/* ══ 6. Excluir Conta ══ */}
-        <h2 className={styles.sectionTitle}>Zona de Perigo</h2>
-        <div className={styles.card}>
-          <p className={styles.dangerDesc}>
-            Excluir sua conta apaga permanentemente todas as suas memórias, fotos, vídeos e dados. Esta ação não pode ser desfeita.
-          </p>
-          <button className={styles.dangerBtn} onClick={handleDeleteAccount}>
-            Excluir minha conta
-          </button>
-        </div>
-
-        {/* ══ 7. Ajuda / FAQ ══ */}
+        {/* ══ 6. Ajuda / FAQ ══ */}
         <h2 className={styles.sectionTitle}>Ajuda / FAQ</h2>
         <div className={styles.faqList}>
           {FAQ_ITEMS.map((item, idx) => (
@@ -402,6 +499,17 @@ export default function ConfigScreen({ onClose }) {
               )}
             </div>
           ))}
+        </div>
+
+        {/* ══ 7. Excluir Conta ══ */}
+        <h2 className={styles.sectionTitle}>Zona de Perigo</h2>
+        <div className={styles.card}>
+          <p className={styles.dangerDesc}>
+            Excluir sua conta apaga permanentemente todas as suas memórias, fotos, vídeos e dados. Esta ação não pode ser desfeita.
+          </p>
+          <button className={styles.dangerBtn} onClick={handleDeleteAccount}>
+            Excluir minha conta
+          </button>
         </div>
 
         <div style={{ height: 32 }} />

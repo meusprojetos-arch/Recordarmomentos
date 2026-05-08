@@ -101,3 +101,24 @@ export async function getSharedWithMe() {
   }
   return results
 }
+
+/**
+ * Busca memorias publicas de outro usuario
+ */
+export async function getUserPublicMemories(uid) {
+  const memoriesCol = collection(firestore, 'users', uid, 'memories')
+  const q = query(memoriesCol, where('privacyLevel', '==', 'public'))
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+/**
+ * Busca todas as memorias de outro usuario (se perfil publico)
+ */
+export async function getUserAllMemories(uid) {
+  const { orderBy: ob } = await import('firebase/firestore')
+  const memoriesCol = collection(firestore, 'users', uid, 'memories')
+  const q = query(memoriesCol, ob('createdAt', 'desc'))
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}

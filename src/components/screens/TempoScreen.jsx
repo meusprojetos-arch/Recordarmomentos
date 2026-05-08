@@ -7,9 +7,10 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { getMemories, searchMemories } from '../../services/memoriesService.js'
+import { getMemories, searchMemories, deleteMemory, getTrashItems, restoreFromTrash, permanentDeleteFromTrash } from '../../services/memoriesService.js'
 import { db as localDb } from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
+import FolderGrid from '../ui/FolderGrid.jsx'
 import styles from './TempoScreen.module.css'
 import toast from 'react-hot-toast'
 
@@ -45,11 +46,18 @@ function formatDate(dateStr) {
 // ─── Componente principal ───────────────────────────────────────────────────────
 
 export default function TempoScreen() {
+  // Tab ativa: galeria | pastas | lixeira
+  const [activeTab, setActiveTab]       = useState('galeria')
+
   const [memories, setMemories]         = useState([])
   const [thumbUrls, setThumbUrls]       = useState({})
   const [filter, setFilter]             = useState('all')
   const [query, setQuery]               = useState('')
   const [searchResults, setSearchResults] = useState(null)
+
+  // Lixeira
+  const [trashItems, setTrashItems]     = useState([])
+  const [trashLoading, setTrashLoading] = useState(false)
 
   // Filtro por data
   const [yearFilter, setYearFilter]     = useState('')
@@ -63,6 +71,10 @@ export default function TempoScreen() {
   // Seleção múltipla
   const [selectMode, setSelectMode]     = useState(false)
   const [selectedIds, setSelectedIds]   = useState(new Set())
+
+  // Modal mover para pasta
+  const [showMoveModal, setShowMoveModal] = useState(false)
+  const [folders, setFolders]           = useState([])
 
   // Swipe no viewer
   const touchStartX = useRef(null)
@@ -118,6 +130,39 @@ export default function TempoScreen() {
     if (!query.trim()) { setSearchResults(null); return }
     searchMemories(query).then(setSearchResults).catch(() => {})
   }, [query])
+
+  // ── Lixeira ─────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (activeTab === 'lixeira') loadTrash()
+  }, [activeTab])
+
+  async function loadTrash() {
+    setTrashLoading(true)
+    try {
+      const items = await getTrashItems()
+      setTrashItems(items)
+    } catch { setTrashItems([]) }
+    setTrashLoading(false)
+  }
+
+  async function handleRestore(itemId) {
+    try {
+      await restoreFromTrash(itemId)
+      setTrashItems(prev => prev.filter(i => i.id !== itemId))
+      toast.success('Restaurado com sucesso!')
+    } catch { toast.error('Erro ao restaurar') }
+  }
+
+  async function handlePermanentDelete(itemId) {
+    const ok = window.confirm('Excluir permanentemente? Esta ação não pode ser desfeita.')
+    if (!ok) return
+    try {
+      await permanentDeleteFromTrash(itemId)
+      setTrashItems(prev => prev.filter(i => i.id !== itemId))
+      toast.success('Excluído permanentemente')
+    } catch { toast.error('Erro ao excluir') }
+  }
 
   // ── Memórias filtradas ─────────────────────────────────────────────────────
 
@@ -296,6 +341,44 @@ export default function TempoScreen() {
     exitSelectMode()
   }
 
+  async function batchDelete() {
+    const count = selectedIds.size
+    const confirmed = window.confirm(`Excluir ${count} item(s) permanentemente?`)
+    if (!confirmed) return
+    try {
+      for (const id of selectedIds) {
+        await deleteMemory(id)
+      }
+      setMemories(prev => prev.filter(m => !selectedIds.has(m.id)))
+      toast.success(`${count} item(s) excluído(s)`)
+    } catch {
+      toast.error('Erro ao excluir')
+    }
+    exitSelectMode()
+  }
+
+  async function openMoveModal() {
+    const allFolders = await localDb.folders.orderBy('order').toArray()
+    setFolders(allFolders)
+    setShowMoveModal(true)
+  }
+
+  async function batchMoveToFolder(folderId) {
+    const count = selectedIds.size
+    try {
+      for (const id of selectedIds) {
+        await localDb.memories.update(id, { folderId })
+      }
+      setMemories(prev => prev.map(m => selectedIds.has(m.id) ? { ...m, folderId } : m))
+      const folder = folders.find(f => f.id === folderId)
+      toast.success(`${count} item(s) movido(s) para "${folder?.name || 'pasta'}"`)
+    } catch {
+      toast.error('Erro ao mover')
+    }
+    setShowMoveModal(false)
+    exitSelectMode()
+  }
+
   // ── Renders auxiliares ─────────────────────────────────────────────────────
 
   function getThumbSrc(m) {
@@ -375,11 +458,74 @@ export default function TempoScreen() {
   return (
     <div className={styles.screen}>
       <Topbar
-        title="Galeria"
+        title="Memórias"
         subtitle={`${mediaMemories.length} memória${mediaMemories.length !== 1 ? 's' : ''}`}
       />
 
       <div className={styles.scroll}>
+
+        {/* ── Tabs: Galeria | Pastas | Lixeira ── */}
+        <div className={styles.tabs}>
+          <button
+            className={`${styles.tab} ${activeTab === 'galeria' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('galeria')}
+          >
+            Galeria
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'pastas' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('pastas')}
+          >
+            Pastas
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'lixeira' ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab('lixeira')}
+          >
+            Lixeira
+          </button>
+        </div>
+
+        {/* ══ TAB: Pastas ══ */}
+        {activeTab === 'pastas' && (
+          <div style={{ marginTop: 12 }}>
+            <FolderGrid />
+          </div>
+        )}
+
+        {/* ══ TAB: Lixeira ══ */}
+        {activeTab === 'lixeira' && (
+          <div style={{ marginTop: 12 }}>
+            <p className={styles.trashInfo}>Itens excluídos ficam aqui por 90 dias antes de serem apagados permanentemente.</p>
+            {trashLoading && <p style={{ textAlign: 'center', color: '#999', padding: 20 }}>Carregando...</p>}
+            {!trashLoading && trashItems.length === 0 && (
+              <div className={styles.emptyState}>
+                <span>🗑️</span>
+                <p>Lixeira vazia</p>
+                <p className={styles.emptySub}>Nenhum item excluído recentemente</p>
+              </div>
+            )}
+            {!trashLoading && trashItems.map(item => (
+              <div key={item.id} className={styles.trashItem}>
+                <div className={styles.trashItemInfo}>
+                  <p className={styles.trashItemTitle}>{item.title || item.type || 'Sem título'}</p>
+                  <p className={styles.trashItemDate}>
+                    Excluído em {item.deletedAt?.seconds ? new Date(item.deletedAt.seconds * 1000).toLocaleDateString('pt-BR') : '—'}
+                  </p>
+                </div>
+                <button className={styles.trashRestoreBtn} onClick={() => handleRestore(item.id)}>
+                  Restaurar
+                </button>
+                <button className={styles.trashDeleteBtn} onClick={() => handlePermanentDelete(item.id)}>
+                  Apagar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ══ TAB: Galeria ══ */}
+        {activeTab === 'galeria' && (<>
 
         {/* ── Busca ── */}
         <div className={styles.searchBar}>
@@ -528,20 +674,13 @@ export default function TempoScreen() {
             <span className={styles.selectionCount}>{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</span>
             <div className={styles.selectionActions}>
               <button className={styles.selectionBtn} onClick={batchShare} disabled={selectedIds.size === 0}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-                  <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
-                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                </svg>
-                Partilhar
+                Compartilhar
               </button>
-              <button className={styles.selectionBtn} onClick={batchDownload} disabled={selectedIds.size === 0}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                Guardar
+              <button className={styles.selectionBtn} onClick={openMoveModal} disabled={selectedIds.size === 0}>
+                Mover
+              </button>
+              <button className={`${styles.selectionBtn} ${styles.selectionBtnDanger}`} onClick={batchDelete} disabled={selectedIds.size === 0}>
+                Excluir
               </button>
               <button className={styles.selectionBtnCancel} onClick={exitSelectMode}>
                 Cancelar
@@ -574,6 +713,8 @@ export default function TempoScreen() {
             ))}
           </>
         )}
+
+        </>)}
       </div>
 
       {/* ── Viewer fullscreen ── */}
@@ -693,6 +834,30 @@ export default function TempoScreen() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal mover para pasta ── */}
+      {showMoveModal && (
+        <div className={styles.moveModalOverlay} onClick={() => setShowMoveModal(false)}>
+          <div className={styles.moveModal} onClick={e => e.stopPropagation()}>
+            <h3 className={styles.moveModalTitle}>Mover para pasta</h3>
+            <div className={styles.moveModalList}>
+              {folders.map(f => (
+                <button
+                  key={f.id}
+                  className={styles.moveModalItem}
+                  onClick={() => batchMoveToFolder(f.id)}
+                >
+                  <img src={f.emoji} alt="" width={24} height={24} aria-hidden="true" />
+                  <span>{f.name}</span>
+                </button>
+              ))}
+            </div>
+            <button className={styles.moveModalCancel} onClick={() => setShowMoveModal(false)}>
+              Cancelar
+            </button>
           </div>
         </div>
       )}

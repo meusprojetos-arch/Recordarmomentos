@@ -42,14 +42,15 @@ export function AuthProvider({ children }) {
     return unsub
   }, [])
 
-  const signup = async (email, password, name) => {
+  const signup = async (email, password, name, username, birthDate) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     await updateProfile(cred.user, { displayName: name })
     // Cria documento do usuario no Firestore
     await setDoc(doc(firestore, 'users', cred.user.uid), {
       name,
       email,
-      username: email.split('@')[0].toLowerCase(),
+      username: username || email.split('@')[0].toLowerCase(),
+      birthDate: birthDate || '',
       bio: '',
       photoURL: '',
       privacyLevel: 'private',

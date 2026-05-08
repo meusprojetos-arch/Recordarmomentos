@@ -6,16 +6,37 @@ import { useAuth } from '../../contexts/AuthContext.jsx'
 import toast from 'react-hot-toast'
 import styles from './AuthScreen.module.css'
 
+function generateUsername(name) {
+  const base = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').replace(/[^a-z0-9]/g, '')
+  const num = Math.floor(Math.random() * 9000) + 1000
+  return `${base}.${num}`
+}
+
 export default function SignupScreen({ onGoLogin, onGoWelcome }) {
   const { signup } = useAuth()
   const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
+  const [birthDate, setBirthDate] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const handleNameChange = (val) => {
+    setName(val)
+    if (val.trim() && !username) {
+      setUsername(generateUsername(val.trim()))
+    }
+  }
+
+  const handleUsernameChange = (val) => {
+    // Só permite letras minúsculas, números, ponto e underline
+    const clean = val.toLowerCase().replace(/[^a-z0-9._]/g, '')
+    setUsername(clean)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!name || !email || !password) {
+    if (!name || !username || !email || !password || !birthDate) {
       toast.error('Preencha todos os campos')
       return
     }
@@ -23,9 +44,13 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
       toast.error('A senha precisa ter pelo menos 6 caracteres')
       return
     }
+    if (!/^[a-z0-9._]{3,30}$/.test(username)) {
+      toast.error('Username deve ter 3-30 caracteres (letras, números, . ou _)')
+      return
+    }
     setLoading(true)
     try {
-      await signup(email, password, name)
+      await signup(email, password, name, username, birthDate)
       toast.success('Conta criada com sucesso!')
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {
@@ -56,9 +81,31 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
               className={styles.input}
               placeholder="Como quer ser chamado?"
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={e => handleNameChange(e.target.value)}
               autoComplete="name"
             />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>Nome de usuário</label>
+            <input
+              type="text"
+              className={styles.input}
+              placeholder="ex: raphael.637 ou maria_123"
+              value={username}
+              onChange={e => handleUsernameChange(e.target.value)}
+              autoComplete="username"
+            />
+            <span className={styles.hint}>Letras minúsculas, números, . e _ permitidos</span>
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>Data de nascimento</label>
+            <input
+              type="date"
+              className={styles.input}
+              value={birthDate}
+              onChange={e => setBirthDate(e.target.value)}
+            />
+            <span className={styles.hint}>Usamos para lembrar aniversários e datas especiais</span>
           </div>
           <div className={styles.field}>
             <label className={styles.label}>Email</label>

@@ -8,22 +8,22 @@
 
 /* ─── CSS Variables ─── */
 :root {
-  /* Paleta Principal — Cores Vivas */
+  /* Paleta Principal — Modo Escuro (padrão) */
   --verde:          #FF6B35;
   --verde-suave:    #FF8C5A;
-  --verde-light:    #FFF0EB;
-  --bege:           #FFFBF7;
-  --bege-claro:     #FFFFFF;
-  --dourado:        #FFB400;
+  --verde-light:    #2A1810;
+  --bege:           #1A1614;
+  --bege-claro:     #252019;
+  --dourado:        #FFC940;
   --dourado-suave:  #FFA200;
-  --dourado-light:  #FFF6DB;
-  --azul:           #7C4DFF;
-  --azul-light:     #F3EDFF;
+  --dourado-light:  #2A2310;
+  --azul:           #A07EFF;
+  --azul-light:     #1A0F2E;
 
   /* Texto */
-  --cinza:          #2D2A26;
-  --cinza-suave:    #6B6560;
-  --branco:         #FFFBF7;
+  --cinza:          #F5F0E8;
+  --cinza-suave:    #B8B0A0;
+  --branco:         #1A1614;
 
   /* Status */
   --sucesso:        #00C853;
@@ -43,9 +43,9 @@
   --radius-full:    9999px;
 
   /* Sombras */
-  --shadow-sm:      0 1px 8px rgba(255,107,53,0.08);
-  --shadow-md:      0 2px 16px rgba(255,107,53,0.12);
-  --shadow-lg:      0 4px 32px rgba(255,107,53,0.18);
+  --shadow-sm:      0 1px 8px rgba(0,0,0,0.3);
+  --shadow-md:      0 2px 16px rgba(0,0,0,0.4);
+  --shadow-lg:      0 4px 32px rgba(0,0,0,0.5);
 
   /* Transições */
   --transition:     all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
@@ -56,42 +56,50 @@
   --navbar-height:  72px;
 }
 
-/* ─── Dark Mode ─── */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bege:          #1A1614;
-    --bege-claro:    #252019;
-    --cinza:         #F5F0E8;
-    --cinza-suave:   #B8B0A0;
-    --branco:        #1A1614;
-    --verde:         #FF8C5A;
-    --verde-suave:   #FFA070;
-    --verde-light:   #2A1810;
-    --dourado:       #FFC940;
-    --dourado-light: #2A2310;
-    --azul:          #A07EFF;
-    --azul-light:    #1A0F2E;
-    --shadow-sm:     0 1px 8px rgba(0,0,0,0.3);
-    --shadow-md:     0 2px 16px rgba(0,0,0,0.4);
-    --shadow-lg:     0 4px 32px rgba(0,0,0,0.5);
-  }
+/* ─── Modo Claro ─── */
+[data-theme="light"] {
+  --verde:          #E55A2B;
+  --verde-suave:    #FF7A4A;
+  --verde-light:    #FFF0EB;
+  --bege:           #F5F2EF;
+  --bege-claro:     #FFFFFF;
+  --dourado:        #E5A000;
+  --dourado-suave:  #CC8C00;
+  --dourado-light:  #FFF6DB;
+  --azul:           #6A3DE8;
+  --azul-light:     #F3EDFF;
 
-  /* Forcar texto escuro em cards brancos dentro do dark mode */
-  .privacyCard, .circleCard, .exportBtn {
-    color: #2D2A26;
-  }
+  /* Texto */
+  --cinza:          #1A1715;
+  --cinza-suave:    #4A4540;
+  --branco:         #F5F2EF;
 
-  /* Inverter ícones SVG em fundos escuros no dark mode */
-  img[src*="/icons/"] {
-    filter: brightness(0) invert(1);
-  }
+  /* Sombras */
+  --shadow-sm:      0 1px 4px rgba(0,0,0,0.1);
+  --shadow-md:      0 2px 12px rgba(0,0,0,0.12);
+  --shadow-lg:      0 4px 24px rgba(0,0,0,0.15);
+}
 
-  /* Manter ícones escuros em containers com fundo claro */
-  [class*="iconWrap"] img[src*="/icons/"],
-  [class*="card"] img[src*="/icons/"],
-  [class*="row"] img[src*="/icons/"] {
-    filter: none;
-  }
+/* Ícones no modo escuro (padrão) */
+img[src*="/icons/"] {
+  filter: brightness(0) invert(1);
+}
+
+[class*="iconWrap"] img[src*="/icons/"],
+[class*="card"] img[src*="/icons/"],
+[class*="row"] img[src*="/icons/"] {
+  filter: none;
+}
+
+/* No modo claro, ícones ficam escuros e visíveis */
+[data-theme="light"] img[src*="/icons/"] {
+  filter: brightness(0) opacity(0.85);
+}
+
+[data-theme="light"] [class*="iconWrap"] img[src*="/icons/"],
+[data-theme="light"] [class*="card"] img[src*="/icons/"],
+[data-theme="light"] [class*="row"] img[src*="/icons/"] {
+  filter: brightness(0) opacity(0.7);
 }
 
 /* ─── Reset ─── */

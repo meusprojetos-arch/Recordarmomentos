@@ -5,7 +5,7 @@ import { firestore, storage, auth } from '../firebase.js'
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
   query, where, orderBy, getDocs, getDoc, limit,
-  serverTimestamp
+  serverTimestamp, Timestamp
 } from 'firebase/firestore'
 import {
   ref, uploadBytes, getDownloadURL, deleteObject
@@ -154,19 +154,105 @@ export async function updateMemory(memoryId, updates) {
 
 /**
  * Deleta uma memoria
+ * - Textos: exclui permanentemente
+ * - Fotos/videos/audios: move para lixeira (90 dias)
  */
 export async function deleteMemory(memoryId) {
   const uid = auth.currentUser?.uid
   if (!uid) throw new Error('Nao autenticado')
   
-  // Busca o doc para pegar o filePath
   const docRef = doc(firestore, 'users', uid, 'memories', memoryId)
   const snap = await getDoc(docRef)
+  if (!snap.exists()) return
+
+  const data = snap.data()
+
+  // Texto: exclusão permanente
+  if (data.type === 'text') {
+    await deleteDoc(docRef)
+    return
+  }
+
+  // Mídia: mover para lixeira
+  const trashCol = collection(firestore, 'users', uid, 'trash')
+  await addDoc(trashCol, {
+    ...data,
+    originalId: memoryId,
+    deletedAt: serverTimestamp(),
+    expiresAt: Timestamp.fromDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)),
+  })
+  await deleteDoc(docRef)
+}
+
+/**
+ * Busca itens na lixeira
+ */
+export async function getTrashItems() {
+  const uid = auth.currentUser?.uid
+  if (!uid) return []
+
+  const trashCol = collection(firestore, 'users', uid, 'trash')
+  const q = query(trashCol, orderBy('deletedAt', 'desc'))
+  const snap = await getDocs(q)
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+}
+
+/**
+ * Restaura um item da lixeira para memorias
+ */
+export async function restoreFromTrash(trashItemId) {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('Nao autenticado')
+
+  const trashRef = doc(firestore, 'users', uid, 'trash', trashItemId)
+  const snap = await getDoc(trashRef)
+  if (!snap.exists()) throw new Error('Item nao encontrado')
+
+  const data = snap.data()
+  const { originalId, deletedAt, expiresAt, ...memoryData } = data
+
+  // Re-adiciona como memória
+  await addDoc(collection(firestore, 'users', uid, 'memories'), {
+    ...memoryData,
+    updatedAt: serverTimestamp(),
+  })
+  await deleteDoc(trashRef)
+}
+
+/**
+ * Exclui permanentemente um item da lixeira
+ */
+export async function permanentDeleteFromTrash(trashItemId) {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('Nao autenticado')
+
+  const trashRef = doc(firestore, 'users', uid, 'trash', trashItemId)
+  const snap = await getDoc(trashRef)
   if (snap.exists() && snap.data().filePath) {
     const fileRef = ref(storage, snap.data().filePath)
     await deleteObject(fileRef).catch(() => {})
   }
-  await deleteDoc(docRef)
+  await deleteDoc(trashRef)
+}
+
+/**
+ * Limpa itens expirados da lixeira (>90 dias)
+ */
+export async function cleanExpiredTrash() {
+  const uid = auth.currentUser?.uid
+  if (!uid) return
+
+  const trashCol = collection(firestore, 'users', uid, 'trash')
+  const now = Timestamp.now()
+  const q = query(trashCol, where('expiresAt', '<=', now))
+  const snap = await getDocs(q)
+  for (const d of snap.docs) {
+    if (d.data().filePath) {
+      const fileRef = ref(storage, d.data().filePath)
+      await deleteObject(fileRef).catch(() => {})
+    }
+    await deleteDoc(d.ref)
+  }
 }
 
 /**

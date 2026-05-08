@@ -17,7 +17,6 @@ import { getMemories } from '../../services/memoriesService.js'
 import { setProfilePrivacy } from '../../services/profileService.js'
 import { exportAllAsZip } from '../../services/exportService.js'
 import PrivacyRow from '../ui/PrivacyRow.jsx'
-import FolderGrid from '../ui/FolderGrid.jsx'
 import SearchUsersModal from '../modals/SearchUsersModal.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './PerfilScreen.module.css'
@@ -42,12 +41,19 @@ export default function PerfilScreen() {
   const [biometric, setBiometric] = useState(false)
   const [isPrivate, setIsPrivate] = useState(true)
   const [cloudBackup, setCloudBackup] = useState(false)
-  const [memCount, setMemCount] = useState(0)
+  const [stats, setStats] = useState({ photos: 0, videos: 0, audios: 0, feed: 0 })
   const [showSearch, setShowSearch] = useState(false)
   const [showPinModal, setShowPinModal] = useState(false)
 
   useEffect(() => {
-    getMemories().then(mems => setMemCount(mems.length)).catch(() => {})
+    getMemories().then(mems => {
+      setStats({
+        photos: mems.filter(m => m.type === 'photo').length,
+        videos: mems.filter(m => m.type === 'video').length,
+        audios: mems.filter(m => m.type === 'audio').length,
+        feed: mems.filter(m => m.type === 'text').length,
+      })
+    }).catch(() => {})
     if (user?.privacyLevel) setIsPrivate(user.privacyLevel === 'private')
   }, [user])
 
@@ -87,12 +93,25 @@ export default function PerfilScreen() {
             : <img src={PERFIL_ICONS.avatarPad} alt="Avatar padrao" width={60} height={60} className={styles.avatarDefault} />
           }
         </div>
-        <h1 className={styles.name}>{localStorage.getItem('recordar_profileName') || user?.displayName || user?.name || 'Meu Perfil'}</h1>
+        <h1 className={styles.name}>{user?.name || user?.displayName || localStorage.getItem('recordar_profileName') || 'Meu Perfil'}</h1>
+        {user?.username && <p className={styles.username}>@{user.username}</p>}
         <p className={styles.bio}>{localStorage.getItem('recordar_profileBio') || user?.bio || '"Cada foto guarda um pedaco da nossa historia."'}</p>
         <div className={styles.stats}>
           <div className={styles.stat}>
-            <span className={styles.statVal}>{memCount}</span>
-            <span className={styles.statLbl}>memorias</span>
+            <span className={styles.statVal}>{stats.photos}</span>
+            <span className={styles.statLbl}>fotos</span>
+          </div>
+          <div className={styles.stat}>
+            <span className={styles.statVal}>{stats.videos}</span>
+            <span className={styles.statLbl}>vídeos</span>
+          </div>
+          <div className={styles.stat}>
+            <span className={styles.statVal}>{stats.feed}</span>
+            <span className={styles.statLbl}>feed</span>
+          </div>
+          <div className={styles.stat}>
+            <span className={styles.statVal}>{stats.audios}</span>
+            <span className={styles.statLbl}>áudios</span>
           </div>
         </div>
       </div>
@@ -100,26 +119,21 @@ export default function PerfilScreen() {
       {/* ── Body ── */}
       <div className={styles.body}>
 
-        {/* ── Circulo Familiar ── */}
+        {/* ── Buscar Pessoas ── */}
         <h2 className={styles.sectionTitle}>
           <img src={PERFIL_ICONS.circulo} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
-          Circulo Familiar
+          Buscar Pessoas
         </h2>
-        <div className={styles.circleCard}>
-          <p className={styles.circleTitle}>Familia</p>
+        <button className={styles.circleCard} onClick={() => setShowSearch(true)} style={{ cursor: 'pointer', width: '100%', border: 'none', textAlign: 'left' }}>
           <div className={styles.avatarRow}>
-            <button
-              className={`${styles.miniAvatar} ${styles.addAvatar}`}
-              onClick={() => setShowSearch(true)}
-              aria-label="Buscar pessoa"
-            >
-              <img src={PERFIL_ICONS.adicionar} alt="Adicionar" width={16} height={16} />
-            </button>
+            <div className={`${styles.miniAvatar} ${styles.addAvatar}`}>
+              <img src={PERFIL_ICONS.adicionar} alt="Buscar" width={16} height={16} />
+            </div>
           </div>
           <p className={styles.circleDesc}>
-            Busque pessoas pelo nome para adicionar
+            Busque pessoas pelo @usuario para ver o perfil
           </p>
-        </div>
+        </button>
 
         {/* ── Privacidade ── */}
         <h2 className={styles.sectionTitle}>
@@ -143,13 +157,6 @@ export default function PerfilScreen() {
             onClick={() => setShowPinModal(true)}
           />
         </div>
-
-        {/* ── Pastas ── */}
-        <h2 className={styles.sectionTitle}>
-          <img src={PERFIL_ICONS.pastas} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
-          Minhas Pastas
-        </h2>
-        <FolderGrid />
 
         {/* ── Exportar / Backup ── */}
         <h2 className={styles.sectionTitle}>
