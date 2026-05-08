@@ -114,11 +114,16 @@ export default function TempoScreen() {
 
   useEffect(() => { loadMemories() }, [loadMemories])
 
-  // Recarregar ao voltar para a tela (visibilidade)
+  // Recarregar ao voltar para a tela ou após importação
   useEffect(() => {
     const handleFocus = () => loadMemories()
+    const handleUpdate = () => loadMemories()
     window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
+    window.addEventListener('memories-updated', handleUpdate)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('memories-updated', handleUpdate)
+    }
   }, [loadMemories])
 
   // ── Geração de URLs de blob ────────────────────────────────────────────────

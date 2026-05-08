@@ -39,6 +39,8 @@ export function openGalleryImport(onProgress, onComplete) {
       }
     }
     onComplete?.(imported, files.length)
+    // Dispara evento para que a galeria recarregue
+    window.dispatchEvent(new Event('memories-updated'))
   }
 
   input.click()

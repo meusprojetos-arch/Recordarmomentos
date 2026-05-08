@@ -44,8 +44,9 @@ export async function addMemory(memoryData, file = null) {
   let localObjectUrl = null
   if (file) {
     try {
+      // Garante que o banco está aberto antes de escrever
+      if (!localDb.isOpen()) await localDb.open()
       const blob = file instanceof Blob ? file : new Blob([file])
-      // Gera URL de objeto como fallback imediato (válida na aba atual)
       localObjectUrl = URL.createObjectURL(blob)
       localId = await localDb.fileBlobs.add({
         localBlobId,
@@ -56,9 +57,11 @@ export async function addMemory(memoryData, file = null) {
         createdAt: new Date().toISOString(),
       })
     } catch (e) {
-      console.error('Erro ao salvar blob local (fileBlobs pode nao existir - verifique versao do IndexedDB):', e)
-      // Tenta abrir o banco na versao mais recente para forcar migracao
-      try { await localDb.open() } catch (_) {}
+      console.error('FALHA ao salvar blob no IndexedDB:', e)
+      // Cria objectUrl de fallback mesmo se IndexedDB falhar
+      if (!localObjectUrl && file instanceof Blob) {
+        localObjectUrl = URL.createObjectURL(file)
+      }
     }
   }
 
@@ -147,7 +150,7 @@ export async function getMemories(options = {}) {
         if (blob) mem.fileBlob = blob
       }
     }
-  } catch (e) { /* ignore indexeddb errors */ }
+  } catch (e) { console.error('IndexedDB blob retrieval failed:', e) }
 
   return memories
 }

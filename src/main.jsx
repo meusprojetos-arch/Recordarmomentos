@@ -5,7 +5,11 @@ import App from './App.jsx'
 import './styles/globals.css'
 import { db, initDefaultFolders } from './db/database.js'
 
-// Força abertura do banco para garantir migração de schema (v3 com fileBlobs.localBlobId)
+// Handler para evitar bloqueio de versão entre abas
+db.on('versionchange', () => { db.close(); window.location.reload() })
+db.on('blocked', () => { console.warn('IndexedDB upgrade bloqueado — feche outras abas') })
+
+// Força abertura e migração do banco
 db.open().then(() => {
   initDefaultFolders().catch(console.error)
 }).catch(e => console.error('Erro ao abrir IndexedDB:', e))
