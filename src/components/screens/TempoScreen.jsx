@@ -341,7 +341,48 @@ export default function TempoScreen() {
 
   async function batchShare() {
     const items = Array.from(selectedIds)
-    toast(`${items.length} item(s) prontos para partilhar`)
+    const files = []
+    for (const id of items) {
+      const m = memories.find(x => x.id === id)
+      if (!m) continue
+      const blob = m.fileBlob || null
+      const url = thumbUrls[m.id] || m.fileUrl
+      if (blob && blob instanceof Blob) {
+        const ext = m.type === 'video' ? 'mp4' : 'jpg'
+        files.push(new File([blob], `${m.title || 'memoria'}.${ext}`, { type: blob.type || (m.type === 'video' ? 'video/mp4' : 'image/jpeg') }))
+      } else if (url) {
+        try {
+          const resp = await fetch(url)
+          const b = await resp.blob()
+          const ext = m.type === 'video' ? 'mp4' : 'jpg'
+          files.push(new File([b], `${m.title || 'memoria'}.${ext}`, { type: b.type }))
+        } catch { /* skip */ }
+      }
+    }
+
+    if (files.length === 0) {
+      toast.error('Nenhum arquivo disponível para compartilhar')
+      exitSelectMode()
+      return
+    }
+
+    // Tenta Web Share API com múltiplos arquivos
+    if (navigator.canShare && navigator.canShare({ files })) {
+      try {
+        await navigator.share({ files, title: 'Memórias — Recordar' })
+      } catch { /* cancelado pelo usuário */ }
+    } else {
+      // Fallback: download de todos
+      for (const file of files) {
+        const url = URL.createObjectURL(file)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = file.name
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+      toast.success(`${files.length} arquivo(s) salvos`)
+    }
     exitSelectMode()
   }
 
