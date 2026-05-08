@@ -11,7 +11,6 @@
 
 import React, { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { format } from 'date-fns'
 import { addMemory } from '../../services/memoriesService.js'
 import { isPremium } from '../../services/planService.js'
 import styles from './AddMemoryModal.module.css'
@@ -24,24 +23,24 @@ const MODAL_ICONS = {
 }
 
 const TIPOS = [
-  { id: 'photo', label: 'Foto',  sub: 'Camera ou galeria' },
-  { id: 'video', label: 'Video', sub: 'Camera ou galeria' },
-  { id: 'audio', label: 'Audio', sub: 'Gravar voz' },
-  { id: 'text',  label: 'Texto', sub: 'Escrever reflexao' },
+  { id: 'photo', label: 'Foto',   sub: 'Da câmera ou galeria' },
+  { id: 'video', label: 'Vídeo',  sub: 'Da câmera ou galeria' },
+  { id: 'audio', label: 'Áudio',  sub: 'Gravar voz' },
+  { id: 'text',  label: 'Frase',  sub: 'Reflexão ou história' },
 ]
 
-export default function AddMemoryModal({ onClose, onSaved }) {
+export default function AddMemoryModal({ onClose, onSaved, initialType }) {
   const [step, setStep]         = useState('type')
   const [selectedType, setType] = useState(null)
   const [file, setFile]         = useState(null)
+  const [files, setFiles]       = useState([])
   const [preview, setPreview]   = useState(null)
   const [isSaving, setIsSaving] = useState(false)
 
   // Detalhes
-  const [title, setTitle]       = useState('')
   const [description, setDesc]  = useState('')
-  const [date, setDate]         = useState(format(new Date(), 'yyyy-MM-dd'))
   const [textContent, setText]  = useState('')
+  const [privacy, setPrivacy]   = useState(null) // obrigatório: 'private' ou 'public'
 
   // Audio
   const [isRecording, setIsRecording] = useState(false)
@@ -53,6 +52,19 @@ export default function AddMemoryModal({ onClose, onSaved }) {
 
   const fileInputRef  = useRef(null)
   const cameraInputRef = useRef(null)
+
+  // Se initialType definido, pula direto para o step correto
+  useState(() => {
+    if (initialType) {
+      const tipo = TIPOS.find(t => t.id === initialType)
+      if (tipo) {
+        setType(tipo)
+        if (tipo.id === 'audio') setStep('audio')
+        else if (tipo.id === 'text') setStep('details')
+        else setStep('source')
+      }
+    }
+  })
 
   // ── Selecionar tipo ──
   const handleSelectType = (tipo) => {
@@ -76,13 +88,24 @@ export default function AddMemoryModal({ onClose, onSaved }) {
     fileInputRef.current.click()
   }
 
-  // ── Arquivo selecionado ──
+  // ── Arquivo(s) selecionado(s) ──
   const handleFileChange = (e) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    setFile(f)
-    setPreview(URL.createObjectURL(f))
-    setStep('details')
+    const selectedFiles = Array.from(e.target.files || [])
+    if (selectedFiles.length === 0) return
+    
+    if (selectedFiles.length === 1) {
+      // Um arquivo: fluxo normal com preview
+      setFile(selectedFiles[0])
+      setFiles([])
+      setPreview(URL.createObjectURL(selectedFiles[0]))
+      setStep('details')
+    } else {
+      // Múltiplos: salva direto sem pedir detalhes
+      setFiles(selectedFiles)
+      setFile(null)
+      setPreview(null)
+      setStep('multiple')
+    }
   }
 
   // ── Gravacao de audio ──
@@ -128,10 +151,43 @@ export default function AddMemoryModal({ onClose, onSaved }) {
     return `${m}:${s}`
   }
 
+  // ── Salvar múltiplos ──
+  const handleSaveMultiple = async () => {
+    setIsSaving(true)
+    let saved = 0
+    try {
+      for (const f of files) {
+        const type = f.type.startsWith('video') ? 'video' : 'photo'
+        const cleanName = f.name.replace(/\.[^.]+$/, '').replace(/^(IMG|VID|WA\d*)[_-]?/i, '').replace(/[_-]/g, ' ').trim() || 'Sem titulo'
+        const fileDate = new Date(f.lastModified || Date.now()).toISOString().substring(0, 10)
+        await addMemory({
+          type,
+          title: cleanName,
+          description: '',
+          date: fileDate,
+          tags: [],
+        }, f)
+        saved++
+      }
+      toast.success(`${saved} memória(s) salva(s)!`)
+      window.dispatchEvent(new Event('memories-updated'))
+      onSaved?.()
+    } catch (err) {
+      console.error(err)
+      toast.error(`Erro: ${saved} de ${files.length} salvos`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   // ── Salvar ──
   const handleSave = async () => {
-    if (!title.trim() && !textContent.trim() && !file && !audioBlob) {
-      toast.error('Adicione um titulo ou conteudo')
+    if (!description.trim() && !textContent.trim() && !file && !audioBlob) {
+      toast.error('Adicione uma descricao ou conteudo')
+      return
+    }
+    if (!privacy) {
+      toast.error('Escolha a privacidade da publicação')
       return
     }
 
@@ -139,10 +195,11 @@ export default function AddMemoryModal({ onClose, onSaved }) {
     try {
       const memData = {
         type:        selectedType?.id || 'text',
-        title:       title || (selectedType?.id === 'text' ? textContent.substring(0, 60) : 'Sem titulo'),
+        title:       description.trim().substring(0, 60) || (selectedType?.id === 'text' ? textContent.substring(0, 60) : 'Sem titulo'),
         description: description,
-        date:        date,
+        date:        new Date().toISOString().substring(0, 10),
         tags:        [],
+        privacyLevel: privacy,
       }
 
       if (selectedType?.id === 'text') {
@@ -190,6 +247,7 @@ export default function AddMemoryModal({ onClose, onSaved }) {
         ref={fileInputRef}
         type="file"
         accept={selectedType?.id === 'video' ? 'video/*' : 'image/*'}
+        multiple
         className={styles.hiddenInput}
         onChange={handleFileChange}
       />
@@ -277,6 +335,29 @@ export default function AddMemoryModal({ onClose, onSaved }) {
           </>
         )}
 
+        {/* ── STEP: Múltiplos arquivos ── */}
+        {step === 'multiple' && (
+          <>
+            <div className={styles.detailsHeader}>
+              <button className={styles.backBtn} onClick={() => setStep('type')}>← Voltar</button>
+              <h2 className={styles.sheetTitle}>Importar {files.length} arquivo(s)</h2>
+            </div>
+            <div style={{ padding: '16px 20px', textAlign: 'center' }}>
+              <p style={{ fontSize: 14, color: 'var(--cinza-suave)', marginBottom: 16 }}>
+                {files.length} foto(s)/vídeo(s) selecionado(s). Serão salvos com data e título automáticos.
+              </p>
+              <button
+                className={`${styles.saveBtn} ${isSaving ? styles.savingBtn : ''}`}
+                onClick={handleSaveMultiple}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Salvando...' : `Salvar ${files.length} arquivo(s)`}
+              </button>
+              <button className={styles.cancelBtn} onClick={onClose}>Cancelar</button>
+            </div>
+          </>
+        )}
+
         {/* ── STEP: Detalhes ── */}
         {step === 'details' && (
           <div className={styles.detailsForm}>
@@ -308,28 +389,7 @@ export default function AddMemoryModal({ onClose, onSaved }) {
             )}
 
             <div className={styles.field}>
-              <label className={styles.fieldLabel}>Titulo</label>
-              <input
-                className={styles.fieldInput}
-                placeholder="Ex: Aniversario da Ana, Viagem a Gramado..."
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                maxLength={80}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.fieldLabel}>Data da memoria</label>
-              <input
-                className={styles.fieldInput}
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.fieldLabel}>Descricao (opcional)</label>
+              <label className={styles.fieldLabel}>Descricao</label>
               <textarea
                 className={styles.fieldTextarea}
                 placeholder="Conte mais sobre este momento..."
@@ -339,10 +399,31 @@ export default function AddMemoryModal({ onClose, onSaved }) {
               />
             </div>
 
+            {/* Privacidade obrigatória */}
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}>Quem pode ver *</label>
+              <div className={styles.privacyRow}>
+                <button
+                  type="button"
+                  className={`${styles.privacyBtn} ${privacy === 'private' ? styles.privacyBtnActive : ''}`}
+                  onClick={() => setPrivacy('private')}
+                >
+                  🔒 Somente eu
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.privacyBtn} ${privacy === 'public' ? styles.privacyBtnActive : ''}`}
+                  onClick={() => setPrivacy('public')}
+                >
+                  🌐 Público
+                </button>
+              </div>
+            </div>
+
             <button
               className={`${styles.saveBtn} ${isSaving ? styles.savingBtn : ''}`}
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || !privacy}
             >
               {isSaving ? 'Salvando...' : 'Salvar Memoria'}
             </button>

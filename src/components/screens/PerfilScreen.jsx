@@ -17,7 +17,6 @@ import { getMemories } from '../../services/memoriesService.js'
 import { setProfilePrivacy } from '../../services/profileService.js'
 import { exportAllAsZip } from '../../services/exportService.js'
 import PrivacyRow from '../ui/PrivacyRow.jsx'
-import SearchUsersModal from '../modals/SearchUsersModal.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './PerfilScreen.module.css'
 
@@ -42,7 +41,7 @@ export default function PerfilScreen() {
   const [isPrivate, setIsPrivate] = useState(true)
   const [cloudBackup, setCloudBackup] = useState(false)
   const [stats, setStats] = useState({ photos: 0, videos: 0, audios: 0, feed: 0 })
-  const [showSearch, setShowSearch] = useState(false)
+
   const [showPinModal, setShowPinModal] = useState(false)
 
   useEffect(() => {
@@ -119,22 +118,6 @@ export default function PerfilScreen() {
       {/* ── Body ── */}
       <div className={styles.body}>
 
-        {/* ── Buscar Pessoas ── */}
-        <h2 className={styles.sectionTitle}>
-          <img src={PERFIL_ICONS.circulo} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
-          Buscar Pessoas
-        </h2>
-        <button className={styles.circleCard} onClick={() => setShowSearch(true)} style={{ cursor: 'pointer', width: '100%', border: 'none', textAlign: 'left' }}>
-          <div className={styles.avatarRow}>
-            <div className={`${styles.miniAvatar} ${styles.addAvatar}`}>
-              <img src={PERFIL_ICONS.adicionar} alt="Buscar" width={16} height={16} />
-            </div>
-          </div>
-          <p className={styles.circleDesc}>
-            Busque pessoas pelo @usuario para ver o perfil
-          </p>
-        </button>
-
         {/* ── Privacidade ── */}
         <h2 className={styles.sectionTitle}>
           <img src={PERFIL_ICONS.privado} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
@@ -205,10 +188,6 @@ export default function PerfilScreen() {
         <div style={{ height: 32 }} />
       </div>
 
-      {/* Modal de busca de pessoas */}
-      {showSearch && (
-        <SearchUsersModal onClose={() => setShowSearch(false)} />
-      )}
       {/* Modal de PIN */}
       {showPinModal && (
         <PinLockModal onClose={() => setShowPinModal(false)} />

@@ -1,55 +1,144 @@
 /**
  * exportService.js — Exportar todas as memorias como ZIP
+ * Inclui fotos, videos, audios e textos organizados por pasta
  */
 import JSZip from 'jszip'
 import { getMemories } from './memoriesService.js'
+import { db } from '../db/database.js'
 
 /**
- * Exporta todas as memorias em um arquivo ZIP organizado por ano/mes
+ * Exporta todas as memorias em um arquivo ZIP organizado por pastas
  * e faz download automatico no navegador
  */
 export async function exportAllAsZip() {
   const memories = await getMemories()
   if (memories.length === 0) throw new Error('Nenhuma memoria para exportar')
 
+  // Buscar pastas do IndexedDB
+  let folders = []
+  try {
+    folders = await db.folders.toArray()
+  } catch { /* ignore */ }
+
+  const folderMap = {}
+  for (const f of folders) {
+    folderMap[f.id] = f.name
+  }
+
   const zip = new JSZip()
 
-  // Indice em texto
-  let indexText = 'RECORDAR — Exportacao de Memorias\n'
+  // Criar estrutura de pastas no ZIP
+  const zipFolders = {
+    'Fotos': zip.folder('Fotos'),
+    'Videos': zip.folder('Videos'),
+    'Audios': zip.folder('Audios'),
+    'Frases': zip.folder('Frases'),
+    'Destaques': zip.folder('Destaques'),
+  }
+
+  // Criar pastas do usuario
+  for (const f of folders) {
+    if (!zipFolders[f.name]) {
+      zipFolders[f.name] = zip.folder(f.name)
+    }
+  }
+
+  let indexText = 'RECORDAR — Exportação de Memórias\n'
   indexText += `Data: ${new Date().toLocaleDateString('pt-BR')}\n`
-  indexText += `Total: ${memories.length} memorias\n\n`
+  indexText += `Total: ${memories.length} memórias\n\n`
+
+  let count = 0
 
   for (const mem of memories) {
-    const year = mem.date?.substring(0, 4) || 'sem-data'
-    const month = mem.date?.substring(5, 7) || '00'
-    const folder = `${year}/${month}`
+    const date = mem.date || 'sem-data'
+    const safeDate = date.replace(/[/\\:]/g, '-')
+    const safeDesc = (mem.description || '').substring(0, 30).replace(/[^a-zA-Z0-9À-ÿ\s_-]/g, '').trim()
+    const baseName = safeDesc || `memoria_${count + 1}`
 
-    // Texto da memoria
-    let content = `Titulo: ${mem.title || 'Sem titulo'}\n`
-    content += `Data: ${mem.date || 'N/A'}\n`
-    content += `Tipo: ${mem.type}\n`
-    if (mem.description) content += `Descricao: ${mem.description}\n`
-    if (mem.tags?.length) content += `Tags: ${mem.tags.join(', ')}\n`
-    content += '\n'
+    // Determinar pasta destino
+    let targetFolder = null
 
-    zip.file(`${folder}/${mem.id}_info.txt`, content)
+    // Se é destaque
+    if (mem.isHighlight) {
+      targetFolder = zipFolders['Destaques']
+    }
 
-    // Se tem arquivo, tenta baixar e incluir
-    if (mem.fileUrl) {
+    // Se pertence a uma pasta do usuario
+    if (mem.folderId && folderMap[mem.folderId]) {
+      const pastaName = folderMap[mem.folderId]
+      if (!zipFolders[pastaName]) {
+        zipFolders[pastaName] = zip.folder(pastaName)
+      }
+      targetFolder = zipFolders[pastaName]
+    }
+
+    // Se nao tem pasta especifica, usa pasta por tipo
+    if (!targetFolder) {
+      if (mem.type === 'photo') targetFolder = zipFolders['Fotos']
+      else if (mem.type === 'video') targetFolder = zipFolders['Videos']
+      else if (mem.type === 'audio') targetFolder = zipFolders['Audios']
+      else targetFolder = zipFolders['Frases']
+    }
+
+    // Obter o blob do arquivo
+    let fileBlob = null
+
+    // 1. Blob ja enriquecido pelo getMemories
+    if (mem.fileBlob && mem.fileBlob instanceof Blob) {
+      fileBlob = mem.fileBlob
+    } else if (mem.fileBlob && !(mem.fileBlob instanceof Blob)) {
+      fileBlob = new Blob([mem.fileBlob], { type: getMimeType(mem.type) })
+    }
+
+    // 2. Se tem fileUrl (premium/cloud), buscar via fetch
+    if (!fileBlob && mem.fileUrl && !mem.fileUrl.startsWith('blob:')) {
       try {
         const response = await fetch(mem.fileUrl)
         if (response.ok) {
-          const blob = await response.blob()
-          const ext = getExtension(mem.type, blob.type)
-          zip.file(`${folder}/${mem.id}.${ext}`, blob)
+          fileBlob = await response.blob()
         }
-      } catch (err) {
-        // Se nao consegue baixar, apenas pula
-        console.warn(`Nao conseguiu baixar arquivo da memoria ${mem.id}`)
-      }
+      } catch { /* skip */ }
     }
 
-    indexText += `- [${year}/${month}] ${mem.title || 'Sem titulo'} (${mem.type})\n`
+    // 3. Buscar no IndexedDB fileBlobs table
+    if (!fileBlob) {
+      try {
+        let match = null
+        if (mem.localBlobId) {
+          match = await db.fileBlobs.where('localBlobId').equals(mem.localBlobId).first()
+        }
+        if (!match) {
+          match = await db.fileBlobs.where('firestoreId').equals(mem.id).first()
+        }
+        if (match?.blob) {
+          fileBlob = match.blob
+        }
+      } catch { /* skip */ }
+    }
+
+    // Adicionar arquivo ao ZIP
+    if (fileBlob) {
+      const ext = getExtension(mem.type, fileBlob.type)
+      targetFolder.file(`${safeDate}_${baseName}.${ext}`, fileBlob)
+    }
+
+    // Adicionar texto/descricao
+    if (mem.type === 'text' || (mem.description && !fileBlob)) {
+      const textContent = [
+        `Data: ${mem.date || 'N/A'}`,
+        '',
+        mem.description || mem.title || '',
+      ].join('\n')
+      targetFolder.file(`${safeDate}_${baseName}.txt`, textContent)
+    }
+
+    // Se tem arquivo E descricao, adicionar nota separada
+    if (fileBlob && mem.description) {
+      targetFolder.file(`${safeDate}_${baseName}_desc.txt`, mem.description)
+    }
+
+    indexText += `- [${mem.type}] ${date} — ${mem.description?.substring(0, 50) || 'Sem descrição'}\n`
+    count++
   }
 
   zip.file('_indice.txt', indexText)
@@ -61,16 +150,27 @@ export async function exportAllAsZip() {
     compressionOptions: { level: 6 }
   })
 
-  downloadBlob(blob, `Recordar_Backup_${new Date().toISOString().substring(0,10)}.zip`)
+  downloadBlob(blob, `Recordar_Backup_${new Date().toISOString().substring(0, 10)}.zip`)
 }
 
 function getExtension(type, mimeType) {
+  if (mimeType?.includes('png')) return 'png'
+  if (mimeType?.includes('webp')) return 'webp'
+  if (mimeType?.includes('gif')) return 'gif'
+  if (mimeType?.includes('mp4')) return 'mp4'
+  if (mimeType?.includes('webm')) return 'webm'
+  if (mimeType?.includes('ogg')) return 'ogg'
   if (type === 'photo') return 'jpg'
   if (type === 'video') return 'mp4'
   if (type === 'audio') return 'webm'
-  if (mimeType?.includes('png')) return 'png'
-  if (mimeType?.includes('webp')) return 'webp'
   return 'bin'
+}
+
+function getMimeType(type) {
+  if (type === 'photo') return 'image/jpeg'
+  if (type === 'video') return 'video/mp4'
+  if (type === 'audio') return 'audio/webm'
+  return 'application/octet-stream'
 }
 
 function downloadBlob(blob, filename) {

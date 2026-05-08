@@ -148,6 +148,40 @@
   box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
 }
 
+/* ── Password field wrapper ── */
+.passwordWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.passwordWrap .input {
+  padding-right: 44px;
+  margin-bottom: 0;
+}
+
+.eyeBtn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--cinza);
+  opacity: 0.6;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.eyeBtn:hover {
+  opacity: 1;
+}
+
 .textarea {
   width: 100%;
   padding: 11px 14px;

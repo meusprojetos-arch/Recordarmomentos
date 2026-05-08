@@ -15,6 +15,8 @@ import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { getUserPlan, getStorageUsage, formatBytes } from '../../services/planService.js'
+import { auth, firestore } from '../../firebase.js'
+import { doc, updateDoc } from 'firebase/firestore'
 import db from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import styles from './ConfigScreen.module.css'
@@ -52,7 +54,39 @@ const FAQ_ITEMS = [
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function ConfigScreen({ onClose }) {
-  const { user, logout } = useAuth()
+  const { user, logout, changePassword } = useAuth()
+
+  // ── Trocar Senha ──
+  const [currentPwd, setCurrentPwd]     = useState('')
+  const [newPwd, setNewPwd]             = useState('')
+  const [confirmPwd, setConfirmPwd]     = useState('')
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false)
+  const [showNewPwd, setShowNewPwd]     = useState(false)
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false)
+  const [savingPwd, setSavingPwd]       = useState(false)
+
+  const handleChangePassword = async () => {
+    if (!currentPwd) { toast.error('Digite a senha atual'); return }
+    if (!newPwd) { toast.error('Digite a nova senha'); return }
+    if (newPwd.length < 6) { toast.error('A nova senha deve ter pelo menos 6 caracteres'); return }
+    if (newPwd !== confirmPwd) { toast.error('As senhas não coincidem'); return }
+    setSavingPwd(true)
+    try {
+      await changePassword(currentPwd, newPwd)
+      toast.success('Senha alterada com sucesso!')
+      setCurrentPwd('')
+      setNewPwd('')
+      setConfirmPwd('')
+    } catch (err) {
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        toast.error('Senha atual incorreta')
+      } else {
+        toast.error('Erro ao alterar senha')
+      }
+    } finally {
+      setSavingPwd(false)
+    }
+  }
 
   // ── Editar Perfil ──
   const [name, setName]       = useState('')
@@ -81,6 +115,25 @@ export default function ConfigScreen({ onClose }) {
     setIsPrivate(localStorage.getItem('recordar_privacy') !== 'public')
     setAutoBackup(localStorage.getItem('recordar_autoBackup') === '1')
     setBackupFreq(localStorage.getItem('recordar_backupFreq') || 'diario')
+
+    // Sincronizar dados locais com Firestore se faltam no servidor
+    const syncToFirestore = async () => {
+      const uid = auth.currentUser?.uid
+      if (!uid) return
+      const localBio = localStorage.getItem('recordar_profileBio') || ''
+      const localAvatar = localStorage.getItem('recordar_avatar') || ''
+      const localName = localStorage.getItem('recordar_profileName') || ''
+      const updates = {}
+      if (localBio && !user?.bio) updates.bio = localBio
+      if (localAvatar && !user?.photoURL) updates.photoURL = localAvatar
+      if (localName && !user?.name) updates.name = localName
+      if (Object.keys(updates).length > 0) {
+        try {
+          await updateDoc(doc(firestore, 'users', uid), updates)
+        } catch { /* ignore */ }
+      }
+    }
+    syncToFirestore()
   }, [user])
 
   // ── Salvar perfil ──
@@ -90,6 +143,14 @@ export default function ConfigScreen({ onClose }) {
     try {
       localStorage.setItem('recordar_profileName', name.trim())
       localStorage.setItem('recordar_profileBio', bio.trim())
+      // Salvar no Firestore para outros usuários verem
+      const uid = auth.currentUser?.uid
+      if (uid) {
+        await updateDoc(doc(firestore, 'users', uid), {
+          name: name.trim(),
+          bio: bio.trim(),
+        })
+      }
       toast.success('Perfil atualizado!')
     } catch {
       toast.error('Erro ao salvar perfil')
@@ -104,10 +165,17 @@ export default function ConfigScreen({ onClose }) {
     if (!file) return
     if (!file.type.startsWith('image/')) { toast.error('Selecione uma imagem'); return }
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       const base64 = reader.result
       setAvatarSrc(base64)
       localStorage.setItem('recordar_avatar', base64)
+      // Salvar no Firestore para outros usuários verem
+      const uid = auth.currentUser?.uid
+      if (uid) {
+        try {
+          await updateDoc(doc(firestore, 'users', uid), { photoURL: base64 })
+        } catch { /* ignore */ }
+      }
       toast.success('Foto atualizada!')
     }
     reader.readAsDataURL(file)
@@ -176,8 +244,14 @@ export default function ConfigScreen({ onClose }) {
     // Calcular uso local real (soma dos blobs no IndexedDB)
     const calcLocal = async () => {
       try {
-        const memories = await db.memories.toArray()
         let totalBytes = 0
+        // Buscar blobs da tabela fileBlobs (onde as fotos são realmente armazenadas)
+        const blobs = await db.fileBlobs.toArray()
+        for (const b of blobs) {
+          if (b.blob) totalBytes += b.blob.size || 0
+        }
+        // Também contar blobs inline na tabela memories (caso existam)
+        const memories = await db.memories.toArray()
         for (const m of memories) {
           if (m.fileBlob) totalBytes += m.fileBlob.size || 0
           if (m.thumbnail) totalBytes += m.thumbnail.size || 0
@@ -291,7 +365,112 @@ export default function ConfigScreen({ onClose }) {
           </button>
         </div>
 
-        {/* ══ 2. Armazenamento ══ */}
+        {/* ══ 2. Trocar Senha ══ */}
+        <h2 className={styles.sectionTitle}>Trocar Senha</h2>
+        <div className={styles.card}>
+          <label className={styles.fieldLabel}>Senha atual</label>
+          <div className={styles.passwordWrap}>
+            <input
+              className={styles.input}
+              type={showCurrentPwd ? 'text' : 'password'}
+              value={currentPwd}
+              onChange={e => setCurrentPwd(e.target.value)}
+              placeholder="Digite a senha atual"
+            />
+            <button
+              type="button"
+              className={styles.eyeBtn}
+              onClick={() => setShowCurrentPwd(v => !v)}
+              aria-label={showCurrentPwd ? 'Ocultar senha' : 'Mostrar senha'}
+            >
+              {showCurrentPwd ? (
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+          </div>
+
+          <label className={styles.fieldLabel}>Nova senha</label>
+          <div className={styles.passwordWrap}>
+            <input
+              className={styles.input}
+              type={showNewPwd ? 'text' : 'password'}
+              value={newPwd}
+              onChange={e => setNewPwd(e.target.value)}
+              placeholder="Digite a nova senha"
+            />
+            <button
+              type="button"
+              className={styles.eyeBtn}
+              onClick={() => setShowNewPwd(v => !v)}
+              aria-label={showNewPwd ? 'Ocultar senha' : 'Mostrar senha'}
+            >
+              {showNewPwd ? (
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+          </div>
+
+          <label className={styles.fieldLabel}>Confirmar nova senha</label>
+          <div className={styles.passwordWrap}>
+            <input
+              className={styles.input}
+              type={showConfirmPwd ? 'text' : 'password'}
+              value={confirmPwd}
+              onChange={e => setConfirmPwd(e.target.value)}
+              placeholder="Repita a nova senha"
+            />
+            <button
+              type="button"
+              className={styles.eyeBtn}
+              onClick={() => setShowConfirmPwd(v => !v)}
+              aria-label={showConfirmPwd ? 'Ocultar senha' : 'Mostrar senha'}
+            >
+              {showConfirmPwd ? (
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+            </button>
+          </div>
+
+          <button
+            className={styles.saveBtn}
+            onClick={handleChangePassword}
+            disabled={savingPwd}
+          >
+            {savingPwd ? 'Salvando…' : 'Alterar senha'}
+          </button>
+        </div>
+
+        {/* ══ 3. Armazenamento ══ */}
         <h2 className={styles.sectionTitle}>Armazenamento</h2>
         <div className={styles.card}>
 

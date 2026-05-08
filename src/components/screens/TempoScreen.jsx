@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { getMemories, searchMemories, deleteMemory, getTrashItems, restoreFromTrash, permanentDeleteFromTrash } from '../../services/memoriesService.js'
+import { getMemories, searchMemories, deleteMemory, updateMemory, getTrashItems, restoreFromTrash, permanentDeleteFromTrash } from '../../services/memoriesService.js'
 import { db as localDb } from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import FolderGrid from '../ui/FolderGrid.jsx'
@@ -76,6 +76,21 @@ export default function TempoScreen() {
   const [showMoveModal, setShowMoveModal] = useState(false)
   const [folders, setFolders]           = useState([])
 
+  // Visualização de pasta aberta
+  const [openFolder, setOpenFolder]     = useState(null)
+  const [folderMemories, setFolderMemories] = useState([])
+  const [folderLoading, setFolderLoading] = useState(false)
+  const [folderThumbUrls, setFolderThumbUrls] = useState({})
+  const [folderViewerOpen, setFolderViewerOpen] = useState(false)
+  const [folderViewerIndex, setFolderViewerIndex] = useState(0)
+
+  // Contagem de memórias por pasta (para FolderGrid)
+  const [memoryCounts, setMemoryCounts] = useState({})
+
+  // Modo trancar
+  const [lockMode, setLockMode]         = useState(false)
+  const [lockSelectedIds, setLockSelectedIds] = useState(new Set())
+
   // Swipe no viewer
   const touchStartX = useRef(null)
   const longPressTimer = useRef(null)
@@ -85,13 +100,64 @@ export default function TempoScreen() {
   const loadMemories = useCallback(async () => {
     try {
       const mems = await getMemories()
-      setMemories(mems)
+      // Encontrar a pasta "Trancadas" para excluir da galeria principal
+      let lockedFolderId = null
+      try {
+        const lockedFolder = await localDb.folders.where('name').equals('Trancadas').first()
+        if (lockedFolder) lockedFolderId = lockedFolder.id
+      } catch { /* ignore */ }
+      // Filtrar memórias trancadas (privadas + na pasta Trancadas)
+      const visible = mems.filter(m => {
+        if (lockedFolderId && m.folderId === lockedFolderId && m.privacyLevel === 'private') return false
+        return true
+      })
+      setMemories(visible)
+      // Calcular contagem por pasta
+      const countMap = {}
+      for (const m of mems) {
+        if (m.folderId) countMap[m.folderId] = (countMap[m.folderId] || 0) + 1
+      }
+      setMemoryCounts(countMap)
     } catch (e) {
       console.error(e)
     }
   }, [])
 
   useEffect(() => { loadMemories() }, [loadMemories])
+
+  // Abrir pasta e carregar suas memórias
+  const handleOpenFolder = async (folder) => {
+    setOpenFolder(folder)
+    setFolderLoading(true)
+    try {
+      const mems = await getMemories()
+      const folderMems = mems.filter(m => m.folderId === folder.id)
+      setFolderMemories(folderMems)
+      // Gerar URLs de blob para fotos da pasta
+      const urls = {}
+      for (const m of folderMems) {
+        try {
+          if (m._objectUrl && (m.type === 'photo' || m.type === 'video')) {
+            urls[m.id] = m._objectUrl
+          } else if (m.fileUrl && (m.type === 'photo' || m.type === 'video')) {
+            urls[m.id] = m.fileUrl
+          } else if (m.thumbnail && m.thumbnail instanceof Blob) {
+            urls[m.id] = URL.createObjectURL(m.thumbnail)
+          } else if (m.fileBlob && m.fileBlob instanceof Blob && (m.type === 'photo' || m.type === 'video')) {
+            urls[m.id] = URL.createObjectURL(m.fileBlob)
+          } else if (m.fileBlob && !(m.fileBlob instanceof Blob) && (m.type === 'photo' || m.type === 'video')) {
+            const blob = new Blob([m.fileBlob], { type: m.type === 'photo' ? 'image/jpeg' : 'video/mp4' })
+            urls[m.id] = URL.createObjectURL(blob)
+          }
+        } catch { /* skip */ }
+      }
+      setFolderThumbUrls(urls)
+    } catch (e) {
+      console.error(e)
+      setFolderMemories([])
+    }
+    setFolderLoading(false)
+  }
 
   // Recarregar ao voltar para a tela ou após importação
   useEffect(() => {
@@ -301,10 +367,11 @@ export default function TempoScreen() {
   }
 
   function handleThumbClick(memory) {
-    if (selectMode) {
+    if (lockMode) {
+      toggleLockSelect(memory.id)
+    } else if (selectMode) {
       toggleSelect(memory.id)
     } else {
-      // Só abre viewer se tem mídia disponível
       const src = thumbUrls[memory.id] || memory.fileUrl
       if (src) {
         openViewer(memory)
@@ -337,6 +404,15 @@ export default function TempoScreen() {
     a.download = memory.title || 'memoria'
     a.click()
     toast.success('Download iniciado')
+  }
+
+  async function toggleMemoryPrivacy(memory) {
+    const newLevel = memory.privacyLevel === 'public' ? 'private' : 'public'
+    try {
+      await updateMemory(memory.id, { privacyLevel: newLevel })
+      setMemories(prev => prev.map(m => m.id === memory.id ? { ...m, privacyLevel: newLevel } : m))
+      toast.success(newLevel === 'public' ? 'Agora é pública' : 'Agora é só sua')
+    } catch { toast.error('Erro ao alterar') }
   }
 
   async function batchShare() {
@@ -421,16 +497,60 @@ export default function TempoScreen() {
     const count = selectedIds.size
     try {
       for (const id of selectedIds) {
-        await localDb.memories.update(id, { folderId })
+        await updateMemory(id, { folderId })
       }
-      setMemories(prev => prev.map(m => selectedIds.has(m.id) ? { ...m, folderId } : m))
       const folder = folders.find(f => f.id === folderId)
       toast.success(`${count} item(s) movido(s) para "${folder?.name || 'pasta'}"`)
-    } catch {
-      toast.error('Erro ao mover')
+      // Recarregar para atualizar contagens
+      await loadMemories()
+    } catch (err) {
+      console.error('Erro ao mover:', err)
+      toast.error('Erro ao mover para pasta')
     }
     setShowMoveModal(false)
     exitSelectMode()
+  }
+
+  // ── Modo Trancar ──────────────────────────────────────────────────────────
+
+  function toggleLockSelect(id) {
+    setLockSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function handleLockPhotos() {
+    if (lockSelectedIds.size === 0) return
+    try {
+      // Criar/encontrar pasta "Trancadas"
+      let lockedFolder = await localDb.folders.where('name').equals('Trancadas').first()
+      if (!lockedFolder) {
+        const folderId = await localDb.folders.add({
+          name: 'Trancadas',
+          emoji: '/icons/pasta-generica.svg',
+          isAuto: false,
+          autoRule: null,
+          order: 99,
+          createdAt: new Date().toISOString(),
+        })
+        lockedFolder = { id: folderId }
+      }
+
+      // Mover para pasta + marcar como privado
+      for (const id of lockSelectedIds) {
+        await updateMemory(id, { privacyLevel: 'private', folderId: lockedFolder.id })
+      }
+
+      // Remover da galeria visível
+      setMemories(prev => prev.filter(m => !lockSelectedIds.has(m.id)))
+      toast.success(`${lockSelectedIds.size} item(s) trancado(s)`)
+    } catch {
+      toast.error('Erro ao trancar')
+    }
+    setLockMode(false)
+    setLockSelectedIds(new Set())
   }
 
   // ── Renders auxiliares ─────────────────────────────────────────────────────
@@ -442,10 +562,11 @@ export default function TempoScreen() {
   function GridItem({ memory }) {
     const src = getThumbSrc(memory)
     const isSelected = selectedIds.has(memory.id)
+    const isLockSelected = lockSelectedIds.has(memory.id)
 
     return (
       <div
-        className={`${styles.memThumb} ${isSelected ? styles.memThumbSelected : ''}`}
+        className={`${styles.memThumb} ${isSelected ? styles.memThumbSelected : ''} ${isLockSelected ? styles.memThumbLocked : ''}`}
         onClick={() => handleThumbClick(memory)}
         onTouchStart={() => !selectMode && startLongPress(memory)}
         onTouchEnd={cancelLongPress}
@@ -457,7 +578,19 @@ export default function TempoScreen() {
       >
         {/* Imagem / Vídeo / Áudio */}
         {src && memory.type === 'photo' && (
-          <img src={src} alt={memory.title || ''} className={styles.thumbImg} loading="lazy" />
+          <img
+            src={src}
+            alt={memory.title || ''}
+            className={styles.thumbImg}
+            loading="lazy"
+            onError={e => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex') }}
+          />
+        )}
+        {src && memory.type === 'photo' && (
+          <div className={styles.thumbPlaceholder} style={{ display: 'none' }}>
+            <img src={FILTER_ICONS.photo} alt="" width={32} height={32} aria-hidden="true" />
+            <span className={styles.thumbTitle}>{memory.title}</span>
+          </div>
         )}
         {src && memory.type === 'video' && (
           <>
@@ -543,7 +676,66 @@ export default function TempoScreen() {
         {/* ══ TAB: Pastas ══ */}
         {activeTab === 'pastas' && (
           <div style={{ marginTop: 12 }}>
-            <FolderGrid />
+            {!openFolder ? (
+              <FolderGrid onOpenFolder={handleOpenFolder} memoryCounts={memoryCounts} />
+            ) : (
+              <div className={styles.folderView}>
+                <button className={styles.folderBackBtn} onClick={() => setOpenFolder(null)}>
+                  ← Voltar para pastas
+                </button>
+                <h3 className={styles.folderViewTitle}>
+                  <img src={openFolder.emoji} alt="" width={24} height={24} style={{ marginRight: 8, verticalAlign: 'middle' }} />
+                  {openFolder.name}
+                </h3>
+                {folderLoading && <p style={{ textAlign: 'center', color: '#999', padding: 20 }}>Carregando...</p>}
+                {!folderLoading && folderMemories.length === 0 && (
+                  <div className={styles.emptyState}>
+                    <span>📂</span>
+                    <p>Pasta vazia</p>
+                    <p className={styles.emptySub}>Mova memórias para esta pasta usando o botão "Mover"</p>
+                  </div>
+                )}
+                {!folderLoading && folderMemories.length > 0 && (
+                  <div className={styles.yearGrid}>
+                    {folderMemories.map((m, idx) => {
+                      const thumbSrc = folderThumbUrls[m.id] || m.fileUrl || null
+                      return (
+                        <div
+                          key={m.id}
+                          className={styles.memThumb}
+                          onClick={() => {
+                            if (thumbSrc) {
+                              setFolderViewerIndex(idx)
+                              setFolderViewerOpen(true)
+                            }
+                          }}
+                        >
+                          {thumbSrc ? (
+                            <>
+                              <img
+                                src={thumbSrc}
+                                alt={m.title || ''}
+                                className={styles.thumbImg}
+                                onError={e => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex') }}
+                              />
+                              <div className={styles.thumbPlaceholder} style={{ display: 'none' }}>
+                                <span style={{ fontSize: 24 }}>📷</span>
+                                <span className={styles.thumbTitle}>{m.title || 'Foto'}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className={styles.thumbPlaceholder}>
+                              <span style={{ fontSize: 24 }}>{m.type === 'video' ? '🎬' : m.type === 'audio' ? '🎵' : '📷'}</span>
+                              <span className={styles.thumbTitle}>{m.title || m.description || m.type}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -645,7 +837,34 @@ export default function TempoScreen() {
               ✕
             </button>
           )}
+
+          {/* Botão Trancar */}
+          <button
+            className={`${styles.lockBtn} ${lockMode ? styles.lockBtnActive : ''}`}
+            onClick={() => { setLockMode(v => !v); setLockSelectedIds(new Set()) }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            {lockMode ? 'Trancando...' : 'Trancar'}
+          </button>
         </div>
+
+        {/* Barra de trancar */}
+        {lockMode && (
+          <div className={styles.lockBar}>
+            <span className={styles.lockBarText}>
+              {lockSelectedIds.size} selecionado(s) — toque nas fotos para trancar
+            </span>
+            <button className={styles.lockBarBtn} onClick={handleLockPhotos} disabled={lockSelectedIds.size === 0}>
+              Trancar
+            </button>
+            <button className={styles.lockBarCancel} onClick={() => { setLockMode(false); setLockSelectedIds(new Set()) }}>
+              Cancelar
+            </button>
+          </div>
+        )}
 
         {showDatePicker && (
           <div className={styles.datePicker}>
@@ -847,6 +1066,14 @@ export default function TempoScreen() {
             <div className={styles.viewerTopActions}>
               <button
                 className={styles.viewerIconBtn}
+                onClick={() => toggleMemoryPrivacy(currentMemory)}
+                aria-label={currentMemory.privacyLevel === 'public' ? 'Tornar privado' : 'Tornar público'}
+                title={currentMemory.privacyLevel === 'public' ? 'Público' : 'Privado'}
+              >
+                <span style={{ fontSize: 18 }}>{currentMemory.privacyLevel === 'public' ? '🌐' : '🔒'}</span>
+              </button>
+              <button
+                className={styles.viewerIconBtn}
                 onClick={() => shareMemory(currentMemory)}
                 aria-label="Partilhar"
               >
@@ -891,6 +1118,46 @@ export default function TempoScreen() {
           </div>
         </div>
       )}
+
+      {/* ── Viewer de pasta ── */}
+      {folderViewerOpen && folderMemories[folderViewerIndex] && (() => {
+        const mem = folderMemories[folderViewerIndex]
+        const src = folderThumbUrls[mem.id] || mem.fileUrl || null
+        return (
+          <div className={styles.viewer} role="dialog" aria-modal="true">
+            <div className={styles.viewerBackdrop} onClick={() => setFolderViewerOpen(false)} />
+            <div className={styles.viewerMedia}>
+              {src && mem.type === 'photo' && (
+                <img src={src} alt={mem.title || ''} className={styles.viewerImg} />
+              )}
+              {src && mem.type === 'video' && (
+                <video src={src} controls autoPlay className={styles.viewerImg} />
+              )}
+            </div>
+            {folderViewerIndex > 0 && (
+              <button className={`${styles.navBtn} ${styles.navBtnLeft}`} onClick={() => setFolderViewerIndex(i => i - 1)} aria-label="Anterior">
+                <svg viewBox="0 0 24 24" fill="white" width="24" height="24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" /></svg>
+              </button>
+            )}
+            {folderViewerIndex < folderMemories.length - 1 && (
+              <button className={`${styles.navBtn} ${styles.navBtnRight}`} onClick={() => setFolderViewerIndex(i => i + 1)} aria-label="Próximo">
+                <svg viewBox="0 0 24 24" fill="white" width="24" height="24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" /></svg>
+              </button>
+            )}
+            <div className={styles.viewerTopBar}>
+              <button className={styles.viewerIconBtn} onClick={() => setFolderViewerOpen(false)} aria-label="Fechar">
+                <svg viewBox="0 0 24 24" fill="white" width="22" height="22"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+              </button>
+              <span className={styles.viewerCounter}>{folderViewerIndex + 1} / {folderMemories.length}</span>
+              <div className={styles.viewerTopActions} />
+            </div>
+            <div className={styles.viewerInfo}>
+              {mem.title && <p className={styles.viewerTitle}>{mem.title}</p>}
+              {mem.date && <p className={styles.viewerDate}>{mem.date}</p>}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Modal mover para pasta ── */}
       {showMoveModal && (

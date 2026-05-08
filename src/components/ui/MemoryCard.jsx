@@ -42,20 +42,22 @@ export default function MemoryCard({ memory }) {
       {/* Thumbnail */}
       <div className={styles.thumb}>
         {thumbUrl
-          ? <img src={thumbUrl} alt={memory.title || 'Memória'} />
+          ? <img src={thumbUrl} alt="Memória" />
           : <img src={TYPE_ICONS[memory.type] || TYPE_ICONS.photo} alt="" aria-hidden="true" width={40} height={40} />
         }
       </div>
 
       {/* Conteúdo */}
       <div className={styles.info}>
-        <p className={styles.title}>{memory.title || 'Sem título'}</p>
         <p className={styles.date}>{dateLabel}</p>
         {memory.description && (
           <p className={styles.desc}>{memory.description}</p>
         )}
-        {folder && (
-          <span className={styles.tag}>{folder.emoji} {folder.name}</span>
+        {folder && folder.name !== 'Trancadas' && (
+          <span className={styles.tag}>
+            <img src={folder.emoji} alt="" width={14} height={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+            {folder.name}
+          </span>
         )}
       </div>
     </div>

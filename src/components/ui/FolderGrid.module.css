@@ -46,3 +46,76 @@
 }
 
 .addName { color: var(--verde); }
+
+/* ── Modal nova pasta ── */
+.newFolderOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 20px;
+}
+
+.newFolderModal {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  padding: 24px 20px;
+  width: 100%;
+  max-width: 320px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+.newFolderTitle {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cinza);
+  margin-bottom: 16px;
+}
+
+.newFolderInput {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid rgba(255, 107, 53, 0.2);
+  border-radius: var(--radius-sm);
+  background: var(--bege);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--cinza);
+  outline: none;
+  margin-bottom: 16px;
+}
+
+.newFolderInput:focus {
+  border-color: var(--verde);
+}
+
+.newFolderActions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.newFolderCancel {
+  background: none;
+  border: none;
+  color: var(--cinza-suave);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 16px;
+}
+
+.newFolderConfirm {
+  background: var(--verde);
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+}

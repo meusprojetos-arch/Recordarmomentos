@@ -329,3 +329,31 @@
 }
 
 .cancelBtn:active { background: #EEE; }
+
+/* ── Privacy Row ── */
+.privacyRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.privacyBtn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(255,255,255,0.15);
+  background: var(--bege-claro);
+  color: var(--cinza-suave);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: var(--transition-fast);
+  text-align: center;
+}
+
+.privacyBtnActive {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: white;
+}

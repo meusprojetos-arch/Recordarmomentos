@@ -219,6 +219,74 @@
   padding: 4px 6px;
 }
 
+/* ── Lock Button ── */
+.lockBtn {
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: var(--cinza-suave);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition-fast);
+}
+.lockBtnActive {
+  background: var(--verde-light);
+  border-color: var(--verde);
+  color: var(--verde);
+}
+
+.lockBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #1a1a2e;
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+
+.lockBarText {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  flex: 1;
+}
+
+.lockBarBtn {
+  padding: 6px 12px;
+  border: none;
+  background: var(--verde);
+  color: white;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+.lockBarBtn:disabled { opacity: 0.4; cursor: default; }
+
+.lockBarCancel {
+  padding: 6px 10px;
+  border: none;
+  background: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.6);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.memThumbLocked {
+  outline: 3px solid #FFB400;
+  outline-offset: -3px;
+}
+
 .datePicker {
   background: var(--bege-claro);
   border-radius: var(--radius-md);
@@ -792,4 +860,31 @@
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-10px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Folder View ── */
+.folderView {
+  animation: slideDown 0.2s ease;
+}
+
+.folderBackBtn {
+  background: none;
+  border: none;
+  color: var(--verde);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-bottom: 8px;
+  font-family: var(--font-sans);
+}
+
+.folderViewTitle {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cinza);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
 }

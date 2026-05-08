@@ -165,3 +165,87 @@
   transition: var(--transition-fast);
 }
 .importBtn:active { transform: scale(0.98); }
+
+.searchPeopleBtn {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid rgba(79,124,82,0.3);
+  border-radius: var(--radius-md);
+  background: var(--bege-claro);
+  color: var(--verde);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  margin: 12px 0 8px;
+  transition: var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.searchPeopleBtn:active { transform: scale(0.98); }
+
+/* ── Permission Banner ── */
+.permissionBanner {
+  background: var(--bege-claro);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1.5px solid rgba(255, 107, 53, 0.2);
+}
+
+.permissionContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.permissionIcon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.permissionTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--cinza);
+  margin-bottom: 2px;
+}
+
+.permissionSub {
+  font-size: 13px;
+  color: var(--cinza-suave);
+}
+
+.permissionActions {
+  display: flex;
+  gap: 10px;
+}
+
+.permissionAllow {
+  flex: 1;
+  padding: 10px;
+  background: var(--verde);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.permissionDismiss {
+  flex: 1;
+  padding: 10px;
+  background: none;
+  color: var(--cinza-suave);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}

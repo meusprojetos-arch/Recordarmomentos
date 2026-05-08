@@ -69,9 +69,10 @@
 
 .username {
   font-size: 14px;
-  color: var(--verde);
+  color: #fff;
   font-weight: 600;
   margin-top: 2px;
+  opacity: 0.85;
 }
 
 .bio {

@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext.jsx'
-import { getMemories, addMemory } from '../../services/memoriesService.js'
+import { getMemories, addMemory, updateMemory } from '../../services/memoriesService.js'
 import { getSharedWithMe } from '../../services/usersService.js'
 import Topbar from '../layout/Topbar.jsx'
 import styles from './FeedScreen.module.css'
@@ -14,11 +14,19 @@ export default function FeedScreen() {
   const { user } = useAuth()
   const [posts, setPosts]             = useState([])
   const [newPost, setNewPost]         = useState('')
+  const [postDesc, setPostDesc]       = useState('')
   const [posting, setPosting]         = useState(false)
   const [showCompose, setShowCompose] = useState(false)
-  const [likedIds, setLikedIds]       = useState([])
+  const [likedIds, setLikedIds]       = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('recordar_likedPosts') || '[]')
+    } catch { return [] }
+  })
   const [selectedPost, setSelectedPost] = useState(null)
   const [loading, setLoading]         = useState(true)
+
+  // Privacidade do post
+  const [postPrivacy, setPostPrivacy] = useState(null) // null = não escolheu ainda
 
   // Filtro por data
   const [dateFrom, setDateFrom]       = useState('')
@@ -60,18 +68,24 @@ export default function FeedScreen() {
       toast.error('Escreva algo antes de postar')
       return
     }
+    if (!postPrivacy) {
+      toast.error('Escolha a privacidade da publicação')
+      return
+    }
     setPosting(true)
     try {
       await addMemory({
         type: 'text',
         title: newPost.substring(0, 60),
-        description: newPost,
+        description: postDesc.trim() || newPost,
         date: new Date().toISOString().substring(0, 10),
         tags: [],
-        privacyLevel: 'private',
+        privacyLevel: postPrivacy,
       })
       toast.success('Reflexão publicada!')
       setNewPost('')
+      setPostDesc('')
+      setPostPrivacy(null)
       setShowCompose(false)
       loadFeed()
     } catch {
@@ -83,22 +97,39 @@ export default function FeedScreen() {
   /* ── Like toggle ── */
   const toggleLike = (id, e) => {
     e.stopPropagation()
-    setLikedIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    )
+    setLikedIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      localStorage.setItem('recordar_likedPosts', JSON.stringify(next))
+      return next
+    })
   }
 
   /* ── Share ── */
   const handleShare = async (post, e) => {
     if (e) e.stopPropagation()
-    const text = post.description || post.title || ''
+    const frase = post.description || post.title || ''
+    const autor = user?.displayName || user?.name || 'Alguém'
+    const text = `"${frase}"\n\n— ${autor}, no Recordar\n\nGuarde suas memórias mais especiais no Recordar — o app feito para quem ama recordar. 💚`
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Reflexão — Recordar', text })
+        await navigator.share({ title: 'Recordar — Memórias que importam', text })
       } catch { /* cancelled */ }
     } else {
       await navigator.clipboard.writeText(text)
       toast.success('Copiado para a área de transferência!')
+    }
+  }
+
+  /* ── Toggle privacidade de post existente ── */
+  const handleTogglePostPrivacy = async (post, e) => {
+    if (e) e.stopPropagation()
+    const newLevel = post.privacyLevel === 'public' ? 'private' : 'public'
+    try {
+      await updateMemory(post.id, { privacyLevel: newLevel })
+      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, privacyLevel: newLevel } : p))
+      toast.success(newLevel === 'public' ? 'Publicação agora é pública' : 'Publicação agora é só sua')
+    } catch {
+      toast.error('Erro ao alterar privacidade')
     }
   }
 
@@ -221,12 +252,39 @@ export default function FeedScreen() {
                 autoFocus
               />
             </div>
+
+            {/* Descrição opcional */}
+            <input
+              className={styles.composeTitleInput}
+              placeholder="Descrição (opcional)"
+              value={postDesc}
+              onChange={e => setPostDesc(e.target.value)}
+              maxLength={200}
+            />
+
+            {/* Seletor de privacidade obrigatório */}
+            <div className={styles.privacySelector}>
+              <span className={styles.privacyLabel}>Quem pode ver:</span>
+              <button
+                className={`${styles.privacyOption} ${postPrivacy === 'private' ? styles.privacyOptionActive : ''}`}
+                onClick={() => setPostPrivacy('private')}
+              >
+                🔒 Somente eu
+              </button>
+              <button
+                className={`${styles.privacyOption} ${postPrivacy === 'public' ? styles.privacyOptionActive : ''}`}
+                onClick={() => setPostPrivacy('public')}
+              >
+                🌐 Público
+              </button>
+            </div>
+
             <div className={styles.composeFooter}>
               <span className={styles.charCount}>{newPost.length} caracteres</span>
               <button
                 className={styles.postBtn}
                 onClick={handlePost}
-                disabled={posting || !newPost.trim()}
+                disabled={posting || !newPost.trim() || !postPrivacy}
               >
                 {posting ? 'Publicando…' : 'Publicar'}
               </button>
@@ -287,6 +345,16 @@ export default function FeedScreen() {
                   <p className={styles.postAuthor}>{authorName(post)}</p>
                   <p className={styles.postDate}>{formatDateTime(post.createdAt)}</p>
                 </div>
+                {/* Indicador de privacidade */}
+                {!post.fromUser && (
+                  <button
+                    className={styles.privacyBadge}
+                    onClick={e => handleTogglePostPrivacy(post, e)}
+                    title={post.privacyLevel === 'public' ? 'Público — clique para trancar' : 'Privado — clique para publicar'}
+                  >
+                    {post.privacyLevel === 'public' ? '🌐' : '🔒'}
+                  </button>
+                )}
               </div>
 
               {/* Text content */}

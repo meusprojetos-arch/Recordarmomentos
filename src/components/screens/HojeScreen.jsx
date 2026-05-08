@@ -20,6 +20,7 @@ import Topbar from '../layout/Topbar.jsx'
 import MemoryCard from '../ui/MemoryCard.jsx'
 import QuickAction from '../ui/QuickAction.jsx'
 import BackupBanner from '../ui/BackupBanner.jsx'
+import SearchUsersModal from '../modals/SearchUsersModal.jsx'
 import styles from './HojeScreen.module.css'
 
 // ÍCONES — substitua cada URL pela sua imagem personalizada
@@ -47,11 +48,39 @@ export default function HojeScreen() {
   const { user } = useAuth()
   const [userName, setUserName] = useState('voce')
   const [frase] = useState(() => FRASES[Math.floor(Math.random() * FRASES.length)])
+  const [showSearch, setShowSearch] = useState(false)
+  const [showPermissionBanner, setShowPermissionBanner] = useState(false)
   const [reminder, setReminder] = useState(null)
   const [recentMemories, setRecentMemories] = useState([])
 
   const today = new Date()
   const todayFormatted = format(today, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })
+
+  // Solicitar permissões na primeira vez
+  useEffect(() => {
+    const asked = localStorage.getItem('recordar_permissions_asked')
+    if (!asked) {
+      setShowPermissionBanner(true)
+    }
+  }, [])
+
+  const handleAllowPermissions = async () => {
+    localStorage.setItem('recordar_permissions_asked', '1')
+    setShowPermissionBanner(false)
+    try {
+      // Solicitar acesso à câmera (isso dispara o prompt do navegador/SO)
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      stream.getTracks().forEach(t => t.stop())
+      toast.success('Permissões concedidas!')
+    } catch {
+      toast('Você pode permitir depois nas configurações do navegador')
+    }
+  }
+
+  const handleDismissPermissions = () => {
+    localStorage.setItem('recordar_permissions_asked', '1')
+    setShowPermissionBanner(false)
+  }
 
   // Carrega nome do usuario
   useEffect(() => {
@@ -95,10 +124,10 @@ export default function HojeScreen() {
   }
 
   const quickActions = [
-    { iconUrl: ICONS.fotovideo, label: 'Foto ou Vídeo', sub: 'Da câmera ou galeria', color: 'green', type: 'photo' },
-    { iconUrl: ICONS.escrever,  label: 'Escrever',      sub: 'Reflexão ou história', color: 'gold',  type: 'text'  },
-    { iconUrl: ICONS.audio,     label: 'Áudio',         sub: 'Gravar voz',           color: 'blue',  type: 'audio' },
-    { iconUrl: ICONS.local,     label: 'Local',         sub: 'Marcar lugar',         color: 'rose',  type: 'location' },
+    { iconUrl: ICONS.fotovideo, label: 'Foto',    sub: 'Da câmera ou galeria',   color: 'green', type: 'photo' },
+    { iconUrl: '/icons/filtro-video.svg', label: 'Vídeo',   sub: 'Da câmera ou galeria',   color: 'green', type: 'video' },
+    { iconUrl: ICONS.audio,     label: 'Áudio',   sub: 'Gravar voz',             color: 'blue',  type: 'audio' },
+    { iconUrl: ICONS.escrever,  label: 'Frase',   sub: 'Reflexão ou história',   color: 'gold',  type: 'text'  },
   ]
 
   return (
@@ -112,12 +141,37 @@ export default function HojeScreen() {
       />
 
       <div className={styles.scroll}>
+
+        {/* ── Banner de permissão ── */}
+        {showPermissionBanner && (
+          <div className={styles.permissionBanner}>
+            <div className={styles.permissionContent}>
+              <span className={styles.permissionIcon}>📸</span>
+              <div>
+                <p className={styles.permissionTitle}>Permitir acesso às fotos e câmera</p>
+                <p className={styles.permissionSub}>Para salvar e importar suas memórias automaticamente</p>
+              </div>
+            </div>
+            <div className={styles.permissionActions}>
+              <button className={styles.permissionAllow} onClick={handleAllowPermissions}>Permitir</button>
+              <button className={styles.permissionDismiss} onClick={handleDismissPermissions}>Agora não</button>
+            </div>
+          </div>
+        )}
         {/* ── Cartão de saudação ── */}
         <div className={styles.greetingCard}>
           <p className={styles.greetingDate}>{todayFormatted.toUpperCase()}</p>
           <h2 className={styles.greetingText}>{getGreeting()}, {userName}!</h2>
           <p className={styles.greetingPhrase}>{frase}</p>
         </div>
+
+        {/* ── Buscar Pessoas ── */}
+        <button className={styles.searchPeopleBtn} onClick={() => setShowSearch(true)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Buscar Pessoas
+        </button>
 
         {/* ── Aviso de backup ── */}
         <BackupBanner onUpgrade={() => setShowPlans(true)} />
@@ -149,7 +203,7 @@ export default function HojeScreen() {
               label={a.label}
               sub={a.sub}
               color={a.color}
-              onClick={() => setShowAddModal(true)}
+              onClick={() => setShowAddModal(a.type)}
             />
           ))}
         </div>
@@ -185,6 +239,10 @@ export default function HojeScreen() {
           ))}
         </div>
       </div>
+
+      {showSearch && (
+        <SearchUsersModal onClose={() => setShowSearch(false)} />
+      )}
     </div>
   )
 }

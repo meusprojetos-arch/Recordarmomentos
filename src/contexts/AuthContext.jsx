@@ -8,7 +8,10 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile
+  updateProfile,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth'
 import { doc, setDoc, getDoc } from 'firebase/firestore'
 
@@ -46,7 +49,7 @@ export function AuthProvider({ children }) {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     await updateProfile(cred.user, { displayName: name })
     // Cria documento do usuario no Firestore
-    await setDoc(doc(firestore, 'users', cred.user.uid), {
+    const userData = {
       name,
       email,
       username: username || email.split('@')[0].toLowerCase(),
@@ -55,6 +58,15 @@ export function AuthProvider({ children }) {
       photoURL: '',
       privacyLevel: 'private',
       createdAt: new Date().toISOString()
+    }
+    await setDoc(doc(firestore, 'users', cred.user.uid), userData)
+    // Atualiza o estado imediatamente sem esperar onAuthStateChanged
+    setUser({
+      uid: cred.user.uid,
+      email: cred.user.email,
+      displayName: name,
+      photoURL: '',
+      ...userData
     })
     return cred.user
   }
@@ -66,7 +78,13 @@ export function AuthProvider({ children }) {
 
   const logout = () => signOut(auth)
 
-  const value = { user, loading, signup, login, logout }
+  const changePassword = async (currentPassword, newPassword) => {
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword)
+    await reauthenticateWithCredential(auth.currentUser, credential)
+    await updatePassword(auth.currentUser, newPassword)
+  }
+
+  const value = { user, loading, signup, login, logout, changePassword }
 
   return (
     <AuthContext.Provider value={value}>

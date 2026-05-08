@@ -4,7 +4,7 @@
  * - Público: mostra perfil completo com tabs Feed e Memórias
  */
 import React, { useState, useEffect } from 'react'
-import { getUserAllMemories } from '../../services/usersService.js'
+import { getUserAllMemories, getUserById } from '../../services/usersService.js'
 import styles from './UserProfileModal.module.css'
 
 const MONTHS_PT = [
@@ -20,10 +20,20 @@ function formatDateTime(timestamp) {
   return `${date} às ${time}`
 }
 
-export default function UserProfileModal({ user, onClose }) {
+export default function UserProfileModal({ user: initialUser, onClose }) {
   const [activeTab, setActiveTab] = useState('feed')
   const [memories, setMemories] = useState([])
   const [loading, setLoading] = useState(false)
+  const [user, setUser] = useState(initialUser)
+
+  // Buscar dados frescos do perfil
+  useEffect(() => {
+    if (initialUser?.uid) {
+      getUserById(initialUser.uid).then(freshUser => {
+        if (freshUser) setUser(freshUser)
+      }).catch(() => {})
+    }
+  }, [initialUser?.uid])
 
   const isPrivate = user?.privacyLevel === 'private'
 

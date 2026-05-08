@@ -469,3 +469,79 @@
   font-size: 13px;
   cursor: pointer;
 }
+
+/* ── Privacy Selector ── */
+.privacySelector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.privacyLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cinza-suave);
+  white-space: nowrap;
+}
+
+.privacyOption {
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid rgba(255,255,255,0.15);
+  background: transparent;
+  color: var(--cinza-suave);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: var(--transition-fast);
+}
+
+.privacyOptionActive {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: white;
+}
+
+.privacyBadge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.08);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  transition: var(--transition-fast);
+}
+.privacyBadge:active { transform: scale(0.9); }
+
+/* ── Compose extra fields ── */
+.composeTitleInput {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-sm);
+  background: var(--bege-claro);
+  color: var(--cinza);
+  font-size: 14px;
+  font-family: var(--font-sans);
+  margin-top: 8px;
+  outline: none;
+}
+.composeTitleInput:focus { border-color: var(--verde); }
+.composeTitleInput::placeholder { color: var(--cinza-suave); }
+
+/* ── Post title in card ── */
+.postTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cinza);
+  margin-bottom: 4px;
+  font-family: var(--font-serif);
+}

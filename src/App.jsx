@@ -28,7 +28,7 @@ function AppContent() {
   const { user, loading } = useAuth()
   const [authScreen, setAuthScreen] = useState('welcome')
   const [activeTab, setActiveTab]         = useState('hoje')
-  const [showAddModal, setShowAddModal]   = useState(false)
+  const [showAddModal, setShowAddModal]   = useState(false) // false ou string do tipo ('photo','text','audio','location')
   const [showPlans, setShowPlans]         = useState(false)
   const [showConfig, setShowConfig]       = useState(false)
   const [showRestore, setShowRestore]     = useState(false)
@@ -106,6 +106,7 @@ function AppContent() {
 
         {showAddModal && (
           <AddMemoryModal
+            initialType={typeof showAddModal === 'string' ? showAddModal : null}
             onClose={() => setShowAddModal(false)}
             onSaved={() => { setShowAddModal(false); triggerRefresh() }}
           />
