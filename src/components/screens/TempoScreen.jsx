@@ -82,43 +82,61 @@ export default function TempoScreen() {
 
   // ── Carregamento de memórias ───────────────────────────────────────────────
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const mems = await getMemories()
-        
-        // Também buscar blobs direto da tabela fileBlobs
-        const localBlobs = await localDb.fileBlobs.toArray().catch(() => [])
-        const blobByFsId = {}
-        const blobByTitle = {}
-        for (const lb of localBlobs) {
-          if (lb.firestoreId) blobByFsId[lb.firestoreId] = lb.blob
-          if (lb.title) blobByTitle[lb.title] = lb.blob
-        }
-        for (const mem of mems) {
-          if (!mem.fileBlob && !mem.fileUrl) {
-            mem.fileBlob = blobByFsId[mem.id] || blobByTitle[mem.title] || null
-          }
-        }
-        
-        setMemories(mems)
-      } catch (e) {
-        console.error(e)
+  const loadMemories = useCallback(async () => {
+    try {
+      const mems = await getMemories()
+      
+      // Buscar TODOS os blobs locais e fazer match
+      const localBlobs = await localDb.fileBlobs.toArray().catch(() => [])
+      const blobByFsId = {}
+      const blobByTitle = {}
+      const blobByDateType = {}
+      for (const lb of localBlobs) {
+        if (lb.firestoreId) blobByFsId[lb.firestoreId] = lb.blob
+        if (lb.title) blobByTitle[lb.title] = lb.blob
+        if (lb.date && lb.type) blobByDateType[`${lb.date}|${lb.type}|${lb.title}`] = lb.blob
       }
+      for (const mem of mems) {
+        if (!mem.fileBlob && !mem.fileUrl) {
+          const blob = blobByFsId[mem.id] 
+            || blobByTitle[mem.title] 
+            || blobByDateType[`${mem.date}|${mem.type}|${mem.title}`]
+            || null
+          if (blob) mem.fileBlob = blob
+        }
+      }
+      
+      setMemories(mems)
+    } catch (e) {
+      console.error(e)
     }
-    load()
   }, [])
+
+  useEffect(() => { loadMemories() }, [loadMemories])
+
+  // Recarregar ao voltar para a tela (visibilidade)
+  useEffect(() => {
+    const handleFocus = () => loadMemories()
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [loadMemories])
 
   // ── Geração de URLs de blob ────────────────────────────────────────────────
 
   useEffect(() => {
     const urls = {}
     for (const m of memories) {
-      if (m.thumbnail) {
-        urls[m.id] = URL.createObjectURL(m.thumbnail)
-      } else if (m.fileBlob && (m.type === 'photo' || m.type === 'video')) {
-        urls[m.id] = URL.createObjectURL(m.fileBlob)
-      }
+      try {
+        if (m.thumbnail && m.thumbnail instanceof Blob) {
+          urls[m.id] = URL.createObjectURL(m.thumbnail)
+        } else if (m.fileBlob && m.fileBlob instanceof Blob && (m.type === 'photo' || m.type === 'video')) {
+          urls[m.id] = URL.createObjectURL(m.fileBlob)
+        } else if (m.fileBlob && !(m.fileBlob instanceof Blob) && (m.type === 'photo' || m.type === 'video')) {
+          // Tentar converter ArrayBuffer/Uint8Array para Blob
+          const blob = new Blob([m.fileBlob], { type: m.type === 'photo' ? 'image/jpeg' : 'video/mp4' })
+          urls[m.id] = URL.createObjectURL(blob)
+        }
+      } catch (e) { /* skip invalid blobs */ }
     }
     setThumbUrls(urls)
     return () => { Object.values(urls).forEach(u => URL.revokeObjectURL(u)) }

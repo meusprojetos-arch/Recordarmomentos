@@ -87,11 +87,11 @@ export async function addMemory(memoryData, file = null) {
 
   const docRef = await addDoc(memoriesCol(uid), docData)
 
-  // Atualiza registro local com firestoreId
+  // Atualiza registro local com firestoreId para associação futura
   if (localId) {
     try {
       await localDb.fileBlobs.update(localId, { firestoreId: docRef.id })
-    } catch {}
+    } catch (e) { console.warn('Erro ao associar firestoreId:', e) }
   }
 
   return { id: docRef.id, ...docData }
@@ -120,13 +120,18 @@ export async function getMemories(options = {}) {
   try {
     const localBlobs = await localDb.fileBlobs.toArray()
     const blobMap = {}
+    const blobByTitle = {}
+    const blobByDateType = {}
     for (const lb of localBlobs) {
       if (lb.firestoreId) blobMap[lb.firestoreId] = lb.blob
-      if (lb.title) blobMap[`title:${lb.title}`] = lb.blob
+      if (lb.title) blobByTitle[lb.title] = lb.blob
+      if (lb.date && lb.type) blobByDateType[`${lb.date}|${lb.type}|${lb.title || ''}`] = lb.blob
     }
     for (const mem of memories) {
       if (!mem.fileUrl) {
-        const blob = blobMap[mem.id] || blobMap[`title:${mem.title}`]
+        const blob = blobMap[mem.id] 
+          || blobByTitle[mem.title] 
+          || blobByDateType[`${mem.date}|${mem.type}|${mem.title || ''}`]
         if (blob) mem.fileBlob = blob
       }
     }
