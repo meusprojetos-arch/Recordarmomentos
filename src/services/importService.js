@@ -53,13 +53,14 @@ function getFileDate(file) {
 }
 
 /**
- * Limpa nome do arquivo para usar como titulo
+ * Limpa nome do arquivo para usar como titulo (mantendo unicidade)
  */
 function cleanFileName(name) {
-  return name
-    .replace(/\.[^.]+$/, '') // remove extensao
-    .replace(/[_-]/g, ' ')  // troca _ e - por espaco
-    .replace(/IMG|VID|WA/gi, '')
-    .replace(/\d{8,}/g, '')  // remove sequencias longas de numeros
-    .trim() || 'Sem titulo'
+  const noExt = name.replace(/\.[^.]+$/, '')
+  // Só remove prefixos conhecidos, mantém o resto para garantir unicidade
+  const cleaned = noExt
+    .replace(/^(IMG|VID|WA\d*)[_-]?/i, '')
+    .replace(/[_-]/g, ' ')
+    .trim()
+  return cleaned || noExt || 'Sem titulo'
 }

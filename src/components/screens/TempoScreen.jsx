@@ -86,21 +86,21 @@ export default function TempoScreen() {
     try {
       const mems = await getMemories()
       
-      // Buscar TODOS os blobs locais e fazer match
+      // Buscar TODOS os blobs locais e fazer match adicional
       const localBlobs = await localDb.fileBlobs.toArray().catch(() => [])
       const blobByFsId = {}
+      const blobByLocalBlobId = {}
       const blobByTitle = {}
-      const blobByDateType = {}
       for (const lb of localBlobs) {
         if (lb.firestoreId) blobByFsId[lb.firestoreId] = lb.blob
-        if (lb.title) blobByTitle[lb.title] = lb.blob
-        if (lb.date && lb.type) blobByDateType[`${lb.date}|${lb.type}|${lb.title}`] = lb.blob
+        if (lb.localBlobId) blobByLocalBlobId[lb.localBlobId] = lb.blob
+        if (lb.title && lb.title !== 'Sem titulo') blobByTitle[lb.title] = lb.blob
       }
       for (const mem of mems) {
         if (!mem.fileBlob && !mem.fileUrl) {
           const blob = blobByFsId[mem.id] 
-            || blobByTitle[mem.title] 
-            || blobByDateType[`${mem.date}|${mem.type}|${mem.title}`]
+            || (mem.localBlobId && blobByLocalBlobId[mem.localBlobId])
+            || (mem.title && mem.title !== 'Sem titulo' && blobByTitle[mem.title])
             || null
           if (blob) mem.fileBlob = blob
         }

@@ -40,17 +40,19 @@ export async function addMemory(memoryData, file = null) {
 
   // Salva blob LOCALMENTE primeiro (garante que a foto fica acessível)
   let localId = null
+  const localBlobId = uuid() // ID único para associar blob
   if (file) {
     try {
       const blob = file instanceof Blob ? file : new Blob([file])
       localId = await localDb.fileBlobs.add({
+        localBlobId,
         type: memoryData.type || 'photo',
         title: memoryData.title || '',
         date: memoryData.date || '',
         blob: blob,
         createdAt: new Date().toISOString(),
       })
-    } catch (e) { console.warn('Erro ao salvar local:', e) }
+    } catch (e) { console.error('Erro ao salvar blob local:', e) }
   }
 
   let fileUrl = ''
@@ -75,6 +77,7 @@ export async function addMemory(memoryData, file = null) {
     fileUrl,
     filePath,
     fileSize,
+    localBlobId: file ? localBlobId : '',
     localOnly: !premium || !file,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -119,19 +122,19 @@ export async function getMemories(options = {}) {
   // Enriquecer com blobs locais do IndexedDB
   try {
     const localBlobs = await localDb.fileBlobs.toArray()
-    const blobMap = {}
+    const blobByFsId = {}
+    const blobByLocalBlobId = {}
     const blobByTitle = {}
-    const blobByDateType = {}
     for (const lb of localBlobs) {
-      if (lb.firestoreId) blobMap[lb.firestoreId] = lb.blob
-      if (lb.title) blobByTitle[lb.title] = lb.blob
-      if (lb.date && lb.type) blobByDateType[`${lb.date}|${lb.type}|${lb.title || ''}`] = lb.blob
+      if (lb.firestoreId) blobByFsId[lb.firestoreId] = lb.blob
+      if (lb.localBlobId) blobByLocalBlobId[lb.localBlobId] = lb.blob
+      if (lb.title && lb.title !== 'Sem titulo') blobByTitle[lb.title] = lb.blob
     }
     for (const mem of memories) {
-      if (!mem.fileUrl) {
-        const blob = blobMap[mem.id] 
-          || blobByTitle[mem.title] 
-          || blobByDateType[`${mem.date}|${mem.type}|${mem.title || ''}`]
+      if (!mem.fileUrl && !mem.fileBlob) {
+        const blob = blobByFsId[mem.id] 
+          || (mem.localBlobId && blobByLocalBlobId[mem.localBlobId])
+          || (mem.title && mem.title !== 'Sem titulo' && blobByTitle[mem.title])
         if (blob) mem.fileBlob = blob
       }
     }
