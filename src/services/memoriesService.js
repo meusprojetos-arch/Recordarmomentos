@@ -132,23 +132,31 @@ export async function getMemories(options = {}) {
 
   // Enriquecer com blobs locais do IndexedDB
   try {
-    const localBlobs = await localDb.fileBlobs.toArray()
-    const blobByFsId = {}
-    const blobByLocalBlobId = {}
-    const blobByTitle = {}
-    for (const lb of localBlobs) {
-      if (lb.firestoreId) blobByFsId[lb.firestoreId] = lb.blob
-      if (lb.localBlobId) blobByLocalBlobId[lb.localBlobId] = lb.blob
-      if (lb.title && lb.title !== 'Sem titulo') blobByTitle[lb.title] = lb.blob
-    }
+    if (!localDb.isOpen()) await localDb.open()
     for (const mem of memories) {
-      // Tenta sempre enriquecer com blob local (para thumbnail e exibição offline)
-      if (!mem.fileBlob) {
-        const blob = blobByFsId[mem.id]
-          || (mem.localBlobId && blobByLocalBlobId[mem.localBlobId])
-          || (mem.title && mem.title !== 'Sem titulo' && blobByTitle[mem.title])
-        if (blob) mem.fileBlob = blob
+      if (mem.fileBlob || mem.fileUrl) continue
+      
+      let blob = null
+      
+      // 1. Busca por localBlobId (mais confiável)
+      if (!blob && mem.localBlobId) {
+        const match = await localDb.fileBlobs.where('localBlobId').equals(mem.localBlobId).first()
+        if (match?.blob) blob = match.blob
       }
+      
+      // 2. Busca por firestoreId
+      if (!blob) {
+        const match = await localDb.fileBlobs.where('firestoreId').equals(mem.id).first()
+        if (match?.blob) blob = match.blob
+      }
+      
+      // 3. Último recurso: busca por título (se único)
+      if (!blob && mem.title && mem.title !== 'Sem titulo') {
+        const match = await localDb.fileBlobs.where('title').equals(mem.title).first()
+        if (match?.blob) blob = match.blob
+      }
+      
+      if (blob) mem.fileBlob = blob
     }
   } catch (e) { console.error('IndexedDB blob retrieval failed:', e) }
 

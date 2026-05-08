@@ -85,27 +85,6 @@ export default function TempoScreen() {
   const loadMemories = useCallback(async () => {
     try {
       const mems = await getMemories()
-      
-      // Buscar TODOS os blobs locais e fazer match adicional
-      const localBlobs = await localDb.fileBlobs.toArray().catch(() => [])
-      const blobByFsId = {}
-      const blobByLocalBlobId = {}
-      const blobByTitle = {}
-      for (const lb of localBlobs) {
-        if (lb.firestoreId) blobByFsId[lb.firestoreId] = lb.blob
-        if (lb.localBlobId) blobByLocalBlobId[lb.localBlobId] = lb.blob
-        if (lb.title && lb.title !== 'Sem titulo') blobByTitle[lb.title] = lb.blob
-      }
-      for (const mem of mems) {
-        if (!mem.fileBlob && !mem.fileUrl) {
-          const blob = blobByFsId[mem.id] 
-            || (mem.localBlobId && blobByLocalBlobId[mem.localBlobId])
-            || (mem.title && mem.title !== 'Sem titulo' && blobByTitle[mem.title])
-            || null
-          if (blob) mem.fileBlob = blob
-        }
-      }
-      
       setMemories(mems)
     } catch (e) {
       console.error(e)
