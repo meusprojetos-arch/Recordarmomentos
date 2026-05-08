@@ -16,104 +16,54 @@ export const db = new Dexie('RecordarDB');
 
 db.version(1).stores({
   // Memórias — núcleo do app
-  memories: [
-    '++id',          // PK auto-increment
-    'type',          // 'photo' | 'video' | 'audio' | 'text'
-    'date',          // data da memória (ISO string)
-    'createdAt',     // data de criação no app
-    'folderId',      // FK → folders.id (pode ser null)
-    'title',         // título curto
-    'description',   // texto descritivo
-    'filePath',      // caminho/blob URL do arquivo
-    'fileBlob',      // Blob do arquivo (armazenado localmente)
-    'thumbnail',     // Blob da miniatura (para fotos/vídeos)
-    'duration',      // duração em segundos (áudio/vídeo)
-    'location',      // { lat, lng, name }
-    'tags',          // array de tags ["família","natal"]
-    'isHighlight',   // boolean — destaque do ano
-    'isFavorite',    // boolean
-    'isShared',      // boolean — compartilhado no círculo familiar
-    'shareWith',     // array de user IDs
-    'privacyLevel',  // 'private' | 'family' | 'public'
-    '*tags',         // índice para busca por tags
-  ].join(', '),
+  memories: '++id, type, date, createdAt, folderId, *tags',
 
   // Pastas — organização
-  folders: [
-    '++id',
-    'name',          // "Natal", "Viagens", etc.
-    'emoji',         // ícone
-    'isAuto',        // criada automaticamente pelo app
-    'autoRule',      // regra de classificação automática
-    'color',         // cor hex opcional
-    'createdAt',
-    'order',         // posição na lista
-  ].join(', '),
+  folders: '++id, name, isAuto, order',
 
   // Perfil do usuário
-  profile: [
-    '++id',
-    'name',
-    'bio',
-    'avatarBlob',    // Blob da foto de perfil
-    'username',
-    'email',
-    'birthDate',
-    'privacyLevel',  // 'private' | 'public'
-    'biometricEnabled',
-    'pinHash',       // hash do PIN de bloqueio
-    'createdAt',
-    'updatedAt',
-  ].join(', '),
+  profile: '++id, username, email',
 
   // Círculo Familiar
-  family: [
-    '++id',
-    'name',
-    'username',
-    'avatarBlob',
-    'role',          // "admin" | "member"
-    'joinedAt',
-    'isActive',
-  ].join(', '),
+  family: '++id, name, username',
 
   // Configurações gerais
-  settings: [
-    '&key',          // PK única por chave
-    'value',
-    'updatedAt',
-  ].join(', '),
+  settings: '&key',
 
   // Lembretes automáticos
-  reminders: [
-    '++id',
-    'memoryId',      // FK → memories.id
-    'message',
-    'triggerDate',   // data de disparo
-    'type',          // 'anniversary' | 'highlight'
-    'isRead',
-  ].join(', '),
+  reminders: '++id, memoryId, triggerDate, type',
 });
 
 // Versão 2: tabela dedicada para blobs de arquivos
 db.version(2).stores({
-  memories: '++id, type, date, createdAt, folderId, title, description, filePath, fileBlob, thumbnail, duration, location, tags, isHighlight, isFavorite, isShared, shareWith, privacyLevel, *tags',
-  folders: '++id, name, emoji, isAuto, autoRule, color, createdAt, order',
-  profile: '++id, name, bio, avatarBlob, username, email, birthDate, privacyLevel, biometricEnabled, pinHash, createdAt, updatedAt',
-  family: '++id, name, username, avatarBlob, role, joinedAt, isActive',
-  settings: '&key, value, updatedAt',
-  reminders: '++id, memoryId, message, triggerDate, type, isRead',
+  memories: '++id, type, date, createdAt, folderId, *tags',
+  folders: '++id, name, isAuto, order',
+  profile: '++id, username, email',
+  family: '++id, name, username',
+  settings: '&key',
+  reminders: '++id, memoryId, triggerDate, type',
   fileBlobs: '++id, firestoreId, title, type, date',
 });
 
-// Versão 3: adiciona localBlobId como índice em fileBlobs para lookup rápido
+// Versão 3: adiciona localBlobId como índice em fileBlobs
 db.version(3).stores({
-  memories: '++id, type, date, createdAt, folderId, title, description, filePath, fileBlob, thumbnail, duration, location, tags, isHighlight, isFavorite, isShared, shareWith, privacyLevel, *tags',
-  folders: '++id, name, emoji, isAuto, autoRule, color, createdAt, order',
-  profile: '++id, name, bio, avatarBlob, username, email, birthDate, privacyLevel, biometricEnabled, pinHash, createdAt, updatedAt',
-  family: '++id, name, username, avatarBlob, role, joinedAt, isActive',
-  settings: '&key, value, updatedAt',
-  reminders: '++id, memoryId, message, triggerDate, type, isRead',
+  memories: '++id, type, date, createdAt, folderId, *tags',
+  folders: '++id, name, isAuto, order',
+  profile: '++id, username, email',
+  family: '++id, name, username',
+  settings: '&key',
+  reminders: '++id, memoryId, triggerDate, type',
+  fileBlobs: '++id, localBlobId, firestoreId, title, type, date',
+});
+
+// Versão 4: fix ConstraintError - schema limpo sem índices duplicados
+db.version(4).stores({
+  memories: '++id, type, date, createdAt, folderId, *tags',
+  folders: '++id, name, isAuto, order',
+  profile: '++id, username, email',
+  family: '++id, name, username',
+  settings: '&key',
+  reminders: '++id, memoryId, triggerDate, type',
   fileBlobs: '++id, localBlobId, firestoreId, title, type, date',
 });
 
