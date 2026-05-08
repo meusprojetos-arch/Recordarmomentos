@@ -1,0 +1,17 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" fill="none">
+  <!-- Center petal circle -->
+  <circle cx="15" cy="14" r="3" fill="#FF6B35"/>
+  <!-- Petals -->
+  <ellipse cx="15" cy="8" rx="2.5" ry="3.5" fill="#FF6B35" opacity="0.55"/>
+  <ellipse cx="15" cy="20" rx="2.5" ry="3.5" fill="#FF6B35" opacity="0.55"/>
+  <ellipse cx="9" cy="14" rx="3.5" ry="2.5" fill="#FF6B35" opacity="0.55"/>
+  <ellipse cx="21" cy="14" rx="3.5" ry="2.5" fill="#FF6B35" opacity="0.55"/>
+  <ellipse cx="10.7" cy="9.7" rx="2.5" ry="3.5" transform="rotate(-45 10.7 9.7)" fill="#FF6B35" opacity="0.4"/>
+  <ellipse cx="19.3" cy="18.3" rx="2.5" ry="3.5" transform="rotate(-45 19.3 18.3)" fill="#FF6B35" opacity="0.4"/>
+  <ellipse cx="19.3" cy="9.7" rx="2.5" ry="3.5" transform="rotate(45 19.3 9.7)" fill="#FF6B35" opacity="0.4"/>
+  <ellipse cx="10.7" cy="18.3" rx="2.5" ry="3.5" transform="rotate(45 10.7 18.3)" fill="#FF6B35" opacity="0.4"/>
+  <!-- Stem -->
+  <path d="M15 17 Q13 21 12 26" fill="none" stroke="#FF6B35" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- Leaf -->
+  <path d="M13.5 22 Q10 20 10 17 Q12.5 20 13.5 22 Z" fill="#FF6B35" opacity="0.6"/>
+</svg>
