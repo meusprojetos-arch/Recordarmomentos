@@ -23,9 +23,6 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
 
   const handleNameChange = (val) => {
     setName(val)
-    if (val.trim() && !username) {
-      setUsername(generateUsername(val.trim()))
-    }
   }
 
   const handleUsernameChange = (val) => {

@@ -112,7 +112,16 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
+      // Detectar formato suportado
+      let mimeType = 'audio/webm'
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus'
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4'
+      } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+        mimeType = 'audio/ogg'
+      }
+      const mediaRecorder = new MediaRecorder(stream, { mimeType })
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
 
@@ -121,13 +130,13 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
       }
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const blob = new Blob(audioChunksRef.current, { type: mimeType })
         setAudioBlob(blob)
         stream.getTracks().forEach(t => t.stop())
         clearInterval(timerRef.current)
       }
 
-      mediaRecorder.start()
+      mediaRecorder.start(1000) // chunks a cada 1s para melhor compatibilidade
       setIsRecording(true)
       setAudioDuration(0)
       timerRef.current = setInterval(() => {
@@ -208,7 +217,8 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
 
       let fileToUpload = file
       if (audioBlob) {
-        fileToUpload = new File([audioBlob], `audio_${Date.now()}.webm`, { type: 'audio/webm' })
+        const audioExt = audioBlob.type.includes('mp4') ? 'mp4' : audioBlob.type.includes('ogg') ? 'ogg' : 'webm'
+        fileToUpload = new File([audioBlob], `audio_${Date.now()}.${audioExt}`, { type: audioBlob.type })
         memData.duration = audioDuration
       }
 
@@ -239,7 +249,7 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
         ref={cameraInputRef}
         type="file"
         accept={selectedType?.id === 'video' ? 'video/*' : 'image/*'}
-        capture="environment"
+        capture
         className={styles.hiddenInput}
         onChange={handleFileChange}
       />

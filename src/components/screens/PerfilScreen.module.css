@@ -242,3 +242,155 @@
   font-family: var(--font-sans);
   cursor: pointer;
 }
+
+/* ── Edit Profile Button ── */
+.editProfileBtn {
+  margin-top: 12px;
+  padding: 8px 24px;
+  background: var(--bege-claro);
+  border: 1.5px solid rgba(79,124,82,0.3);
+  border-radius: var(--radius-sm);
+  color: var(--verde);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+/* ── Edit Profile Modal ── */
+.editOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.editModal {
+  background: var(--bege);
+  border-radius: var(--radius-md);
+  padding: 24px 20px;
+  width: 100%;
+  max-width: 360px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.editTitle {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cinza);
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.editAvatarWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.editAvatarCircle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--verde);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.editAvatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.editAvatarLetter {
+  font-size: 32px;
+  font-weight: 700;
+  color: white;
+}
+
+.editAvatarBtn {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--verde);
+  cursor: pointer;
+}
+
+.editLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cinza-suave);
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+
+.editInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid rgba(255, 107, 53, 0.2);
+  border-radius: var(--radius-sm);
+  background: var(--bege-claro);
+  font-size: 15px;
+  color: var(--cinza);
+  outline: none;
+  font-family: var(--font-sans);
+}
+
+.editInput:focus {
+  border-color: var(--verde);
+}
+
+.editTextarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid rgba(255, 107, 53, 0.2);
+  border-radius: var(--radius-sm);
+  background: var(--bege-claro);
+  font-size: 15px;
+  color: var(--cinza);
+  outline: none;
+  font-family: var(--font-sans);
+  resize: none;
+}
+
+.editTextarea:focus {
+  border-color: var(--verde);
+}
+
+.editSaveBtn {
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px;
+  background: var(--verde);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.editCancelBtn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  background: none;
+  color: var(--cinza-suave);
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}

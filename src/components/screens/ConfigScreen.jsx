@@ -17,6 +17,7 @@ import { useAuth } from '../../contexts/AuthContext.jsx'
 import { getUserPlan, getStorageUsage, formatBytes } from '../../services/planService.js'
 import { auth, firestore } from '../../firebase.js'
 import { doc, updateDoc } from 'firebase/firestore'
+import { exportAllAsZip } from '../../services/exportService.js'
 import db from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import styles from './ConfigScreen.module.css'
@@ -298,74 +299,7 @@ export default function ConfigScreen({ onClose }) {
       <div className={styles.scroll}>
         <button className={styles.backBtn} onClick={onClose}>← Voltar</button>
 
-        {/* ══ 1. Editar Perfil ══ */}
-        <h2 className={styles.sectionTitle}>Editar Perfil</h2>
-        <div className={styles.card}>
-
-          {/* Avatar */}
-          <div className={styles.avatarWrap}>
-            <div className={styles.avatarCircle}>
-              {avatarSrc
-                ? <img src={avatarSrc} alt="Foto de perfil" className={styles.avatarImg} />
-                : <img src={ICONS.avatar} alt="Avatar padrão" className={`${styles.avatarImg} ${styles.avatarDefault}`} width={48} height={48} />
-              }
-            </div>
-            <label className={styles.avatarChangeBtn} htmlFor="avatarInput" aria-label="Trocar foto">
-              Trocar foto
-            </label>
-            <input
-              id="avatarInput"
-              type="file"
-              accept="image/*"
-              className={styles.hidden}
-              onChange={handleAvatarChange}
-            />
-          </div>
-
-          {/* Nome */}
-          <label className={styles.fieldLabel} htmlFor="profileName">Nome</label>
-          <input
-            id="profileName"
-            className={styles.input}
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Seu nome"
-            maxLength={60}
-          />
-
-          {/* Username (não editável) */}
-          <label className={styles.fieldLabel}>Nome de usuário</label>
-          <input
-            className={styles.input}
-            type="text"
-            value={user?.username ? `@${user.username}` : ''}
-            disabled
-            style={{ opacity: 0.6, cursor: 'not-allowed' }}
-          />
-
-          {/* Bio */}
-          <label className={styles.fieldLabel} htmlFor="profileBio">Bio</label>
-          <textarea
-            id="profileBio"
-            className={styles.textarea}
-            value={bio}
-            onChange={e => setBio(e.target.value)}
-            placeholder="Uma frase sobre você…"
-            maxLength={160}
-            rows={3}
-          />
-
-          <button
-            className={styles.saveBtn}
-            onClick={handleSaveProfile}
-            disabled={savingProfile}
-          >
-            {savingProfile ? 'Salvando…' : 'Salvar alterações'}
-          </button>
-        </div>
-
-        {/* ══ 2. Trocar Senha ══ */}
+        {/* ══ 1. Trocar Senha ══ */}
         <h2 className={styles.sectionTitle}>Trocar Senha</h2>
         <div className={styles.card}>
           <label className={styles.fieldLabel}>Senha atual</label>
@@ -678,6 +612,54 @@ export default function ConfigScreen({ onClose }) {
               )}
             </div>
           ))}
+        </div>
+
+        {/* ══ Exportar e Planos ══ */}
+        <h2 className={styles.sectionTitle}>Exportar e Planos</h2>
+        <div className={styles.card + ' ' + styles.cardNoPad}>
+          <div
+            className={styles.row}
+            onClick={async () => {
+              const tid = toast.loading('Preparando exportação...')
+              try {
+                await exportAllAsZip()
+                toast.dismiss(tid)
+                toast.success('Exportação pronta! Verifique seus downloads.')
+              } catch {
+                toast.dismiss(tid)
+                toast.error('Erro na exportação')
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          >
+            <div className={styles.rowIconWrap} style={{ background: '#E8F5E9' }}>
+              <img src={ICONS.exportar} alt="" width={20} height={20} aria-hidden="true" />
+            </div>
+            <div className={styles.rowText}>
+              <p className={styles.rowLabel}>Exportar tudo (ZIP)</p>
+              <p className={styles.rowSub}>Fotos, vídeos e textos organizados</p>
+            </div>
+            <span className={styles.chevron} aria-hidden="true">›</span>
+          </div>
+
+          <div className={styles.rowDivider} />
+
+          <div
+            className={styles.row}
+            onClick={() => toast('Em breve — Planos e Armazenamento')}
+            role="button"
+            tabIndex={0}
+          >
+            <div className={styles.rowIconWrap} style={{ background: '#FFF6DB' }}>
+              <span style={{ fontSize: 16 }}>💎</span>
+            </div>
+            <div className={styles.rowText}>
+              <p className={styles.rowLabel}>Planos e Armazenamento</p>
+              <p className={styles.rowSub}>Proteja suas memórias na nuvem</p>
+            </div>
+            <span className={styles.chevron} aria-hidden="true">›</span>
+          </div>
         </div>
 
         {/* ══ 7. Excluir Conta ══ */}

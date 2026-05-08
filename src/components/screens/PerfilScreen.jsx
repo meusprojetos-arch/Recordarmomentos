@@ -1,12 +1,5 @@
 /**
  * PerfilScreen — Tela de Perfil
- * 
- * Contém:
- *  - Header com avatar, nome, estatísticas
- *  - Círculo Familiar
- *  - Privacidade (toggle biometria, perfil privado)
- *  - Pastas
- *  - Exportação / Backup
  */
 
 import React, { useState, useEffect } from 'react'
@@ -15,34 +8,31 @@ import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useApp } from '../../App.jsx'
 import { getMemories } from '../../services/memoriesService.js'
 import { setProfilePrivacy } from '../../services/profileService.js'
-import { exportAllAsZip } from '../../services/exportService.js'
+import { auth, firestore } from '../../firebase.js'
+import { doc, updateDoc } from 'firebase/firestore'
 import PrivacyRow from '../ui/PrivacyRow.jsx'
-import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './PerfilScreen.module.css'
 
-// ICONES DO PERFIL
 const PERFIL_ICONS = {
   config:    '/icons/config.svg',
   avatarPad: '/icons/avatar-padrao.svg',
-  circulo:   '/icons/circulo-familiar.svg',
   privado:   '/icons/privado.svg',
-  biometria: '/icons/biometria.svg',
-  pastas:    '/icons/pastas.svg',
-  exportar:  '/icons/exportar.svg',
-  salvar:    '/icons/salvar.svg',
   nuvem:     '/icons/nuvem.svg',
-  adicionar: '/icons/adicionar.svg',
 }
 
 export default function PerfilScreen() {
   const { user, logout } = useAuth()
   const { setShowPlans, setShowConfig } = useApp()
-  const [biometric, setBiometric] = useState(false)
   const [isPrivate, setIsPrivate] = useState(true)
   const [cloudBackup, setCloudBackup] = useState(false)
   const [stats, setStats] = useState({ photos: 0, videos: 0, audios: 0, feed: 0 })
 
-  const [showPinModal, setShowPinModal] = useState(false)
+  // Editar perfil
+  const [editName, setEditName] = useState('')
+  const [editBio, setEditBio] = useState('')
+  const [avatarSrc, setAvatarSrc] = useState(null)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
 
   useEffect(() => {
     getMemories().then(mems => {
@@ -54,27 +44,58 @@ export default function PerfilScreen() {
       })
     }).catch(() => {})
     if (user?.privacyLevel) setIsPrivate(user.privacyLevel === 'private')
+    setEditName(user?.name || user?.displayName || localStorage.getItem('recordar_profileName') || '')
+    setEditBio(user?.bio || localStorage.getItem('recordar_profileBio') || '')
+    setAvatarSrc(localStorage.getItem('recordar_avatar') || user?.photoURL || null)
   }, [user])
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) { toast.error('O nome não pode ficar vazio'); return }
+    setSavingProfile(true)
+    try {
+      localStorage.setItem('recordar_profileName', editName.trim())
+      localStorage.setItem('recordar_profileBio', editBio.trim())
+      const uid = auth.currentUser?.uid
+      if (uid) {
+        await updateDoc(doc(firestore, 'users', uid), {
+          name: editName.trim(),
+          bio: editBio.trim(),
+        })
+      }
+      toast.success('Perfil atualizado!')
+      setShowEdit(false)
+    } catch {
+      toast.error('Erro ao salvar perfil')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { toast.error('Selecione uma imagem'); return }
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const base64 = reader.result
+      setAvatarSrc(base64)
+      localStorage.setItem('recordar_avatar', base64)
+      const uid = auth.currentUser?.uid
+      if (uid) {
+        try { await updateDoc(doc(firestore, 'users', uid), { photoURL: base64 }) } catch {}
+      }
+      toast.success('Foto atualizada!')
+    }
+    reader.readAsDataURL(file)
+  }
 
   const handleTogglePrivacy = async () => {
     const newLevel = isPrivate ? 'public' : 'private'
     setIsPrivate(!isPrivate)
     try {
       await setProfilePrivacy(newLevel)
-      toast.success(newLevel === 'private' ? 'Perfil agora e privado' : 'Perfil agora e publico')
+      toast.success(newLevel === 'private' ? 'Perfil agora é privado' : 'Perfil agora é público')
     } catch { toast.error('Erro ao mudar privacidade') }
-  }
-
-  const handleExportAll = async () => {
-    const tid = toast.loading('Preparando exportacao...')
-    try {
-      await exportAllAsZip()
-      toast.dismiss(tid)
-      toast.success('Exportacao pronta! Verifique seus downloads.')
-    } catch (err) {
-      toast.dismiss(tid)
-      toast.error('Erro na exportacao')
-    }
   }
 
   return (
@@ -86,15 +107,15 @@ export default function PerfilScreen() {
             <img src={PERFIL_ICONS.config} alt="Configurações" width={22} height={22} />
           </button>
         </div>
-        <div className={styles.avatar}>
-          {(localStorage.getItem('recordar_avatar') || user?.photoURL)
-            ? <img src={localStorage.getItem('recordar_avatar') || user.photoURL} alt="Foto de perfil" />
+        <div className={styles.avatar} onClick={() => setShowEdit(true)}>
+          {avatarSrc
+            ? <img src={avatarSrc} alt="Foto de perfil" />
             : <img src={PERFIL_ICONS.avatarPad} alt="Avatar padrao" width={60} height={60} className={styles.avatarDefault} />
           }
         </div>
-        <h1 className={styles.name}>{user?.name || user?.displayName || localStorage.getItem('recordar_profileName') || 'Meu Perfil'}</h1>
+        <h1 className={styles.name}>{editName || 'Meu Perfil'}</h1>
         {user?.username && <p className={styles.username}>@{user.username}</p>}
-        <p className={styles.bio}>{localStorage.getItem('recordar_profileBio') || user?.bio || '"Cada foto guarda um pedaco da nossa historia."'}</p>
+        <p className={styles.bio}>{editBio || '"Cada foto guarda um pedaco da nossa historia."'}</p>
         <div className={styles.stats}>
           <div className={styles.stat}>
             <span className={styles.statVal}>{stats.photos}</span>
@@ -113,6 +134,7 @@ export default function PerfilScreen() {
             <span className={styles.statLbl}>áudios</span>
           </div>
         </div>
+        <button className={styles.editProfileBtn} onClick={() => setShowEdit(true)}>Editar Perfil</button>
       </div>
 
       {/* ── Body ── */}
@@ -127,33 +149,18 @@ export default function PerfilScreen() {
           <PrivacyRow
             iconUrl={PERFIL_ICONS.privado} iconBg="#FFF0EB"
             label="Perfil privado"
-            sub={isPrivate ? 'So voce pode ver suas memorias' : 'Outros usuarios podem ver seu perfil'}
+            sub={isPrivate ? 'Só você pode ver suas memórias' : 'Outros usuários podem ver seu perfil'}
             type="toggle"
             value={isPrivate}
             onChange={handleTogglePrivacy}
           />
-          <PrivacyRow
-            iconUrl={PERFIL_ICONS.biometria} iconBg="#FFF6DB"
-            label="PIN de bloqueio"
-            sub="Proteger o app com senha"
-            type="chevron"
-            onClick={() => setShowPinModal(true)}
-          />
         </div>
 
-        {/* ── Exportar / Backup ── */}
+        {/* ── Backup na nuvem ── */}
         <h2 className={styles.sectionTitle}>
-          <img src={PERFIL_ICONS.exportar} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
-          Exportar e Backup
+          <img src={PERFIL_ICONS.nuvem} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
+          Backup
         </h2>
-        <button className={styles.exportBtn} onClick={handleExportAll}>
-          <img src={PERFIL_ICONS.salvar} alt="" aria-hidden="true" className={styles.exportIcon} width={28} height={28} />
-          <div className={styles.exportText}>
-            <p className={styles.exportLabel}>Exportar tudo (ZIP)</p>
-            <p className={styles.exportSub}>Fotos, vídeos e textos organizados</p>
-          </div>
-          <span className={styles.exportArrow}>›</span>
-        </button>
         <div className={styles.exportBtn} onClick={() => {
           setCloudBackup(v => !v)
           toast(!cloudBackup ? 'Backup na nuvem ativado!' : 'Backup desativado')
@@ -173,24 +180,79 @@ export default function PerfilScreen() {
           <span style={{ fontSize: 24 }}>💎</span>
           <div className={styles.exportText}>
             <p className={styles.exportLabel}>Planos e Armazenamento</p>
-            <p className={styles.exportSub}>Proteja suas memorias na nuvem</p>
+            <p className={styles.exportSub}>Proteja suas memórias na nuvem</p>
           </div>
           <span className={styles.exportArrow}>›</span>
         </button>
 
-        <div style={{ height: 8 }} />
+        <div style={{ height: 16 }} />
 
         {/* ── Sair ── */}
-        <button className={styles.logoutBtn} onClick={() => { logout(); toast.success('Voce saiu da conta') }}>
+        <button className={styles.logoutBtn} onClick={() => { logout(); toast.success('Você saiu da conta') }}>
           Sair da conta
         </button>
 
         <div style={{ height: 32 }} />
       </div>
 
-      {/* Modal de PIN */}
-      {showPinModal && (
-        <PinLockModal onClose={() => setShowPinModal(false)} />
+      {/* ── Modal Editar Perfil ── */}
+      {showEdit && (
+        <div className={styles.editOverlay} onClick={() => setShowEdit(false)}>
+          <div className={styles.editModal} onClick={e => e.stopPropagation()}>
+            <h3 className={styles.editTitle}>Editar Perfil</h3>
+
+            <div className={styles.editAvatarWrap}>
+              <div className={styles.editAvatarCircle}>
+                {avatarSrc
+                  ? <img src={avatarSrc} alt="" className={styles.editAvatarImg} />
+                  : <span className={styles.editAvatarLetter}>{editName?.charAt(0)?.toUpperCase() || '?'}</span>
+                }
+              </div>
+              <label className={styles.editAvatarBtn} htmlFor="perfilAvatarInput">Trocar foto</label>
+              <input
+                id="perfilAvatarInput"
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleAvatarChange}
+              />
+            </div>
+
+            <label className={styles.editLabel}>Nome</label>
+            <input
+              className={styles.editInput}
+              type="text"
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              placeholder="Seu nome"
+              maxLength={60}
+            />
+
+            <label className={styles.editLabel}>Nome de usuário</label>
+            <input
+              className={styles.editInput}
+              type="text"
+              value={user?.username ? `@${user.username}` : ''}
+              disabled
+              style={{ opacity: 0.6 }}
+            />
+
+            <label className={styles.editLabel}>Bio</label>
+            <textarea
+              className={styles.editTextarea}
+              value={editBio}
+              onChange={e => setEditBio(e.target.value)}
+              placeholder="Uma frase sobre você…"
+              maxLength={160}
+              rows={3}
+            />
+
+            <button className={styles.editSaveBtn} onClick={handleSaveProfile} disabled={savingProfile}>
+              {savingProfile ? 'Salvando…' : 'Salvar'}
+            </button>
+            <button className={styles.editCancelBtn} onClick={() => setShowEdit(false)}>Cancelar</button>
+          </div>
+        </div>
       )}
     </div>
   )
