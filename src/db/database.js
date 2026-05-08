@@ -106,6 +106,17 @@ db.version(2).stores({
   fileBlobs: '++id, firestoreId, title, type, date',
 });
 
+// Versão 3: adiciona localBlobId como índice em fileBlobs para lookup rápido
+db.version(3).stores({
+  memories: '++id, type, date, createdAt, folderId, title, description, filePath, fileBlob, thumbnail, duration, location, tags, isHighlight, isFavorite, isShared, shareWith, privacyLevel, *tags',
+  folders: '++id, name, emoji, isAuto, autoRule, color, createdAt, order',
+  profile: '++id, name, bio, avatarBlob, username, email, birthDate, privacyLevel, biometricEnabled, pinHash, createdAt, updatedAt',
+  family: '++id, name, username, avatarBlob, role, joinedAt, isActive',
+  settings: '&key, value, updatedAt',
+  reminders: '++id, memoryId, message, triggerDate, type, isRead',
+  fileBlobs: '++id, localBlobId, firestoreId, title, type, date',
+});
+
 // ─── Helpers de Configurações ─────────────────────────────────────────
 
 export async function getSetting(key, defaultValue = null) {

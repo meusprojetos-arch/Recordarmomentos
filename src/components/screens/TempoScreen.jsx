@@ -127,19 +127,30 @@ export default function TempoScreen() {
     const urls = {}
     for (const m of memories) {
       try {
-        if (m.thumbnail && m.thumbnail instanceof Blob) {
+        if (m._objectUrl && (m.type === 'photo' || m.type === 'video')) {
+          urls[m.id] = m._objectUrl
+        } else if (m.fileUrl && (m.type === 'photo' || m.type === 'video')) {
+          urls[m.id] = m.fileUrl
+        } else if (m.thumbnail && m.thumbnail instanceof Blob) {
           urls[m.id] = URL.createObjectURL(m.thumbnail)
         } else if (m.fileBlob && m.fileBlob instanceof Blob && (m.type === 'photo' || m.type === 'video')) {
           urls[m.id] = URL.createObjectURL(m.fileBlob)
         } else if (m.fileBlob && !(m.fileBlob instanceof Blob) && (m.type === 'photo' || m.type === 'video')) {
-          // Tentar converter ArrayBuffer/Uint8Array para Blob
           const blob = new Blob([m.fileBlob], { type: m.type === 'photo' ? 'image/jpeg' : 'video/mp4' })
           urls[m.id] = URL.createObjectURL(blob)
         }
       } catch (e) { /* skip invalid blobs */ }
     }
     setThumbUrls(urls)
-    return () => { Object.values(urls).forEach(u => URL.revokeObjectURL(u)) }
+    return () => {
+      Object.entries(urls).forEach(([id, u]) => {
+        // Não revogar _objectUrl pois é gerenciado externamente
+        const mem = memories.find(m => m.id === id)
+        if (!mem?._objectUrl || u !== mem._objectUrl) {
+          URL.revokeObjectURL(u)
+        }
+      })
+    }
   }, [memories])
 
   // ── Busca ─────────────────────────────────────────────────────────────────

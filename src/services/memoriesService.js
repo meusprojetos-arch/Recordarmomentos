@@ -41,9 +41,12 @@ export async function addMemory(memoryData, file = null) {
   // Salva blob LOCALMENTE primeiro (garante que a foto fica acessível)
   let localId = null
   const localBlobId = uuid() // ID único para associar blob
+  let localObjectUrl = null
   if (file) {
     try {
       const blob = file instanceof Blob ? file : new Blob([file])
+      // Gera URL de objeto como fallback imediato (válida na aba atual)
+      localObjectUrl = URL.createObjectURL(blob)
       localId = await localDb.fileBlobs.add({
         localBlobId,
         type: memoryData.type || 'photo',
@@ -52,7 +55,11 @@ export async function addMemory(memoryData, file = null) {
         blob: blob,
         createdAt: new Date().toISOString(),
       })
-    } catch (e) { console.error('Erro ao salvar blob local:', e) }
+    } catch (e) {
+      console.error('Erro ao salvar blob local (fileBlobs pode nao existir - verifique versao do IndexedDB):', e)
+      // Tenta abrir o banco na versao mais recente para forcar migracao
+      try { await localDb.open() } catch (_) {}
+    }
   }
 
   let fileUrl = ''
@@ -97,7 +104,8 @@ export async function addMemory(memoryData, file = null) {
     } catch (e) { console.warn('Erro ao associar firestoreId:', e) }
   }
 
-  return { id: docRef.id, ...docData }
+  // Retorna com objectUrl para uso imediato na sessão atual
+  return { id: docRef.id, ...docData, _objectUrl: localObjectUrl }
 }
 
 /**
@@ -131,8 +139,9 @@ export async function getMemories(options = {}) {
       if (lb.title && lb.title !== 'Sem titulo') blobByTitle[lb.title] = lb.blob
     }
     for (const mem of memories) {
-      if (!mem.fileUrl && !mem.fileBlob) {
-        const blob = blobByFsId[mem.id] 
+      // Tenta sempre enriquecer com blob local (para thumbnail e exibição offline)
+      if (!mem.fileBlob) {
+        const blob = blobByFsId[mem.id]
           || (mem.localBlobId && blobByLocalBlobId[mem.localBlobId])
           || (mem.title && mem.title !== 'Sem titulo' && blobByTitle[mem.title])
         if (blob) mem.fileBlob = blob

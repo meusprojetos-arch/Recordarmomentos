@@ -3,10 +3,12 @@ import ReactDOM from 'react-dom/client'
 import { Toaster } from 'react-hot-toast'
 import App from './App.jsx'
 import './styles/globals.css'
-import { initDefaultFolders } from './db/database.js'
+import { db, initDefaultFolders } from './db/database.js'
 
-// Inicializa pastas padrão na primeira execução
-initDefaultFolders().catch(console.error)
+// Força abertura do banco para garantir migração de schema (v3 com fileBlobs.localBlobId)
+db.open().then(() => {
+  initDefaultFolders().catch(console.error)
+}).catch(e => console.error('Erro ao abrir IndexedDB:', e))
 
 // Aplica tema salvo
 const savedTheme = localStorage.getItem('recordar_theme') || 'dark'
