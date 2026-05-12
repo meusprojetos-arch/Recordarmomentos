@@ -6,10 +6,6 @@ workflows:
     instance_type: mac_mini_m2
 
     environment:
-      ios_signing:
-        provisioning_profiles:
-        - Recordar App Store
-
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
@@ -32,7 +28,7 @@ workflows:
       - name: Build iOS
         script: |
           xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME" --archive-xcargs "CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM=69TTU76KJR" --export-options-plist export_options.plist
-          
+
     artifacts:
       - build/ios/ipa/*.ipa
 
