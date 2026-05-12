@@ -9,6 +9,9 @@ workflows:
        app_store_connect: Codemagic
    
     environment:
+      groups:
+        - firebase
+        
       ios_signing:
         provisioning_profiles:
           - Recordar App Store

@@ -27,7 +27,13 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Safety timeout: se onAuthStateChanged nao disparar em 5s, desbloqueia
+    const timeout = setTimeout(() => {
+      setLoading(false)
+    }, 5000)
+
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      clearTimeout(timeout)
       if (firebaseUser) {
         // Busca dados extras do Firestore
         const profileDoc = await getDoc(doc(firestore, 'users', firebaseUser.uid)).catch(() => null)
@@ -45,7 +51,7 @@ export function AuthProvider({ children }) {
       }
       setLoading(false)
     })
-    return unsub
+    return () => { clearTimeout(timeout); unsub() }
   }, [])
 
   const signup = async (email, password, name, username, birthDate) => {

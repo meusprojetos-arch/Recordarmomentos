@@ -2,9 +2,9 @@
  * RECORDAR — Firebase Config
  */
 import { initializeApp } from 'firebase/app'
-import { getAuth, connectAuthEmulator } from 'firebase/auth'
-import { getFirestore, connectFirestoreEmulator, enableIndexedDbPersistence } from 'firebase/firestore'
-import { getStorage, connectStorageEmulator } from 'firebase/storage'
+import { getAuth } from 'firebase/auth'
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore'
+import { getStorage } from 'firebase/storage'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -18,12 +18,19 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
-export const firestore = getFirestore(app)
-export const storage = getStorage(app)
 
-// Habilita persistencia offline do Firestore
-enableIndexedDbPersistence(firestore).catch((err) => {
-  console.warn('Firestore offline persistence failed:', err.code)
-})
+// Usa a nova API de persistência (compatível com iOS WKWebView)
+let firestoreInstance
+try {
+  firestoreInstance = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  })
+} catch (e) {
+  // Fallback se já foi inicializado ou persistência falhar
+  firestoreInstance = getFirestore(app)
+}
+export const firestore = firestoreInstance
+
+export const storage = getStorage(app)
 
 export default app
