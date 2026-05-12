@@ -35,21 +35,27 @@ export function AuthProvider({ children }) {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       clearTimeout(timeout)
       if (firebaseUser) {
-        // Busca dados extras do Firestore
-        const profileDoc = await getDoc(doc(firestore, 'users', firebaseUser.uid)).catch(() => null)
-        setUser({
+        // Seta user imediatamente com dados do Auth
+        const basicUser = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
           photoURL: firebaseUser.photoURL,
-          ...profileDoc?.data()
-        })
+        }
+        setUser(basicUser)
+        setLoading(false)
+        // Busca dados extras do Firestore em background (não bloqueia)
+        getDoc(doc(firestore, 'users', firebaseUser.uid)).then(profileDoc => {
+          if (profileDoc?.exists()) {
+            setUser(prev => ({ ...prev, ...profileDoc.data() }))
+          }
+        }).catch(() => {})
         // Inicializa pastas padrão isoladas por uid
-        initDefaultFolders(firebaseUser.uid).catch(console.error)
+        initDefaultFolders(firebaseUser.uid).catch(() => {})
       } else {
         setUser(null)
+        setLoading(false)
       }
-      setLoading(false)
     })
     return () => { clearTimeout(timeout); unsub() }
   }, [])
@@ -68,8 +74,9 @@ export function AuthProvider({ children }) {
       privacyLevel: 'private',
       createdAt: new Date().toISOString()
     }
-    await setDoc(doc(firestore, 'users', cred.user.uid), userData)
-    // Atualiza o estado imediatamente sem esperar onAuthStateChanged
+    // Salva no Firestore sem bloquear (não trava se offline)
+    setDoc(doc(firestore, 'users', cred.user.uid), userData).catch(() => {})
+    // Atualiza o estado imediatamente sem esperar Firestore
     setUser({
       uid: cred.user.uid,
       email: cred.user.email,
@@ -82,6 +89,19 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const cred = await signInWithEmailAndPassword(auth, email, password)
+    // Seta user imediatamente com dados básicos sem esperar Firestore
+    setUser({
+      uid: cred.user.uid,
+      email: cred.user.email,
+      displayName: cred.user.displayName,
+      photoURL: cred.user.photoURL,
+    })
+    // Busca dados extras do Firestore em background
+    getDoc(doc(firestore, 'users', cred.user.uid)).then(profileDoc => {
+      if (profileDoc?.exists()) {
+        setUser(prev => ({ ...prev, ...profileDoc.data() }))
+      }
+    }).catch(() => {})
     return cred.user
   }
 
