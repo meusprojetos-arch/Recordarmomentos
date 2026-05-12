@@ -41,7 +41,10 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
 
-    publishing:
+        publishing:
+      app_store_connect:
+        auth: integration
+
       email:
         recipients:
           - meusalaoai@gmail.com
