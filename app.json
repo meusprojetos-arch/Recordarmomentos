@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "87c63e81-be80-422b-bd62-4cd4c44d45c2"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.recordar.memorias",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

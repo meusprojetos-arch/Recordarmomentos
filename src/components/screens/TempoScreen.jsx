@@ -110,7 +110,11 @@ export default function TempoScreen() {
       // Encontrar a pasta "Trancadas" para excluir da galeria principal
       let lockedFolderId = null
       try {
-        const lockedFolder = await localDb.folders.where('name').equals('Trancadas').first()
+        const uid = user?.uid || ''
+        const lockedFolder = await localDb.folders
+          .where('uid').equals(uid)
+          .and(f => f.name === 'Trancadas')
+          .first()
         if (lockedFolder) lockedFolderId = lockedFolder.id
       } catch { /* ignore */ }
       // Filtrar memórias trancadas (privadas + na pasta Trancadas)
@@ -128,7 +132,7 @@ export default function TempoScreen() {
     } catch (e) {
       console.error(e)
     }
-  }, [])
+  }, [user?.uid])
 
   useEffect(() => { loadMemories() }, [loadMemories])
 
@@ -544,16 +548,20 @@ export default function TempoScreen() {
 
   async function handleLockPhotos() {
     if (lockSelectedIds.size === 0) return
+    const uid = user?.uid || ''
     try {
-      // Criar/encontrar pasta "Trancadas"
-      let lockedFolder = await localDb.folders.where('name').equals('Trancadas').first()
+      // Criar/encontrar pasta "Trancadas" do usuário atual
+      let lockedFolder = await localDb.folders
+        .where('uid').equals(uid)
+        .and(f => f.name === 'Trancadas')
+        .first()
       if (!lockedFolder) {
         const folderId = await localDb.folders.add({
           name: 'Trancadas',
           emoji: '/icons/pasta-generica.svg',
           isAuto: false,
           autoRule: null,
-          uid: user?.uid || '',
+          uid,
           order: 99,
           createdAt: new Date().toISOString(),
         })
