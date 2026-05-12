@@ -9,6 +9,8 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.recordar.memorias
+        provisioning_profiles:
+          - com.recordar.memorias
 
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
@@ -39,6 +41,6 @@ workflows:
       - build/ios/ipa/*.ipa
 
     publishing:
-     email:
-      recipients:
-      - meusalaoai@gmail.com
+      email:
+        recipients:
+          - meusalaoai@gmail.com
