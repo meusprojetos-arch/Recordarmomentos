@@ -8,7 +8,7 @@ workflows:
     environment:
       ios_signing:
         provisioning_profiles:
-        - com.recordar.memorias
+        - Recordar App Store
 
       vars:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
