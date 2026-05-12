@@ -44,17 +44,18 @@ export default function PerfilScreen() {
       })
     }).catch(() => {})
     if (user?.privacyLevel) setIsPrivate(user.privacyLevel === 'private')
-    setEditName(user?.name || user?.displayName || localStorage.getItem('recordar_profileName') || '')
-    setEditBio(user?.bio || localStorage.getItem('recordar_profileBio') || '')
-    setAvatarSrc(localStorage.getItem('recordar_avatar') || user?.photoURL || null)
+    const uid = user?.uid || ''
+    setEditName(user?.name || user?.displayName || localStorage.getItem(`recordar_profileName_${uid}`) || '')
+    setEditBio(user?.bio || localStorage.getItem(`recordar_profileBio_${uid}`) || '')
+    setAvatarSrc(localStorage.getItem(`recordar_avatar_${uid}`) || user?.photoURL || null)
   }, [user])
 
   const handleSaveProfile = async () => {
     if (!editName.trim()) { toast.error('O nome não pode ficar vazio'); return }
     setSavingProfile(true)
     try {
-      localStorage.setItem('recordar_profileName', editName.trim())
-      localStorage.setItem('recordar_profileBio', editBio.trim())
+      localStorage.setItem(`recordar_profileName_${auth.currentUser?.uid || ''}`, editName.trim())
+      localStorage.setItem(`recordar_profileBio_${auth.currentUser?.uid || ''}`, editBio.trim())
       const uid = auth.currentUser?.uid
       if (uid) {
         await updateDoc(doc(firestore, 'users', uid), {
@@ -79,7 +80,7 @@ export default function PerfilScreen() {
     reader.onload = async () => {
       const base64 = reader.result
       setAvatarSrc(base64)
-      localStorage.setItem('recordar_avatar', base64)
+      localStorage.setItem(`recordar_avatar_${auth.currentUser?.uid || ''}`, base64)
       const uid = auth.currentUser?.uid
       if (uid) {
         try { await updateDoc(doc(firestore, 'users', uid), { photoURL: base64 }) } catch {}

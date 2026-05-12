@@ -67,6 +67,17 @@ db.version(4).stores({
   fileBlobs: '++id, localBlobId, firestoreId, title, type, date',
 });
 
+// Versão 5: adiciona uid para isolamento entre contas
+db.version(5).stores({
+  memories: '++id, type, date, createdAt, folderId, uid, *tags',
+  folders: '++id, name, isAuto, order, uid',
+  profile: '++id, username, email',
+  family: '++id, name, username',
+  settings: '&key',
+  reminders: '++id, memoryId, triggerDate, type',
+  fileBlobs: '++id, localBlobId, firestoreId, title, type, date, uid',
+});
+
 // ─── Helpers de Configurações ─────────────────────────────────────────
 
 export async function getSetting(key, defaultValue = null) {
@@ -152,7 +163,7 @@ export async function searchMemories(query) {
 
 // ─── Inicialização: pastas padrão ─────────────────────────────────────
 
-export async function initDefaultFolders() {
+export async function initDefaultFolders(uid = null) {
   const defaults = [
     { name: 'Família',        emoji: '/icons/pasta-familia.svg',        isAuto: true,  autoRule: 'tag:família',      order: 1 },
     { name: 'Aniversários',   emoji: '/icons/pasta-aniversarios.svg',   isAuto: true,  autoRule: 'date:birthday',    order: 2 },
@@ -167,14 +178,16 @@ export async function initDefaultFolders() {
     { name: 'Destaques',      emoji: '/icons/pasta-destaques.svg',      isAuto: true,  autoRule: 'isHighlight:true', order: 11 },
   ];
 
-  // Adicionar apenas pastas que ainda não existem (por nome)
-  const existing = await db.folders.toArray();
+  // Filtra pastas existentes para este usuário
+  const existing = uid
+    ? await db.folders.where('uid').equals(uid).toArray()
+    : await db.folders.toArray();
   const existingNames = existing.map(f => f.name);
   const toAdd = defaults.filter(f => !existingNames.includes(f.name));
 
   if (toAdd.length > 0) {
     await db.folders.bulkAdd(
-      toAdd.map(f => ({ ...f, createdAt: new Date().toISOString() }))
+      toAdd.map(f => ({ ...f, uid: uid || '', createdAt: new Date().toISOString() }))
     );
   }
 }
@@ -283,8 +296,13 @@ export function matchesAutoRule(rule, memoryDate, memory = {}) {
  * Classifica automaticamente uma memória nas pastas automáticas.
  * Retorna o ID da primeira pasta que corresponder, ou null.
  */
-export async function autoClassifyMemory(memory) {
-  const folders = await db.folders.filter(f => f.isAuto === true).toArray()
+export async function autoClassifyMemory(memory, uid = null) {
+  let folders
+  if (uid) {
+    folders = await db.folders.where('uid').equals(uid).filter(f => f.isAuto === true).toArray()
+  } else {
+    folders = await db.folders.filter(f => f.isAuto === true).toArray()
+  }
   for (const folder of folders) {
     if (matchesAutoRule(folder.autoRule, memory.date, memory)) {
       return folder.id

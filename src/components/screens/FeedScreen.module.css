@@ -403,18 +403,18 @@
   gap: 6px;
   padding: 8px 14px;
   border-radius: var(--radius-md);
-  border: 1px solid #ddd;
-  background: white;
-  color: #555;
+  border: 1px solid rgba(114,140,105,0.3);
+  background: var(--salvia-light, #1A2418);
+  color: #728C69;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .dateFilterBtnActive {
-  background: var(--verde-light);
-  border-color: var(--verde);
-  color: var(--verde);
+  background: var(--salvia-light, #1A2418);
+  border-color: #728C69;
+  color: #728C69;
 }
 
 .dateFilterClear {

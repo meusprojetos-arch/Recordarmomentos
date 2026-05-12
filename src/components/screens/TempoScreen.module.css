@@ -197,17 +197,17 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  border: 1.5px solid var(--cinza-suave);
-  background: transparent;
-  color: var(--cinza-suave);
+  border: 1.5px solid rgba(114,140,105,0.4);
+  background: var(--salvia-light, #1A2418);
+  color: #728C69;
   font-family: var(--font-sans);
   transition: var(--transition-fast);
 }
 .dateFilterBtn:active { transform: scale(0.96); }
 .dateFilterBtnActive {
-  border-color: var(--verde);
-  color: var(--verde);
-  background: var(--verde-light);
+  border-color: #728C69;
+  color: #728C69;
+  background: var(--salvia-light, #1A2418);
 }
 
 .dateFilterClear {

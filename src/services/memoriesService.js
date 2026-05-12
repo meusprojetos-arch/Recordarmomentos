@@ -50,6 +50,7 @@ export async function addMemory(memoryData, file = null) {
       localObjectUrl = URL.createObjectURL(blob)
       localId = await localDb.fileBlobs.add({
         localBlobId,
+        uid,
         type: memoryData.type || 'photo',
         title: memoryData.title || '',
         date: memoryData.date || '',
@@ -138,21 +139,21 @@ export async function getMemories(options = {}) {
       
       let blob = null
       
-      // 1. Busca por localBlobId (mais confiável)
+      // 1. Busca por localBlobId (mais confiável) — filtra por uid
       if (!blob && mem.localBlobId) {
         const match = await localDb.fileBlobs.where('localBlobId').equals(mem.localBlobId).first()
-        if (match?.blob) blob = match.blob
+        if (match?.blob && (!match.uid || match.uid === uid)) blob = match.blob
       }
       
-      // 2. Busca por firestoreId
+      // 2. Busca por firestoreId — filtra por uid
       if (!blob) {
         const match = await localDb.fileBlobs.where('firestoreId').equals(mem.id).first()
-        if (match?.blob) blob = match.blob
+        if (match?.blob && (!match.uid || match.uid === uid)) blob = match.blob
       }
       
-      // 3. Último recurso: busca por título (se único)
+      // 3. Último recurso: busca por título (se único) — filtra por uid
       if (!blob && mem.title && mem.title !== 'Sem titulo') {
-        const match = await localDb.fileBlobs.where('title').equals(mem.title).first()
+        const match = await localDb.fileBlobs.where('title').equals(mem.title).and(item => !item.uid || item.uid === uid).first()
         if (match?.blob) blob = match.blob
       }
       

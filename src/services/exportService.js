@@ -5,6 +5,7 @@
 import JSZip from 'jszip'
 import { getMemories } from './memoriesService.js'
 import { db } from '../db/database.js'
+import { auth } from '../firebase.js'
 
 /**
  * Exporta todas as memorias em um arquivo ZIP organizado por pastas
@@ -14,10 +15,13 @@ export async function exportAllAsZip() {
   const memories = await getMemories()
   if (memories.length === 0) throw new Error('Nenhuma memoria para exportar')
 
-  // Buscar pastas do IndexedDB
+  // Buscar pastas do IndexedDB (filtradas por uid)
   let folders = []
   try {
-    folders = await db.folders.toArray()
+    const uid = auth.currentUser?.uid
+    folders = uid
+      ? await db.folders.where('uid').equals(uid).toArray()
+      : await db.folders.toArray()
   } catch { /* ignore */ }
 
   const folderMap = {}

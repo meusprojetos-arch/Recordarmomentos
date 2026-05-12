@@ -6,10 +6,15 @@ import React, { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import toast from 'react-hot-toast'
 import db from '../../db/database.js'
+import { useAuth } from '../../contexts/AuthContext.jsx'
 import styles from './FolderGrid.module.css'
 
 export default function FolderGrid({ onOpenFolder, memoryCounts }) {
-  const folders = useLiveQuery(() => db.folders.orderBy('order').toArray(), [])
+  const { user } = useAuth()
+  const folders = useLiveQuery(() => {
+    if (!user?.uid) return []
+    return db.folders.where('uid').equals(user.uid).sortBy('order')
+  }, [user?.uid])
   const [showInput, setShowInput] = useState(false)
   const [newName, setNewName] = useState('')
 
@@ -28,6 +33,7 @@ export default function FolderGrid({ onOpenFolder, memoryCounts }) {
         emoji: '/icons/pasta-generica.svg',
         isAuto: false,
         autoRule: null,
+        uid: user?.uid || '',
         order: (folders?.length || 0) + 1,
         createdAt: new Date().toISOString(),
       })

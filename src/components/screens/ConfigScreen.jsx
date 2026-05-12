@@ -110,9 +110,10 @@ export default function ConfigScreen({ onClose }) {
 
   // ── Carregar configurações persistidas ──
   useEffect(() => {
-    setName(user?.displayName || user?.name || localStorage.getItem('recordar_profileName') || '')
-    setBio(user?.bio || localStorage.getItem('recordar_profileBio') || '')
-    setAvatarSrc(localStorage.getItem('recordar_avatar') || user?.photoURL || null)
+    const uid = user?.uid || ''
+    setName(user?.displayName || user?.name || localStorage.getItem(`recordar_profileName_${uid}`) || '')
+    setBio(user?.bio || localStorage.getItem(`recordar_profileBio_${uid}`) || '')
+    setAvatarSrc(localStorage.getItem(`recordar_avatar_${uid}`) || user?.photoURL || null)
     setIsPrivate(localStorage.getItem('recordar_privacy') !== 'public')
     setAutoBackup(localStorage.getItem('recordar_autoBackup') === '1')
     setBackupFreq(localStorage.getItem('recordar_backupFreq') || 'diario')
@@ -121,9 +122,9 @@ export default function ConfigScreen({ onClose }) {
     const syncToFirestore = async () => {
       const uid = auth.currentUser?.uid
       if (!uid) return
-      const localBio = localStorage.getItem('recordar_profileBio') || ''
-      const localAvatar = localStorage.getItem('recordar_avatar') || ''
-      const localName = localStorage.getItem('recordar_profileName') || ''
+      const localBio = localStorage.getItem(`recordar_profileBio_${uid}`) || ''
+      const localAvatar = localStorage.getItem(`recordar_avatar_${uid}`) || ''
+      const localName = localStorage.getItem(`recordar_profileName_${uid}`) || ''
       const updates = {}
       if (localBio && !user?.bio) updates.bio = localBio
       if (localAvatar && !user?.photoURL) updates.photoURL = localAvatar
@@ -142,8 +143,8 @@ export default function ConfigScreen({ onClose }) {
     if (!name.trim()) { toast.error('O nome não pode ficar vazio'); return }
     setSavingProfile(true)
     try {
-      localStorage.setItem('recordar_profileName', name.trim())
-      localStorage.setItem('recordar_profileBio', bio.trim())
+      localStorage.setItem(`recordar_profileName_${auth.currentUser?.uid || ''}`, name.trim())
+      localStorage.setItem(`recordar_profileBio_${auth.currentUser?.uid || ''}`, bio.trim())
       // Salvar no Firestore para outros usuários verem
       const uid = auth.currentUser?.uid
       if (uid) {
@@ -169,7 +170,7 @@ export default function ConfigScreen({ onClose }) {
     reader.onload = async () => {
       const base64 = reader.result
       setAvatarSrc(base64)
-      localStorage.setItem('recordar_avatar', base64)
+      localStorage.setItem(`recordar_avatar_${auth.currentUser?.uid || ''}`, base64)
       // Salvar no Firestore para outros usuários verem
       const uid = auth.currentUser?.uid
       if (uid) {

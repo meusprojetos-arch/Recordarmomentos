@@ -121,3 +121,128 @@
   color: #999;
   margin-top: -2px;
 }
+
+/* ── Termos ── */
+.termsRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.termsCheckbox {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--verde);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.termsLabel {
+  font-size: 12px;
+  color: var(--cinza-suave);
+  line-height: 1.5;
+}
+
+.termsLink {
+  color: var(--verde);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ── Botão Ajuda ── */
+.helpBtn {
+  display: block;
+  margin: 8px auto 0;
+  background: none;
+  border: none;
+  color: var(--cinza-suave);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  text-decoration: underline;
+  opacity: 0.8;
+}
+
+/* ── Modal genérico ── */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+
+.modalBox {
+  background: var(--bege);
+  border-radius: 16px;
+  padding: 24px 20px;
+  width: 100%;
+  max-width: 360px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modalTitle {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cinza);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.modalBody {
+  font-size: 13px;
+  color: var(--cinza);
+  line-height: 1.7;
+}
+
+.modalBody p {
+  margin-bottom: 12px;
+}
+
+.modalCloseBtn {
+  display: block;
+  width: 100%;
+  margin-top: 20px;
+  padding: 12px;
+  background: var(--verde);
+  color: white;
+  border: none;
+  border-radius: var(--radius-full);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+/* ── Help items ── */
+.helpItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bege-claro);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  text-decoration: none;
+  color: var(--cinza);
+  font-size: 14px;
+  font-weight: 600;
+  transition: transform 0.15s ease;
+}
+
+.helpItem:active {
+  transform: scale(0.97);
+}
+
+.helpIcon {
+  font-size: 20px;
+}

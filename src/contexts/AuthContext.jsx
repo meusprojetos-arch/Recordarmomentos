@@ -14,6 +14,7 @@ import {
   EmailAuthProvider
 } from 'firebase/auth'
 import { doc, setDoc, getDoc } from 'firebase/firestore'
+import { initDefaultFolders } from '../db/database.js'
 
 const AuthContext = createContext(null)
 
@@ -37,6 +38,8 @@ export function AuthProvider({ children }) {
           photoURL: firebaseUser.photoURL,
           ...profileDoc?.data()
         })
+        // Inicializa pastas padrão isoladas por uid
+        initDefaultFolders(firebaseUser.uid).catch(console.error)
       } else {
         setUser(null)
       }

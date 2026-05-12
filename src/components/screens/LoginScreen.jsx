@@ -11,6 +11,7 @@ export default function LoginScreen({ onGoSignup, onGoWelcome }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -73,7 +74,32 @@ export default function LoginScreen({ onGoSignup, onGoWelcome }) {
           Nao tem conta?{' '}
           <button className={styles.switchBtn} onClick={onGoSignup}>Criar conta</button>
         </p>
+
+        <button className={styles.helpBtn} onClick={() => setShowHelp(true)}>
+          Preciso de ajuda
+        </button>
       </div>
+
+      {/* Modal Ajuda */}
+      {showHelp && (
+        <div className={styles.modalOverlay} onClick={() => setShowHelp(false)}>
+          <div className={styles.modalBox} onClick={e => e.stopPropagation()}>
+            <h2 className={styles.modalTitle}>Precisa de ajuda?</h2>
+            <div className={styles.modalBody}>
+              <p>Entre em contato conosco por um dos canais abaixo:</p>
+              <a href="mailto:suporte@recordar.com" className={styles.helpItem}>
+                <span className={styles.helpIcon}>✉</span>
+                <span>suporte@recordar.com</span>
+              </a>
+              <a href="https://wa.me/5513996636898" target="_blank" rel="noopener noreferrer" className={styles.helpItem}>
+                <span className={styles.helpIcon}>📱</span>
+                <span>(13) 99663-6898</span>
+              </a>
+            </div>
+            <button className={styles.modalCloseBtn} onClick={() => setShowHelp(false)}>Fechar</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

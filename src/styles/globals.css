@@ -9,9 +9,11 @@
 /* ─── CSS Variables ─── */
 :root {
   /* Paleta Principal — Modo Escuro (padrão) */
-  --verde:          #FF6B35;
-  --verde-suave:    #FF8C5A;
+  --verde:          #D37E65;
+  --verde-suave:    #E09A85;
   --verde-light:    #2A1810;
+  --salvia:         #728C69;
+  --salvia-light:   #1A2418;
   --bege:           #1A1614;
   --bege-claro:     #252019;
   --dourado:        #FFC940;
@@ -58,9 +60,11 @@
 
 /* ─── Modo Claro ─── */
 [data-theme="light"] {
-  --verde:          #E55A2B;
-  --verde-suave:    #FF7A4A;
+  --verde:          #C06A52;
+  --verde-suave:    #D37E65;
   --verde-light:    #FFF0EB;
+  --salvia:         #728C69;
+  --salvia-light:   #E8F0E6;
   --bege:           #F5F2EF;
   --bege-claro:     #FFFFFF;
   --dourado:        #E5A000;
