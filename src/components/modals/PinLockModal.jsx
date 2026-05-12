@@ -5,10 +5,11 @@ import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import styles from '../screens/AuthScreen.module.css'
 
-const PIN_KEY = 'recordar_pin_hash'
+function getPinKey(uid) {
+  return `recordar_pin_hash_${uid || ''}`
+}
 
 function hashPin(pin) {
-  // Hash simples para PIN local (nao precisa ser crypto-grade)
   let hash = 0
   for (let i = 0; i < pin.length; i++) {
     hash = ((hash << 5) - hash) + pin.charCodeAt(i)
@@ -17,25 +18,26 @@ function hashPin(pin) {
   return hash.toString()
 }
 
-export default function PinLockModal({ onClose, onUnlock }) {
+export default function PinLockModal({ onClose, onUnlock, uid, mode }) {
   const [pin, setPin] = useState('')
   const [confirmPin, setConfirmPin] = useState('')
-  const [step, setStep] = useState('check') // 'check' | 'create' | 'confirm'
+  const [step, setStep] = useState('check')
   const [hasPin, setHasPin] = useState(false)
 
   useEffect(() => {
-    const stored = localStorage.getItem(PIN_KEY)
+    const stored = localStorage.getItem(getPinKey(uid))
     if (stored) {
       setHasPin(true)
-      setStep('verify')
+      // Se mode=manage, mostrar opções de gerenciar
+      setStep(mode === 'manage' ? 'manage' : 'verify')
     } else {
       setStep('create')
     }
-  }, [])
+  }, [uid, mode])
 
   const handleCreate = () => {
     if (pin.length < 4) {
-      toast.error('O PIN precisa ter pelo menos 4 digitos')
+      toast.error('O PIN precisa ter pelo menos 4 dígitos')
       return
     }
     setStep('confirm')
@@ -43,21 +45,20 @@ export default function PinLockModal({ onClose, onUnlock }) {
 
   const handleConfirm = () => {
     if (confirmPin !== pin) {
-      toast.error('Os PINs nao coincidem')
+      toast.error('Os PINs não coincidem')
       setConfirmPin('')
       return
     }
-    localStorage.setItem(PIN_KEY, hashPin(pin))
+    localStorage.setItem(getPinKey(uid), hashPin(pin))
     toast.success('PIN configurado com sucesso!')
     onClose()
   }
 
   const handleVerify = () => {
-    const stored = localStorage.getItem(PIN_KEY)
+    const stored = localStorage.getItem(getPinKey(uid))
     if (hashPin(pin) === stored) {
       toast.success('Desbloqueado!')
       onUnlock?.()
-      onClose()
     } else {
       toast.error('PIN incorreto')
       setPin('')
@@ -65,20 +66,22 @@ export default function PinLockModal({ onClose, onUnlock }) {
   }
 
   const handleRemove = () => {
-    localStorage.removeItem(PIN_KEY)
+    localStorage.removeItem(getPinKey(uid))
     toast.success('PIN removido')
     onClose()
   }
 
   return (
-    <div className={styles.container} style={{ position: 'fixed', inset: 0, zIndex: 300 }}>
-      <div className={styles.content}>
-        <button className={styles.backBtn} onClick={onClose}>← Voltar</button>
+    <div className={styles.modalOverlay} style={{ zIndex: 9999 }}>
+      <div className={styles.modalBox}>
+        <button className={styles.switchBtn} onClick={onClose} style={{ alignSelf: 'flex-start', marginBottom: 12 }}>← Voltar</button>
 
         {step === 'create' && (
           <>
-            <h1 className={styles.title}>Criar PIN</h1>
-            <p className={styles.subtitle}>Escolha um PIN de 4-6 digitos para proteger o app</p>
+            <h2 className={styles.modalTitle}>Criar PIN</h2>
+            <p style={{ fontSize: 13, color: 'var(--cinza-suave)', textAlign: 'center', marginBottom: 16 }}>
+              Escolha um PIN de 4-6 dígitos para proteger a pasta Trancadas
+            </p>
             <div className={styles.form}>
               <input
                 type="password"
@@ -99,8 +102,10 @@ export default function PinLockModal({ onClose, onUnlock }) {
 
         {step === 'confirm' && (
           <>
-            <h1 className={styles.title}>Confirmar PIN</h1>
-            <p className={styles.subtitle}>Digite o PIN novamente para confirmar</p>
+            <h2 className={styles.modalTitle}>Confirmar PIN</h2>
+            <p style={{ fontSize: 13, color: 'var(--cinza-suave)', textAlign: 'center', marginBottom: 16 }}>
+              Digite o PIN novamente para confirmar
+            </p>
             <div className={styles.form}>
               <input
                 type="password"
@@ -121,8 +126,10 @@ export default function PinLockModal({ onClose, onUnlock }) {
 
         {step === 'verify' && (
           <>
-            <h1 className={styles.title}>Digite seu PIN</h1>
-            <p className={styles.subtitle}>Insira o PIN para desbloquear</p>
+            <h2 className={styles.modalTitle}>Digite seu PIN</h2>
+            <p style={{ fontSize: 13, color: 'var(--cinza-suave)', textAlign: 'center', marginBottom: 16 }}>
+              Insira o PIN para desbloquear a pasta
+            </p>
             <div className={styles.form}>
               <input
                 type="password"
@@ -137,7 +144,21 @@ export default function PinLockModal({ onClose, onUnlock }) {
               <button className={styles.btnSubmit} onClick={handleVerify}>
                 Desbloquear
               </button>
-              <button className={styles.switchBtn} onClick={handleRemove} style={{marginTop: 16}}>
+            </div>
+          </>
+        )}
+
+        {step === 'manage' && (
+          <>
+            <h2 className={styles.modalTitle}>PIN de Bloqueio</h2>
+            <p style={{ fontSize: 13, color: 'var(--cinza-suave)', textAlign: 'center', marginBottom: 16 }}>
+              Você já tem um PIN configurado para a pasta Trancadas.
+            </p>
+            <div className={styles.form}>
+              <button className={styles.btnSubmit} onClick={() => { setStep('create'); setPin(''); setConfirmPin('') }}>
+                Alterar PIN
+              </button>
+              <button className={styles.btnSubmit} onClick={handleRemove} style={{ background: '#FF3D57', marginTop: 10 }}>
                 Remover PIN
               </button>
             </div>
@@ -149,8 +170,8 @@ export default function PinLockModal({ onClose, onUnlock }) {
 }
 
 /**
- * Verifica se existe PIN configurado
+ * Verifica se existe PIN configurado para um uid
  */
-export function hasPinLock() {
-  return !!localStorage.getItem(PIN_KEY)
+export function hasPinLock(uid) {
+  return !!localStorage.getItem(getPinKey(uid))
 }

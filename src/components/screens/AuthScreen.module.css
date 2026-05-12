@@ -1,10 +1,12 @@
 .container {
-  height: 100%;
+  min-height: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: var(--bege);
   padding: 24px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .content {
@@ -12,7 +14,8 @@
   max-width: 380px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  padding-bottom: 40px;
 }
 
 .backBtn {
@@ -42,7 +45,7 @@
 .form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .field {
@@ -68,6 +71,9 @@
   background: var(--bege-claro);
   transition: var(--transition-fast);
   outline: none;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .input:focus {
   border-color: var(--verde);
@@ -176,16 +182,16 @@
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  padding: 20px;
+  padding: 16px;
 }
 
 .modalBox {
   background: var(--bege);
   border-radius: 16px;
-  padding: 24px 20px;
+  padding: 20px 18px;
   width: 100%;
-  max-width: 360px;
-  max-height: 80vh;
+  max-width: 340px;
+  max-height: 75vh;
   overflow-y: auto;
 }
 

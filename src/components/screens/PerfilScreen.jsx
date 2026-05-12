@@ -11,6 +11,7 @@ import { setProfilePrivacy } from '../../services/profileService.js'
 import { auth, firestore } from '../../firebase.js'
 import { doc, updateDoc } from 'firebase/firestore'
 import PrivacyRow from '../ui/PrivacyRow.jsx'
+import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './PerfilScreen.module.css'
 
 const PERFIL_ICONS = {
@@ -33,6 +34,7 @@ export default function PerfilScreen() {
   const [avatarSrc, setAvatarSrc] = useState(null)
   const [savingProfile, setSavingProfile] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
+  const [showPinModal, setShowPinModal] = useState(false)
 
   useEffect(() => {
     getMemories().then(mems => {
@@ -157,6 +159,22 @@ export default function PerfilScreen() {
           />
         </div>
 
+        {/* ── PIN de Bloqueio ── */}
+        <h2 className={styles.sectionTitle}>
+          <span style={{marginRight:6, verticalAlign:'middle', fontSize: 18}}>🔒</span>
+          Segurança
+        </h2>
+        <button className={styles.exportBtn} onClick={() => setShowPinModal(true)}>
+          <span style={{ fontSize: 24 }}>🔑</span>
+          <div className={styles.exportText}>
+            <p className={styles.exportLabel}>PIN de Bloqueio</p>
+            <p className={styles.exportSub}>Protege a pasta "Trancadas" com senha</p>
+          </div>
+          <span className={styles.exportArrow}>›</span>
+        </button>
+
+        <div style={{ height: 16 }} />
+
         {/* ── Backup na nuvem ── */}
         <h2 className={styles.sectionTitle}>
           <img src={PERFIL_ICONS.nuvem} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
@@ -254,6 +272,16 @@ export default function PerfilScreen() {
             <button className={styles.editCancelBtn} onClick={() => setShowEdit(false)}>Cancelar</button>
           </div>
         </div>
+      )}
+
+      {/* Modal PIN */}
+      {showPinModal && (
+        <PinLockModal
+          uid={user?.uid}
+          mode="manage"
+          onClose={() => setShowPinModal(false)}
+          onUnlock={() => setShowPinModal(false)}
+        />
       )}
     </div>
   )

@@ -11,6 +11,8 @@ import { getMemories, searchMemories, deleteMemory, updateMemory, getTrashItems,
 import { db as localDb } from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import FolderGrid from '../ui/FolderGrid.jsx'
+import PinLockModal from '../modals/PinLockModal.jsx'
+import { useAuth } from '../../contexts/AuthContext.jsx'
 import styles from './TempoScreen.module.css'
 import toast from 'react-hot-toast'
 
@@ -91,6 +93,11 @@ export default function TempoScreen() {
   const [lockMode, setLockMode]         = useState(false)
   const [lockSelectedIds, setLockSelectedIds] = useState(new Set())
 
+  // PIN para pasta trancadas
+  const [showPinModal, setShowPinModal] = useState(false)
+  const [pendingFolder, setPendingFolder] = useState(null)
+  const { user } = useAuth()
+
   // Swipe no viewer
   const touchStartX = useRef(null)
   const longPressTimer = useRef(null)
@@ -127,6 +134,20 @@ export default function TempoScreen() {
 
   // Abrir pasta e carregar suas memórias
   const handleOpenFolder = async (folder) => {
+    // Se for pasta Trancadas e tem PIN configurado, pedir PIN
+    if (folder.name === 'Trancadas') {
+      const uid = user?.uid || ''
+      const pinHash = localStorage.getItem(`recordar_pin_hash_${uid}`)
+      if (pinHash) {
+        setPendingFolder(folder)
+        setShowPinModal(true)
+        return
+      }
+    }
+    openFolderDirectly(folder)
+  }
+
+  const openFolderDirectly = async (folder) => {
     setOpenFolder(folder)
     setFolderLoading(true)
     try {
@@ -532,6 +553,7 @@ export default function TempoScreen() {
           emoji: '/icons/pasta-generica.svg',
           isAuto: false,
           autoRule: null,
+          uid: user?.uid || '',
           order: 99,
           createdAt: new Date().toISOString(),
         })
@@ -1181,6 +1203,19 @@ export default function TempoScreen() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Modal PIN para pasta Trancadas */}
+      {showPinModal && (
+        <PinLockModal
+          uid={user?.uid}
+          onClose={() => { setShowPinModal(false); setPendingFolder(null) }}
+          onUnlock={() => {
+            setShowPinModal(false)
+            if (pendingFolder) openFolderDirectly(pendingFolder)
+            setPendingFolder(null)
+          }}
+        />
       )}
     </div>
   )

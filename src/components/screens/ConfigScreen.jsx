@@ -20,6 +20,7 @@ import { doc, updateDoc } from 'firebase/firestore'
 import { exportAllAsZip } from '../../services/exportService.js'
 import db from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
+import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './ConfigScreen.module.css'
 
 // ─── Ícones ──────────────────────────────────────────────────────────────────
@@ -107,6 +108,7 @@ export default function ConfigScreen({ onClose }) {
 
   // ── Tema ──
   const [theme, setTheme] = useState(() => localStorage.getItem('recordar_theme') || 'dark')
+  const [showPinModal, setShowPinModal] = useState(false)
 
   // ── Carregar configurações persistidas ──
   useEffect(() => {
@@ -474,17 +476,17 @@ export default function ConfigScreen({ onClose }) {
           {/* PIN de bloqueio */}
           <div
             className={styles.row}
-            onClick={() => toast('Em breve', { icon: '🔒' })}
+            onClick={() => setShowPinModal(true)}
             role="button"
             tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && toast('Em breve', { icon: '🔒' })}
+            onKeyDown={e => e.key === 'Enter' && setShowPinModal(true)}
           >
             <div className={styles.rowIconWrap} style={{ background: '#FFF6DB' }}>
               <img src={ICONS.biometria} alt="" width={20} height={20} aria-hidden="true" />
             </div>
             <div className={styles.rowText}>
               <p className={styles.rowLabel}>PIN de bloqueio</p>
-              <p className={styles.rowSub}>Proteger o app com senha</p>
+              <p className={styles.rowSub}>Protege a pasta "Trancadas" com senha</p>
             </div>
             <span className={styles.chevron} aria-hidden="true">›</span>
           </div>
@@ -676,6 +678,16 @@ export default function ConfigScreen({ onClose }) {
 
         <div style={{ height: 32 }} />
       </div>
+
+      {/* Modal PIN */}
+      {showPinModal && (
+        <PinLockModal
+          uid={user?.uid}
+          mode="manage"
+          onClose={() => setShowPinModal(false)}
+          onUnlock={() => setShowPinModal(false)}
+        />
+      )}
     </div>
   )
 }
