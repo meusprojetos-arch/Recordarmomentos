@@ -1,0 +1,11 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" fill="none">
+  <!-- Folder back -->
+  <path d="M3 10 L3 24 Q3 26 5 26 L25 26 Q27 26 27 24 L27 10 Z" fill="#FF6B35" opacity="0.18" stroke="#FF6B35" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Folder tab -->
+  <path d="M3 10 L3 8 Q3 6 5 6 L12 6 Q13.5 6 14 8 L15.5 10 Z" fill="#FF6B35" opacity="0.55" stroke="#FF6B35" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Folder front face -->
+  <path d="M3 12 L27 12 L27 24 Q27 26 25 26 L5 26 Q3 26 3 24 Z" fill="#FF6B35" opacity="0.35" stroke="#FF6B35" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- Inner highlight line -->
+  <line x1="8" y1="17" x2="22" y2="17" stroke="#FF6B35" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+  <line x1="8" y1="20" x2="18" y2="20" stroke="#FF6B35" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
+</svg>

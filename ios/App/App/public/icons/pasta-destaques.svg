@@ -1,0 +1,8 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" fill="none">
+  <!-- Main star -->
+  <polygon points="15,3 17.6,10.1 25.4,10.1 19.4,14.9 21.6,22 15,17.8 8.4,22 10.6,14.9 4.6,10.1 12.4,10.1" fill="#FF6B35"/>
+  <!-- Small sparkle top-right -->
+  <path d="M23 5 L23.5 7 L25.5 7.5 L23.5 8 L23 10 L22.5 8 L20.5 7.5 L22.5 7 Z" fill="#FF6B35" opacity="0.55"/>
+  <!-- Small sparkle bottom-left -->
+  <path d="M7 21 L7.4 22.6 L9 23 L7.4 23.4 L7 25 L6.6 23.4 L5 23 L6.6 22.6 Z" fill="#FF6B35" opacity="0.4"/>
+</svg>
