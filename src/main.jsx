@@ -3,33 +3,26 @@ import ReactDOM from 'react-dom/client'
 import { Toaster } from 'react-hot-toast'
 import App from './App.jsx'
 import './styles/globals.css'
+
+// Ignora erros cross-origin e promise rejections sem travar o app
+window.onerror = function(msg, src, line) {
+  if (msg === 'Script error.' || line === 0) return true
+  return false
+}
+window.onunhandledrejection = function() {}
+
+// IndexedDB: abre de forma lazy (não bloqueia render)
 import { db } from './db/database.js'
-
-window.onerror = function(msg, src, line, col, err) {
-  // Ignora erros cross-origin genéricos (Script error. Line: 0)
-  if (msg === 'Script error.' || line === 0) return true;
-  console.error('Global error:', msg, src, line);
-  return false;
-};
-
-window.onunhandledrejection = function(e) {
-  console.error('Unhandled rejection:', e.reason);
-};
-
-// Handler para evitar bloqueio de versão entre abas
-db.on('versionchange', () => { db.close(); window.location.reload() })
-db.on('blocked', () => { console.warn('IndexedDB upgrade bloqueado') })
-
-// Força abertura e migração do banco
-db.open().catch(e => console.error('Erro ao abrir IndexedDB:', e))
-
-// Aplica tema salvo
 try {
-  const savedTheme = localStorage.getItem('recordar_theme') || 'dark'
-  if (savedTheme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light')
-  }
-} catch (e) { /* localStorage pode falhar em modo privado */ }
+  db.on('versionchange', () => { db.close(); window.location.reload() })
+  db.open().catch(() => {})
+} catch(e) {}
+
+// Tema
+try {
+  const t = localStorage.getItem('recordar_theme')
+  if (t === 'light') document.documentElement.setAttribute('data-theme', 'light')
+} catch(e) {}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
