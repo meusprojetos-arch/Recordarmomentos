@@ -6,7 +6,14 @@ import './styles/globals.css'
 import { db } from './db/database.js'
 
 window.onerror = function(msg, src, line, col, err) {
-  document.body.innerHTML = '<div style="padding:40px;color:red;font-size:14px;"><b>Erro:</b> ' + msg + '<br>Line: ' + line + '</div>';
+  // Ignora erros cross-origin genéricos (Script error. Line: 0)
+  if (msg === 'Script error.' || line === 0) return true;
+  console.error('Global error:', msg, src, line);
+  return false;
+};
+
+window.onunhandledrejection = function(e) {
+  console.error('Unhandled rejection:', e.reason);
 };
 
 // Handler para evitar bloqueio de versão entre abas
