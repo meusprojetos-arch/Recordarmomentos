@@ -15,10 +15,10 @@ export default defineConfig({
         }
       }
     },
-    target: 'es2017', // Suporte a celulares mais antigos
+    target: 'es2015',
     minify: 'terser',
     terserOptions: {
-      compress: { drop_console: true }
+      compress: { drop_console: false }
     }
   }
 })

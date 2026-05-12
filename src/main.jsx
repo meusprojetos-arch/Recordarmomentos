@@ -6,22 +6,23 @@ import './styles/globals.css'
 import { db } from './db/database.js'
 
 window.onerror = function(msg, src, line, col, err) {
-  alert(msg);
+  document.body.innerHTML = '<div style="padding:40px;color:red;font-size:14px;"><b>Erro:</b> ' + msg + '<br>Line: ' + line + '</div>';
 };
 
 // Handler para evitar bloqueio de versão entre abas
-// db.on('versionchange', () => { db.close(); window.location.reload() })
-// db.on('blocked', () => { console.warn('IndexedDB upgrade bloqueado — feche outras abas') })
+db.on('versionchange', () => { db.close(); window.location.reload() })
+db.on('blocked', () => { console.warn('IndexedDB upgrade bloqueado') })
 
 // Força abertura e migração do banco
-// db.open().catch(e => console.error('Erro ao abrir IndexedDB:', e))
+db.open().catch(e => console.error('Erro ao abrir IndexedDB:', e))
 
 // Aplica tema salvo
-const savedTheme = 'dark'
-
-if (savedTheme === 'light') {
-  document.documentElement.setAttribute('data-theme', 'light')
-}
+try {
+  const savedTheme = localStorage.getItem('recordar_theme') || 'dark'
+  if (savedTheme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light')
+  }
+} catch (e) { /* localStorage pode falhar em modo privado */ }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
