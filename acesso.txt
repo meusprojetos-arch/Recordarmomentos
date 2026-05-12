@@ -1,0 +1,12 @@
+senha ios
+E-mail: rodajaapp@gmail.com
+Senha: Rod@ja2811
+
+
+caminho para mudar versao manual, C:\Users\Admi\Desktop\Recordar\ios\App\App.xcodeproj
+linha 352, CURRENT_PROJECT_VERSION = 1;
+linha 356, MARKETING_VERSION = 1.0;
+
+site que sobe, https://codemagic.io/start
+loguin com github
+git hub ta com gmail do meusalaoai

@@ -5,15 +5,20 @@ import App from './App.jsx'
 import './styles/globals.css'
 import { db } from './db/database.js'
 
+window.onerror = function(msg, src, line, col, err) {
+  alert(msg);
+};
+
 // Handler para evitar bloqueio de versão entre abas
-db.on('versionchange', () => { db.close(); window.location.reload() })
-db.on('blocked', () => { console.warn('IndexedDB upgrade bloqueado — feche outras abas') })
+// db.on('versionchange', () => { db.close(); window.location.reload() })
+// db.on('blocked', () => { console.warn('IndexedDB upgrade bloqueado — feche outras abas') })
 
 // Força abertura e migração do banco
-db.open().catch(e => console.error('Erro ao abrir IndexedDB:', e))
+// db.open().catch(e => console.error('Erro ao abrir IndexedDB:', e))
 
 // Aplica tema salvo
-const savedTheme = localStorage.getItem('recordar_theme') || 'dark'
+const savedTheme = 'dark'
+
 if (savedTheme === 'light') {
   document.documentElement.setAttribute('data-theme', 'light')
 }
