@@ -44,7 +44,7 @@ const FRASES = [
 ]
 
 export default function HojeScreen() {
-  const { setShowAddModal, setShowPlans } = useApp()
+  const { setShowAddModal, setShowPlans, activeTab } = useApp()
   const { user } = useAuth()
   const [userName, setUserName] = useState('voce')
   const [frase] = useState(() => FRASES[Math.floor(Math.random() * FRASES.length)])
@@ -91,10 +91,10 @@ export default function HojeScreen() {
     }
   }, [user])
 
-  // Carrega memorias recentes
+  // Carrega memorias recentes — recarrega sempre que a aba hoje ficar ativa
   useEffect(() => {
     getRecentMemories(10).then(setRecentMemories).catch(() => {})
-  }, [])
+  }, [activeTab])
 
   // Verifica lembretes de aniversario de memorias
   useEffect(() => {
