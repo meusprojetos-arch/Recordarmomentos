@@ -167,6 +167,7 @@ export default function ConfigScreen({ onClose }) {
   const { user, logout, changePassword } = useAuth()
 
   // ── Trocar Senha ──
+  const [showSenhaForm, setShowSenhaForm] = useState(false)
   const [currentPwd, setCurrentPwd]     = useState('')
   const [newPwd, setNewPwd]             = useState('')
   const [confirmPwd, setConfirmPwd]     = useState('')
@@ -187,6 +188,7 @@ export default function ConfigScreen({ onClose }) {
       setCurrentPwd('')
       setNewPwd('')
       setConfirmPwd('')
+      setShowSenhaForm(false)
     } catch (err) {
       if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         toast.error('Senha atual incorreta')
@@ -420,6 +422,28 @@ export default function ConfigScreen({ onClose }) {
         {/* ══ 1. Trocar Senha ══ */}
         <h2 className={styles.sectionTitle}>Trocar Senha</h2>
         <div className={styles.card}>
+          {!showSenhaForm ? (
+            <div
+              className={styles.row}
+              onClick={() => setShowSenhaForm(true)}
+              role="button"
+              tabIndex={0}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className={styles.rowIconWrap} style={{ background: '#FFF0EB' }}>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#D37E65" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div className={styles.rowText}>
+                <p className={styles.rowLabel}>Alterar senha</p>
+                <p className={styles.rowSub}>Toque para trocar sua senha</p>
+              </div>
+              <span className={styles.chevron}>›</span>
+            </div>
+          ) : (
+            <>
           <label className={styles.fieldLabel}>Senha atual</label>
           <div className={styles.passwordWrap}>
             <input
@@ -520,6 +544,15 @@ export default function ConfigScreen({ onClose }) {
           >
             {savingPwd ? 'Salvando…' : 'Alterar senha'}
           </button>
+          <button
+            type="button"
+            onClick={() => { setShowSenhaForm(false); setCurrentPwd(''); setNewPwd(''); setConfirmPwd('') }}
+            style={{ background: 'none', border: 'none', color: '#888', fontSize: 13, cursor: 'pointer', marginTop: 4, padding: '4px 0' }}
+          >
+            Cancelar
+          </button>
+            </>
+          )}
         </div>
 
         {/* ══ 3. Armazenamento ══ */}
