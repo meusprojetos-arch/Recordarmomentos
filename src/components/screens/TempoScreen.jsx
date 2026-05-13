@@ -885,7 +885,9 @@ export default function TempoScreen() {
         {lockMode && (
           <div className={styles.lockBar}>
             <span className={styles.lockBarText}>
-              {lockSelectedIds.size} selecionado(s) — toque nas fotos para trancar
+              {lockSelectedIds.size === 0
+                ? 'Toque nas fotos para selecionar'
+                : `${lockSelectedIds.size} foto(s) selecionada(s)`}
             </span>
             <button className={styles.lockBarBtn} onClick={handleLockPhotos} disabled={lockSelectedIds.size === 0}>
               Trancar
@@ -981,6 +983,38 @@ export default function TempoScreen() {
               </button>
               <button className={styles.selectionBtn} onClick={openMoveModal} disabled={selectedIds.size === 0}>
                 Mover
+              </button>
+              <button className={styles.selectionBtn} onClick={async () => {
+                if (selectedIds.size === 0) return
+                const uid = user?.uid || ''
+                try {
+                  let lockedFolder = await localDb.folders
+                    .where('uid').equals(uid)
+                    .and(f => f.name === 'Trancadas')
+                    .first()
+                  if (!lockedFolder) {
+                    const folderId = await localDb.folders.add({
+                      name: 'Trancadas',
+                      emoji: '/icons/pasta-generica.svg',
+                      isAuto: false,
+                      autoRule: null,
+                      uid,
+                      order: 99,
+                      createdAt: new Date().toISOString(),
+                    })
+                    lockedFolder = { id: folderId }
+                  }
+                  for (const id of selectedIds) {
+                    await updateMemory(id, { privacyLevel: 'private', folderId: lockedFolder.id })
+                  }
+                  setMemories(prev => prev.filter(m => !selectedIds.has(m.id)))
+                  toast.success(`${selectedIds.size} item(s) trancado(s)`)
+                } catch {
+                  toast.error('Erro ao trancar')
+                }
+                exitSelectMode()
+              }} disabled={selectedIds.size === 0}>
+                Trancar
               </button>
               <button className={`${styles.selectionBtn} ${styles.selectionBtnDanger}`} onClick={batchDelete} disabled={selectedIds.size === 0}>
                 Excluir
