@@ -61,8 +61,13 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signup = async (email, password, name, username, birthDate) => {
-    const cred = await createUserWithEmailAndPassword(auth, email, password)
-    await updateProfile(cred.user, { displayName: name })
+    // Timeout de 15s para não ficar travado
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('TIMEOUT')), 15000)
+    )
+    const authPromise = createUserWithEmailAndPassword(auth, email, password)
+    const cred = await Promise.race([authPromise, timeoutPromise])
+    updateProfile(cred.user, { displayName: name }).catch(() => {})
     // Cria documento do usuario no Firestore
     const userData = {
       name,
@@ -88,7 +93,12 @@ export function AuthProvider({ children }) {
   }
 
   const login = async (email, password) => {
-    const cred = await signInWithEmailAndPassword(auth, email, password)
+    // Timeout de 15s para não ficar travado
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('TIMEOUT')), 15000)
+    )
+    const authPromise = signInWithEmailAndPassword(auth, email, password)
+    const cred = await Promise.race([authPromise, timeoutPromise])
     // Seta user imediatamente com dados básicos sem esperar Firestore
     setUser({
       uid: cred.user.uid,

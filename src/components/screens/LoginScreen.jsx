@@ -24,7 +24,9 @@ export default function LoginScreen({ onGoSignup, onGoWelcome }) {
       await login(email, password)
       toast.success('Bem-vindo de volta!')
     } catch (err) {
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      if (err.message === 'TIMEOUT') {
+        toast.error('Conexão lenta. Verifique sua internet e tente novamente.')
+      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         toast.error('Email ou senha incorretos')
       } else if (err.code === 'auth/too-many-requests') {
         toast.error('Muitas tentativas. Tente mais tarde.')

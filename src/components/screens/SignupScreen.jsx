@@ -57,7 +57,9 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
       await signup(email, password, name, username, birthDate)
       toast.success('Conta criada com sucesso!')
     } catch (err) {
-      if (err.code === 'auth/email-already-in-use') {
+      if (err.message === 'TIMEOUT') {
+        toast.error('Conexão lenta. Verifique sua internet e tente novamente.')
+      } else if (err.code === 'auth/email-already-in-use') {
         toast.error('Esse email ja esta em uso')
       } else if (err.code === 'auth/weak-password') {
         toast.error('Senha muito fraca')
