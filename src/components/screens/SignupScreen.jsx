@@ -57,16 +57,14 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
       await signup(email, password, name, username, birthDate)
       toast.success('Conta criada com sucesso!')
     } catch (err) {
-      if (err.message === 'TIMEOUT') {
-        toast.error('Conexão lenta. Verifique sua internet e tente novamente.')
-      } else if (err.code === 'auth/email-already-in-use') {
+      if (err.code === 'auth/email-already-in-use') {
         toast.error('Esse email ja esta em uso')
       } else if (err.code === 'auth/weak-password') {
         toast.error('Senha muito fraca')
       } else if (err.code === 'auth/invalid-email') {
         toast.error('Email invalido')
       } else {
-        toast.error('Erro ao criar conta. Tente novamente.')
+        toast.error(err.message || 'Erro ao criar conta. Tente novamente.')
       }
     }
     setLoading(false)

@@ -2,7 +2,7 @@
  * RECORDAR — Firebase Config
  */
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { initializeAuth, getAuth, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 import { getStorage } from 'firebase/storage'
 
@@ -17,7 +17,19 @@ const firebaseConfig = {
 }
 
 const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+
+// Capacitor iOS: precisa especificar persistência explicitamente para não travar no WKWebView
+let auth
+try {
+  auth = initializeAuth(app, {
+    persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+  })
+} catch (e) {
+  // Se já foi inicializado (ex: hot reload), usa getAuth
+  auth = getAuth(app)
+}
+export { auth }
+
 export const firestore = getFirestore(app)
 export const storage = getStorage(app)
 

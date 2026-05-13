@@ -61,14 +61,8 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signup = async (email, password, name, username, birthDate) => {
-    // Timeout de 15s para não ficar travado
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('TIMEOUT')), 15000)
-    )
-    const authPromise = createUserWithEmailAndPassword(auth, email, password)
-    const cred = await Promise.race([authPromise, timeoutPromise])
+    const cred = await createUserWithEmailAndPassword(auth, email, password)
     updateProfile(cred.user, { displayName: name }).catch(() => {})
-    // Cria documento do usuario no Firestore
     const userData = {
       name,
       email,
@@ -79,9 +73,7 @@ export function AuthProvider({ children }) {
       privacyLevel: 'private',
       createdAt: new Date().toISOString()
     }
-    // Salva no Firestore sem bloquear (não trava se offline)
     setDoc(doc(firestore, 'users', cred.user.uid), userData).catch(() => {})
-    // Atualiza o estado imediatamente sem esperar Firestore
     setUser({
       uid: cred.user.uid,
       email: cred.user.email,
@@ -93,20 +85,13 @@ export function AuthProvider({ children }) {
   }
 
   const login = async (email, password) => {
-    // Timeout de 15s para não ficar travado
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('TIMEOUT')), 15000)
-    )
-    const authPromise = signInWithEmailAndPassword(auth, email, password)
-    const cred = await Promise.race([authPromise, timeoutPromise])
-    // Seta user imediatamente com dados básicos sem esperar Firestore
+    const cred = await signInWithEmailAndPassword(auth, email, password)
     setUser({
       uid: cred.user.uid,
       email: cred.user.email,
       displayName: cred.user.displayName,
       photoURL: cred.user.photoURL,
     })
-    // Busca dados extras do Firestore em background
     getDoc(doc(firestore, 'users', cred.user.uid)).then(profileDoc => {
       if (profileDoc?.exists()) {
         setUser(prev => ({ ...prev, ...profileDoc.data() }))
