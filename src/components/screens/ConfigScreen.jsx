@@ -214,6 +214,11 @@ export default function ConfigScreen({ onClose }) {
   // ── FAQ ──
   const [openFaq, setOpenFaq] = useState(null)
 
+  // ── Exportação ZIP ──
+  const [exportando, setExportando] = useState(false)
+  const [exportProgress, setExportProgress] = useState(0)
+  const exportCancelRef = React.useRef(false)
+
   // ── Tema ──
   const [theme, setTheme] = useState(() => localStorage.getItem('recordar_theme') || 'dark')
   const [showPinModal, setShowPinModal] = useState(false)
@@ -757,16 +762,10 @@ export default function ConfigScreen({ onClose }) {
         <div className={styles.card + ' ' + styles.cardNoPad}>
           <div
             className={styles.row}
-            onClick={async () => {
-              const tid = toast.loading('Preparando exportação...')
-              try {
-                await exportAllAsZip()
-                toast.dismiss(tid)
-                toast.success('Exportação pronta! Verifique seus downloads.')
-              } catch {
-                toast.dismiss(tid)
-                toast.error('Erro na exportação')
-              }
+            onClick={() => {
+              exportCancelRef.current = false
+              setExportProgress(0)
+              setExportando(true)
             }}
             role="button"
             tabIndex={0}
@@ -851,6 +850,93 @@ export default function ConfigScreen({ onClose }) {
             </div>
             <button className={styles.legalCloseBtn} onClick={() => setShowPrivacy(false)}>Fechar</button>
           </div>
+        </div>
+      )}
+
+      {/* ── Modal de Exportação ZIP ── */}
+      {exportando && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+        }}>
+          <div style={{
+            background: 'var(--card-bg, #fff)', borderRadius: 16, padding: 28,
+            width: 300, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+          }}>
+            <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>📦 Exportando...</p>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary, #888)', marginBottom: 16 }}>
+              Preparando seu arquivo ZIP
+            </p>
+            <div style={{
+              background: '#eee', borderRadius: 99, height: 10, marginBottom: 12, overflow: 'hidden'
+            }}>
+              <div style={{
+                background: '#D37E65', height: '100%', borderRadius: 99,
+                width: exportProgress + '%', transition: 'width 0.3s'
+              }} />
+            </div>
+            <p style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>{exportProgress}%</p>
+            <button
+              onClick={() => { exportCancelRef.current = true; setExportando(false); setExportProgress(0) }}
+              style={{
+                background: 'transparent', border: '1.5px solid #D37E65', color: '#D37E65',
+                borderRadius: 99, padding: '10px 32px', fontSize: 15, cursor: 'pointer', fontWeight: 600
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+          {/* Iniciar exportação assim que o modal abrir */}
+          {exportando && exportProgress === 0 && (() => {
+            setTimeout(async () => {
+              if (exportCancelRef.current) return
+              try {
+                const JSZip = (await import('jszip')).default
+                const memories = await db.memories.toArray()
+                const profile = await db.profile.toCollection().first()
+                const zip = new JSZip()
+                const root = zip.folder('Recordar_Export')
+                const MONTHS = ['01_Janeiro','02_Fevereiro','03_Marco','04_Abril','05_Maio','06_Junho','07_Julho','08_Agosto','09_Setembro','10_Outubro','11_Novembro','12_Dezembro']
+                root.file('INFO.txt', ['RECORDAR — Exportação','Exportado em: ' + new Date().toLocaleString('pt-BR'),'Titular: ' + (profile?.name || 'Usuário'),'Total: ' + memories.length].join('
+'))
+                let done = 0
+                for (const m of memories) {
+                  if (exportCancelRef.current) return
+                  const year = m.date?.substring(0,4) || 'SemData'
+                  const month = m.date ? Number(m.date.substring(5,7)) - 1 : -1
+                  const folder = root.folder(year)?.folder(month >= 0 ? MONTHS[month] : 'SemData')
+                  if (m.fileBlob && folder) {
+                    const ext = m.fileBlob.type?.split('/')[1] || 'bin'
+                    const safe = (m.title || m.id).replace(/[^a-zA-Z0-9À-ÿ\s_-]/g,'').trim()
+                    folder.file(safe + '.' + ext, m.fileBlob)
+                  }
+                  done++
+                  setExportProgress(Math.round((done / memories.length) * 50))
+                }
+                if (exportCancelRef.current) return
+                const blob = await zip.generateAsync({ type: 'blob' }, (meta) => {
+                  if (!exportCancelRef.current) setExportProgress(50 + Math.round(meta.percent / 2))
+                })
+                if (exportCancelRef.current) return
+                const url = URL.createObjectURL(blob)
+                const link = document.createElement('a')
+                link.href = url
+                link.download = 'Recordar_' + new Date().toISOString().substring(0,10) + '.zip'
+                link.click()
+                URL.revokeObjectURL(url)
+                setExportando(false)
+                setExportProgress(0)
+                toast.success('📦 Exportação concluída!')
+              } catch(e) {
+                if (!exportCancelRef.current) {
+                  setExportando(false)
+                  setExportProgress(0)
+                  toast.error('Erro na exportação')
+                }
+              }
+            }, 100)
+            return null
+          })()}
         </div>
       )}
     </div>
