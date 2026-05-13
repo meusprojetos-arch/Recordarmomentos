@@ -23,6 +23,114 @@ import Topbar from '../layout/Topbar.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './ConfigScreen.module.css'
 
+const TERMS_CONTENT = `Termos de Uso — Recordar
+
+Última atualização: 13 de maio de 2026
+
+Ao criar uma conta e utilizar o Recordar, você concorda com os seguintes termos:
+
+1. Sobre o Serviço
+O Recordar é um aplicativo de memórias pessoais e legado familiar. Nosso objetivo é ajudar você a guardar e organizar momentos importantes da sua vida.
+
+2. Sua Conta
+• Você deve fornecer informações verdadeiras ao criar sua conta.
+• Cada pessoa deve ter apenas uma conta pessoal.
+• Você é responsável por manter sua senha e PIN seguros.
+• Menores de 13 anos não podem criar conta.
+
+3. Seu Conteúdo
+• Suas memórias são privadas por padrão.
+• Você mantém todos os direitos sobre o conteúdo que armazena.
+• Não armazene conteúdo ilegal ou que viole direitos de terceiros.
+• Não utilize o app para spam, assédio ou atividades maliciosas.
+
+4. Armazenamento
+• Oferecemos armazenamento local (no dispositivo) e na nuvem conforme seu plano.
+• O armazenamento local depende do espaço disponível no seu dispositivo.
+• Não garantimos recuperação de dados perdidos no armazenamento local.
+• Dados na nuvem são protegidos com criptografia em trânsito.
+
+5. Planos e Pagamento
+• O plano gratuito tem limitações de armazenamento na nuvem.
+• Planos pagos podem ser cancelados a qualquer momento.
+• Não há reembolso por períodos parciais de uso.
+
+6. Cancelamento e Exclusão
+• Você pode excluir sua conta a qualquer momento.
+• Ao excluir, seus dados na nuvem serão removidos em até 30 dias.
+• Dados no armazenamento local permanecem no dispositivo até você removê-los.
+
+7. Limitação de Responsabilidade
+• O Recordar é fornecido "como está", sem garantias.
+• Não nos responsabilizamos por perda de dados armazenados localmente.
+• Recomendamos manter backup das memórias importantes.
+
+8. Alterações nos Termos
+• Podemos atualizar estes termos quando necessário.
+• Você será notificado sobre mudanças significativas.
+• O uso continuado após alterações constitui aceitação.
+
+9. Contato
+Para dúvidas sobre estes termos: suporte@recordar.com`
+
+const PRIVACY_CONTENT = `Política de Privacidade — Recordar
+
+Última atualização: 13 de maio de 2026
+
+Sua privacidade é fundamental para nós. Esta política explica como coletamos, usamos e protegemos seus dados.
+
+1. Dados que Coletamos
+• Informações de conta: nome, email, data de nascimento, nome de usuário.
+• Conteúdo: fotos, vídeos, áudios e textos que você escolhe salvar.
+• Dados técnicos: tipo de dispositivo, versão do app, logs de erro.
+• Não coletamos dados de localização, contatos ou histórico de navegação.
+
+2. Como Usamos seus Dados
+• Para fornecer e manter o serviço do aplicativo.
+• Para personalizar sua experiência (pastas automáticas, lembretes).
+• Para backup e sincronização na nuvem (se ativado).
+• Nunca vendemos, alugamos ou compartilhamos seus dados pessoais com terceiros.
+
+3. Armazenamento e Segurança
+• Dados locais ficam no seu dispositivo, protegidos pelo sistema operacional.
+• Dados na nuvem são armazenados no Firebase (Google Cloud) com criptografia.
+• Sua senha é armazenada com hash seguro (nunca em texto plano).
+• O PIN da pasta Trancadas é armazenado apenas localmente.
+
+4. Privacidade do Perfil
+• Por padrão, seu perfil é privado — ninguém além de você pode ver suas memórias.
+• Você controla o que é visível para outros usuários nas configurações.
+• Memórias na pasta "Trancadas" têm camada extra de proteção (PIN).
+
+5. Compartilhamento
+• Só compartilhamos dados quando exigido por lei (ordem judicial).
+• Não usamos seus dados para publicidade.
+• Não temos integrações com redes sociais que acessem seu conteúdo.
+
+6. Seus Direitos
+• Acesso: você pode ver todos os dados que temos sobre você.
+• Correção: pode editar suas informações a qualquer momento.
+• Exclusão: pode apagar sua conta e todos os dados associados.
+• Exportação: pode exportar todas as suas memórias em formato ZIP.
+
+7. Cookies e Rastreamento
+• Não usamos cookies de rastreamento.
+• Não usamos ferramentas de analytics que identificam usuários.
+• Coletamos apenas dados anônimos de uso para melhorar o app.
+
+8. Menores de Idade
+• O Recordar não é destinado a menores de 13 anos.
+• Se identificarmos conta de menor, ela será removida.
+
+9. Alterações nesta Política
+• Atualizaremos esta política quando necessário.
+• Mudanças significativas serão comunicadas via app.
+
+10. Contato
+Para dúvidas sobre privacidade ou para exercer seus direitos:
+• Email: suporte@recordar.com
+• WhatsApp: (13) 99663-6898`
+
 // ─── Ícones ──────────────────────────────────────────────────────────────────
 const ICONS = {
   avatar:   '/icons/avatar-padrao.svg',
@@ -109,6 +217,8 @@ export default function ConfigScreen({ onClose }) {
   // ── Tema ──
   const [theme, setTheme] = useState(() => localStorage.getItem('recordar_theme') || 'dark')
   const [showPinModal, setShowPinModal] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
+  const [showPrivacy, setShowPrivacy] = useState(false)
 
   // ── Carregar configurações persistidas ──
   useEffect(() => {
@@ -665,6 +775,44 @@ export default function ConfigScreen({ onClose }) {
           </div>
         </div>
 
+        {/* ══ Termos e Política ══ */}
+        <h2 className={styles.sectionTitle}>Termos e Política</h2>
+        <div className={styles.card + ' ' + styles.cardNoPad}>
+          <div
+            className={styles.row}
+            onClick={() => setShowTerms(true)}
+            role="button"
+            tabIndex={0}
+          >
+            <div className={styles.rowIconWrap} style={{ background: '#E8F0FF' }}>
+              <span style={{ fontSize: 16 }}>📄</span>
+            </div>
+            <div className={styles.rowText}>
+              <p className={styles.rowLabel}>Termos de Uso</p>
+              <p className={styles.rowSub}>Regras de uso do aplicativo</p>
+            </div>
+            <span className={styles.chevron} aria-hidden="true">›</span>
+          </div>
+
+          <div className={styles.rowDivider} />
+
+          <div
+            className={styles.row}
+            onClick={() => setShowPrivacy(true)}
+            role="button"
+            tabIndex={0}
+          >
+            <div className={styles.rowIconWrap} style={{ background: '#F0E8FF' }}>
+              <span style={{ fontSize: 16 }}>🔐</span>
+            </div>
+            <div className={styles.rowText}>
+              <p className={styles.rowLabel}>Política de Privacidade</p>
+              <p className={styles.rowSub}>Como protegemos seus dados</p>
+            </div>
+            <span className={styles.chevron} aria-hidden="true">›</span>
+          </div>
+        </div>
+
         {/* ══ 7. Excluir Conta ══ */}
         <h2 className={styles.sectionTitle}>Zona de Perigo</h2>
         <div className={styles.card}>
@@ -687,6 +835,36 @@ export default function ConfigScreen({ onClose }) {
           onClose={() => setShowPinModal(false)}
           onUnlock={() => setShowPinModal(false)}
         />
+      )}
+
+      {/* Modal Termos */}
+      {showTerms && (
+        <div className={styles.legalOverlay} onClick={() => setShowTerms(false)}>
+          <div className={styles.legalModal} onClick={e => e.stopPropagation()}>
+            <h2 className={styles.legalTitle}>Termos de Uso</h2>
+            <div className={styles.legalBody}>
+              {TERMS_CONTENT.split('\n').map((line, i) => (
+                <p key={i} style={line.startsWith('•') ? { paddingLeft: 12 } : {}}>{line || '\u00A0'}</p>
+              ))}
+            </div>
+            <button className={styles.legalCloseBtn} onClick={() => setShowTerms(false)}>Fechar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Privacidade */}
+      {showPrivacy && (
+        <div className={styles.legalOverlay} onClick={() => setShowPrivacy(false)}>
+          <div className={styles.legalModal} onClick={e => e.stopPropagation()}>
+            <h2 className={styles.legalTitle}>Política de Privacidade</h2>
+            <div className={styles.legalBody}>
+              {PRIVACY_CONTENT.split('\n').map((line, i) => (
+                <p key={i} style={line.startsWith('•') ? { paddingLeft: 12 } : {}}>{line || '\u00A0'}</p>
+              ))}
+            </div>
+            <button className={styles.legalCloseBtn} onClick={() => setShowPrivacy(false)}>Fechar</button>
+          </div>
+        </div>
       )}
     </div>
   )

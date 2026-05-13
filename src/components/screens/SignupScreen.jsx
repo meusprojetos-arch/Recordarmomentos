@@ -166,13 +166,15 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
           <div className={styles.modalBox} onClick={e => e.stopPropagation()}>
             <h2 className={styles.modalTitle}>Termos de Uso</h2>
             <div className={styles.modalBody}>
-              <p>Bem-vindo ao Recordar! Ao criar uma conta e utilizar nosso aplicativo, você concorda com os seguintes termos:</p>
-              <p><strong>1. Uso do Serviço</strong><br/>O Recordar é um aplicativo de memórias pessoais. Você é responsável pelo conteúdo que armazena.</p>
-              <p><strong>2. Conta</strong><br/>Você deve fornecer informações verdadeiras ao criar sua conta. Cada pessoa deve ter apenas uma conta.</p>
-              <p><strong>3. Conteúdo</strong><br/>Suas memórias são privadas por padrão. Não armazene conteúdo ilegal ou que viole direitos de terceiros.</p>
-              <p><strong>4. Armazenamento</strong><br/>Oferecemos armazenamento local e na nuvem conforme seu plano. Não garantimos recuperação de dados perdidos no armazenamento local.</p>
-              <p><strong>5. Cancelamento</strong><br/>Você pode excluir sua conta a qualquer momento. Dados na nuvem serão removidos em até 30 dias.</p>
-              <p><strong>6. Alterações</strong><br/>Podemos atualizar estes termos. Você será notificado sobre mudanças significativas.</p>
+              <p><strong>Última atualização: 13 de maio de 2026</strong></p>
+              <p>Ao criar uma conta e utilizar o Recordar, você concorda com os seguintes termos:</p>
+              <p><strong>1. Sobre o Serviço</strong><br/>O Recordar é um aplicativo de memórias pessoais e legado familiar. Nosso objetivo é ajudar você a guardar e organizar momentos importantes da sua vida.</p>
+              <p><strong>2. Sua Conta</strong><br/>• Você deve fornecer informações verdadeiras ao criar sua conta.<br/>• Cada pessoa deve ter apenas uma conta pessoal.<br/>• Você é responsável por manter sua senha e PIN seguros.<br/>• Menores de 13 anos não podem criar conta.</p>
+              <p><strong>3. Seu Conteúdo</strong><br/>• Suas memórias são privadas por padrão.<br/>• Você mantém todos os direitos sobre o conteúdo que armazena.<br/>• Não armazene conteúdo ilegal ou que viole direitos de terceiros.</p>
+              <p><strong>4. Armazenamento</strong><br/>• Oferecemos armazenamento local e na nuvem conforme seu plano.<br/>• Não garantimos recuperação de dados perdidos no armazenamento local.<br/>• Dados na nuvem são protegidos com criptografia em trânsito.</p>
+              <p><strong>5. Cancelamento e Exclusão</strong><br/>• Você pode excluir sua conta a qualquer momento.<br/>• Dados na nuvem serão removidos em até 30 dias.</p>
+              <p><strong>6. Alterações</strong><br/>• Podemos atualizar estes termos. Você será notificado sobre mudanças significativas.</p>
+              <p><strong>Contato:</strong> suporte@recordar.com</p>
             </div>
             <button className={styles.modalCloseBtn} onClick={() => setShowTerms(false)}>Fechar</button>
           </div>
@@ -185,13 +187,14 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
           <div className={styles.modalBox} onClick={e => e.stopPropagation()}>
             <h2 className={styles.modalTitle}>Política de Privacidade</h2>
             <div className={styles.modalBody}>
-              <p>Sua privacidade é importante para nós. Veja como tratamos seus dados:</p>
-              <p><strong>1. Dados coletados</strong><br/>Coletamos nome, email, data de nascimento e as memórias que você escolhe salvar (fotos, vídeos, áudios e textos).</p>
-              <p><strong>2. Uso dos dados</strong><br/>Seus dados são usados exclusivamente para fornecer o serviço do aplicativo. Não vendemos nem compartilhamos suas informações com terceiros.</p>
-              <p><strong>3. Armazenamento</strong><br/>Dados são armazenados localmente no seu dispositivo e, opcionalmente, no Firebase (Google Cloud) com criptografia em trânsito.</p>
-              <p><strong>4. Privacidade do perfil</strong><br/>Por padrão seu perfil é privado. Você controla o que é visível para outros usuários.</p>
-              <p><strong>5. Exclusão</strong><br/>Você pode solicitar a exclusão completa dos seus dados a qualquer momento entrando em contato conosco.</p>
-              <p><strong>6. Contato</strong><br/>Para dúvidas sobre privacidade: suporte@recordar.com</p>
+              <p><strong>Última atualização: 13 de maio de 2026</strong></p>
+              <p>Sua privacidade é fundamental para nós. Esta política explica como coletamos, usamos e protegemos seus dados.</p>
+              <p><strong>1. Dados que Coletamos</strong><br/>• Informações de conta: nome, email, data de nascimento, nome de usuário.<br/>• Conteúdo: fotos, vídeos, áudios e textos que você escolhe salvar.<br/>• Dados técnicos: tipo de dispositivo, versão do app.<br/>• Não coletamos localização, contatos ou histórico de navegação.</p>
+              <p><strong>2. Como Usamos seus Dados</strong><br/>• Para fornecer e manter o serviço.<br/>• Para backup e sincronização na nuvem (se ativado).<br/>• Nunca vendemos ou compartilhamos seus dados com terceiros.</p>
+              <p><strong>3. Armazenamento e Segurança</strong><br/>• Dados na nuvem são armazenados no Firebase (Google Cloud) com criptografia.<br/>• Sua senha é armazenada com hash seguro.<br/>• O PIN da pasta Trancadas é armazenado apenas localmente.</p>
+              <p><strong>4. Seus Direitos</strong><br/>• Acesso: pode ver todos os dados que temos sobre você.<br/>• Exclusão: pode apagar sua conta e todos os dados.<br/>• Exportação: pode exportar todas as suas memórias em ZIP.</p>
+              <p><strong>5. Menores de Idade</strong><br/>• O Recordar não é destinado a menores de 13 anos.</p>
+              <p><strong>Contato:</strong> suporte@recordar.com | WhatsApp: (13) 99663-6898</p>
             </div>
             <button className={styles.modalCloseBtn} onClick={() => setShowPrivacy(false)}>Fechar</button>
           </div>
