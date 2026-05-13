@@ -43,6 +43,10 @@
   filter: brightness(0) invert(1);
 }
 
+:global([data-theme="light"]) .settingsBtn img {
+  filter: brightness(0) invert(0);
+}
+
 
 
 .avatar {
