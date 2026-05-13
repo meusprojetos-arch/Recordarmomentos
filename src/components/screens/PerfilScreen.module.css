@@ -40,8 +40,10 @@
 .settingsBtn:active { background: var(--verde-light); transform: scale(0.93); }
 
 .settingsBtn img {
-  filter: brightness(0) invert(1) !important;
+  filter: brightness(0) invert(1);
 }
+
+
 
 .avatar {
   width: 110px;

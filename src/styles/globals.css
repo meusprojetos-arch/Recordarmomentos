@@ -100,6 +100,10 @@ img[src*="/icons/"] {
   filter: brightness(0) opacity(0.85);
 }
 
+[data-theme="light"] button[class*="settingsBtn"] img {
+  filter: brightness(0) opacity(0.75);
+}
+
 [data-theme="light"] [class*="iconWrap"] img[src*="/icons/"],
 [data-theme="light"] [class*="card"] img[src*="/icons/"],
 [data-theme="light"] [class*="row"] img[src*="/icons/"] {
