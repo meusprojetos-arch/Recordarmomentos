@@ -930,8 +930,15 @@ export default function ConfigScreen({ onClose }) {
                 const zip = new JSZip()
                 const root = zip.folder('Recordar_Export')
                 const MONTHS = ['01_Janeiro','02_Fevereiro','03_Marco','04_Abril','05_Maio','06_Junho','07_Julho','08_Agosto','09_Setembro','10_Outubro','11_Novembro','12_Dezembro']
-                root.file('INFO.txt', ['RECORDAR — Exportação','Exportado em: ' + new Date().toLocaleString('pt-BR'),'Titular: ' + (profile?.name || 'Usuário'),'Total: ' + memories.length].join('
-'))
+                root.file(
+  'INFO.txt',
+  [
+    'RECORDAR — Exportação',
+    'Exportado em: ' + new Date().toLocaleString('pt-BR'),
+    'Titular: ' + (profile?.name || 'Usuário'),
+    'Total: ' + memories.length
+  ].join('\n')
+)
                 let done = 0
                 for (const m of memories) {
                   if (exportCancelRef.current) return
