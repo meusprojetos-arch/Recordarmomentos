@@ -220,10 +220,15 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
         memData.description = textContent
       }
 
-      // Gera thumbnail para vídeo
+      // Gera thumbnail para vídeo (com timeout para não travar)
       if (file && selectedType?.id === 'video') {
-        const thumb = await generateVideoThumbnail(file)
-        if (thumb) memData.thumbnail = thumb
+        try {
+          const thumb = await Promise.race([
+            generateVideoThumbnail(file),
+            new Promise(resolve => setTimeout(() => resolve(null), 5000))
+          ])
+          if (thumb) memData.thumbnail = thumb
+        } catch { /* sem thumbnail, segue salvando */ }
       }
 
       let fileToUpload = file

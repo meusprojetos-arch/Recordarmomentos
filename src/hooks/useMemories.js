@@ -116,22 +116,40 @@ export async function generateVideoThumbnail(file, size = 400) {
   return new Promise((resolve) => {
     const video = document.createElement('video')
     const url = URL.createObjectURL(file)
+    let resolved = false
+
+    const cleanup = (result) => {
+      if (resolved) return
+      resolved = true
+      URL.revokeObjectURL(url)
+      resolve(result)
+    }
+
+    // Timeout de segurança — 8 segundos
+    const timer = setTimeout(() => cleanup(null), 8000)
+
+    const capture = () => {
+      clearTimeout(timer)
+      try {
+        const w = video.videoWidth || 320
+        const h = video.videoHeight || 240
+        const ratio = Math.min(size / w, size / h)
+        const canvas = document.createElement('canvas')
+        canvas.width  = w * ratio
+        canvas.height = h * ratio
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+        canvas.toBlob(blob => cleanup(blob), 'image/jpeg', 0.72)
+      } catch { cleanup(null) }
+    }
+
     video.preload = 'metadata'
     video.muted = true
     video.playsInline = true
-    video.onloadeddata = () => {
-      video.currentTime = 1.0
-    }
-    video.onseeked = () => {
-      const ratio = Math.min(size / video.videoWidth, size / video.videoHeight)
-      const canvas = document.createElement('canvas')
-      canvas.width  = video.videoWidth  * ratio
-      canvas.height = video.videoHeight * ratio
-      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
-      URL.revokeObjectURL(url)
-      canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.72)
-    }
-    video.onerror = () => { URL.revokeObjectURL(url); resolve(null) }
+
+    video.onloadedmetadata = () => { video.currentTime = 0.5 }
+    video.onseeked = capture
+    video.onloadeddata = () => { if (video.currentTime > 0) capture() }
+    video.onerror = () => cleanup(null)
     video.src = url
   })
 }
