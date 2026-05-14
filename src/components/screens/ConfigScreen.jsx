@@ -197,6 +197,7 @@ export default function ConfigScreen({ onClose }) {
   }
 
   // ── Trocar Senha ──
+  const [showSenhaForm, setShowSenhaForm] = useState(false)
   const [currentPwd, setCurrentPwd]     = useState('')
   const [newPwd, setNewPwd]             = useState('')
   const [confirmPwd, setConfirmPwd]     = useState('')
@@ -446,36 +447,22 @@ export default function ConfigScreen({ onClose }) {
         <h2 className={styles.sectionTitle}>E-mail da Conta</h2>
         <div className={styles.card}>
           {!showEmailForm ? (
-            <div>
-              <div className={styles.row} style={{ cursor: 'default' }}>
-                <div className={styles.rowIconWrap} style={{ background: '#E3F2FD' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#1976D2" strokeWidth="2" width="20" height="20">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                    <polyline points="22,6 12,13 2,6"/>
-                  </svg>
-                </div>
-                <div className={styles.rowText}>
-                  <p className={styles.rowLabel}>E-mail atual</p>
-                  <p className={styles.rowSub}>{user?.email || '—'}</p>
-                </div>
+            <div
+              className={styles.row}
+              onClick={() => setShowEmailForm(true)}
+              role="button" tabIndex={0}
+            >
+              <div className={styles.rowIconWrap} style={{ background: '#FFF0EB' }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#D37E65" strokeWidth="2" width="20" height="20">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
               </div>
-              <div
-                className={styles.row}
-                onClick={() => setShowEmailForm(true)}
-                role="button" tabIndex={0} style={{ cursor: 'pointer' }}
-              >
-                <div className={styles.rowIconWrap} style={{ background: '#FFF0EB' }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="#D37E65" strokeWidth="2" width="20" height="20">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                  </svg>
-                </div>
-                <div className={styles.rowText}>
-                  <p className={styles.rowLabel}>Alterar e-mail</p>
-                  <p className={styles.rowSub}>Toque para trocar seu e-mail</p>
-                </div>
-                <span className={styles.chevron}>›</span>
+              <div className={styles.rowText}>
+                <p className={styles.rowLabel}>Alterar e-mail</p>
+                <p className={styles.rowSub}>{user?.email || '—'}</p>
               </div>
+              <span className={styles.chevron}>›</span>
             </div>
           ) : (
             <>
@@ -512,6 +499,26 @@ export default function ConfigScreen({ onClose }) {
         {/* ══ 1. Trocar Senha ══ */}
         <h2 className={styles.sectionTitle}>Trocar Senha</h2>
         <div className={styles.card}>
+          {!showSenhaForm ? (
+            <div
+              className={styles.row}
+              onClick={() => setShowSenhaForm(true)}
+              role="button" tabIndex={0}
+            >
+              <div className={styles.rowIconWrap} style={{ background: '#FFF0EB' }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#D37E65" strokeWidth="2" width="20" height="20">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div className={styles.rowText}>
+                <p className={styles.rowLabel}>Alterar senha</p>
+                <p className={styles.rowSub}>Toque para trocar sua senha</p>
+              </div>
+              <span className={styles.chevron}>›</span>
+            </div>
+          ) : (
+            <>
           <label className={styles.fieldLabel}>Senha atual</label>
           <div className={styles.passwordWrap}>
             <input
@@ -612,6 +619,15 @@ export default function ConfigScreen({ onClose }) {
           >
             {savingPwd ? 'Salvando…' : 'Alterar senha'}
           </button>
+          <button
+            type="button"
+            onClick={() => { setShowSenhaForm(false); setCurrentPwd(''); setNewPwd(''); setConfirmPwd('') }}
+            style={{ background: 'none', border: 'none', color: '#888', fontSize: 13, cursor: 'pointer', marginTop: 4, padding: '4px 0' }}
+          >
+            Cancelar
+          </button>
+            </>
+          )}
         </div>
 
         {/* ══ 3. Armazenamento ══ */}
