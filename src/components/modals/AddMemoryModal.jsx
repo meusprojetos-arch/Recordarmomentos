@@ -383,15 +383,7 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
             )}
             {preview && selectedType?.id === 'video' && (
               <div className={styles.previewWrap}>
-                <video
-                  src={preview}
-                  controls
-                  muted
-                  playsInline
-                  preload="auto"
-                  className={styles.previewImg}
-                  style={{ width: '100%', maxHeight: 240, objectFit: 'cover', borderRadius: 8, background: '#000' }}
-                />
+                <video src={preview} controls className={styles.previewImg} />
               </div>
             )}
 

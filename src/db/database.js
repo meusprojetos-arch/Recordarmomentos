@@ -78,17 +78,6 @@ db.version(5).stores({
   fileBlobs: '++id, localBlobId, firestoreId, title, type, date, uid',
 });
 
-// Versão 6: adiciona campo videoThumb para capa de vídeos
-db.version(6).stores({
-  memories: '++id, type, date, createdAt, folderId, uid, *tags',
-  folders: '++id, name, isAuto, order, uid',
-  profile: '++id, username, email',
-  family: '++id, name, username',
-  settings: '&key',
-  reminders: '++id, memoryId, triggerDate, type',
-  fileBlobs: '++id, localBlobId, firestoreId, title, type, date, uid',
-});
-
 // ─── Helpers de Configurações ─────────────────────────────────────────
 
 export async function getSetting(key, defaultValue = null) {

@@ -53,7 +53,6 @@ export default function TempoScreen() {
 
   const [memories, setMemories]         = useState([])
   const [thumbUrls, setThumbUrls]       = useState({})
-  const [videoThumbUrls, setVideoThumbUrls] = useState({})
   const [filter, setFilter]             = useState('all')
   const [query, setQuery]               = useState('')
   const [searchResults, setSearchResults] = useState(null)
@@ -218,63 +217,13 @@ export default function TempoScreen() {
       } catch (e) { /* skip invalid blobs */ }
     }
     setThumbUrls(urls)
-
-    // Gerar capas para vídeos a partir do fileBlob
-    const videoMems = memories.filter(m => m.type === 'video')
-    const vthumb = {}
-    const vthumbCreated = []
-
-    const generateFrameFromBlob = (blob) => new Promise((resolve) => {
-      const videoEl = document.createElement('video')
-      const blobUrl = URL.createObjectURL(blob)
-      let done = false
-      const finish = (result) => {
-        if (done) return
-        done = true
-        URL.revokeObjectURL(blobUrl)
-        resolve(result)
-      }
-      setTimeout(() => finish(null), 6000)
-      videoEl.muted = true
-      videoEl.playsInline = true
-      videoEl.preload = 'metadata'
-      videoEl.onloadedmetadata = () => { videoEl.currentTime = 0.5 }
-      videoEl.onseeked = () => {
-        try {
-          const w = videoEl.videoWidth || 320
-          const h = videoEl.videoHeight || 240
-          const ratio = Math.min(400 / w, 400 / h)
-          const canvas = document.createElement('canvas')
-          canvas.width = w * ratio
-          canvas.height = h * ratio
-          canvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height)
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.72)
-          finish(dataUrl)
-        } catch { finish(null) }
-      }
-      videoEl.onerror = () => finish(null)
-      videoEl.src = blobUrl
-    })
-
-    ;(async () => {
-      for (const m of videoMems) {
-        const blob = m.fileBlob instanceof Blob ? m.fileBlob : null
-        if (!blob) continue
-        try {
-          const dataUrl = await generateFrameFromBlob(blob)
-          if (dataUrl) {
-            vthumb[m.id] = dataUrl
-            vthumbCreated.push(m.id)
-            setVideoThumbUrls(prev => ({ ...prev, [m.id]: dataUrl }))
-          }
-        } catch { /* skip */ }
-      }
-    })()
-
     return () => {
       Object.entries(urls).forEach(([id, u]) => {
+        // Não revogar _objectUrl pois é gerenciado externamente
         const mem = memories.find(m => m.id === id)
-        if (!mem?._objectUrl || u !== mem._objectUrl) URL.revokeObjectURL(u)
+        if (!mem?._objectUrl || u !== mem._objectUrl) {
+          URL.revokeObjectURL(u)
+        }
       })
     }
   }, [memories])
@@ -640,65 +589,6 @@ export default function TempoScreen() {
     return thumbUrls[m.id] || m.fileUrl || null
   }
 
-  function VideoThumb({ memory, src, className }) {
-    // Se já tem videoThumb salvo, usa direto
-    const [frameSrc, setFrameSrc] = React.useState(memory.videoThumb || null)
-
-    React.useEffect(() => {
-      // Se já tem capa salva, não precisa gerar
-      if (memory.videoThumb) { setFrameSrc(memory.videoThumb); return }
-      if (!src) return
-      let cancelled = false
-
-      const timer = setTimeout(() => { cancelled = true }, 8000)
-
-      const video = document.createElement('video')
-      video.muted = true
-      video.playsInline = true
-      video.preload = 'metadata'
-
-      video.onloadedmetadata = () => {
-        video.currentTime = Math.min(0.5, (video.duration || 1) * 0.1)
-      }
-      video.onseeked = () => {
-        clearTimeout(timer)
-        if (cancelled) return
-        try {
-          const w = video.videoWidth || 320
-          const h = video.videoHeight || 240
-          const ratio = Math.min(400 / w, 400 / h)
-          const canvas = document.createElement('canvas')
-          canvas.width = Math.round(w * ratio)
-          canvas.height = Math.round(h * ratio)
-          canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
-          if (!cancelled) {
-            setFrameSrc(dataUrl)
-            // Persistir no IndexedDB para não perder após reload
-            if (memory.localBlobId) {
-              import('../../db/database.js').then(({ db }) => {
-                db.fileBlobs.where('localBlobId').equals(memory.localBlobId).first()
-                  .then(record => { if (record) db.fileBlobs.update(record.id, { videoThumb: dataUrl }) })
-                  .catch(() => {})
-              }).catch(() => {})
-            }
-          }
-        } catch { /* sem capa */ }
-      }
-      video.onerror = () => clearTimeout(timer)
-      video.src = src
-
-      return () => { cancelled = true; clearTimeout(timer) }
-    }, [src, memory.videoThumb, memory.localBlobId])
-
-    if (frameSrc) {
-      return <img src={frameSrc} alt="" className={className} />
-    }
-    return (
-      <video src={src} className={className} muted playsInline preload="metadata" />
-    )
-  }
-
   function GridItem({ memory }) {
     const src = getThumbSrc(memory)
     const isSelected = selectedIds.has(memory.id)
@@ -732,17 +622,9 @@ export default function TempoScreen() {
             <span className={styles.thumbTitle}>{memory.title}</span>
           </div>
         )}
-        {memory.type === 'video' && (
+        {src && memory.type === 'video' && (
           <>
-            {src ? (
-              <VideoThumb memory={memory} src={src} className={styles.thumbImg} />
-            ) : (
-              <div className={styles.thumbPlaceholder}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              </div>
-            )}
+            <video src={src} className={styles.thumbImg} muted playsInline preload="metadata" />
             <div className={styles.playOverlay} aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
                 <path d="M8 5v14l11-7z" />
@@ -986,28 +868,24 @@ export default function TempoScreen() {
             </button>
           )}
 
-          {/* Botão Trancar — oculto durante seleção múltipla */}
-          {!selectMode && (
-            <button
-              className={`${styles.lockBtn} ${lockMode ? styles.lockBtnActive : ''}`}
-              onClick={() => { setLockMode(v => !v); setLockSelectedIds(new Set()) }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              {lockMode ? 'Trancando...' : 'Trancar'}
-            </button>
-          )}
+          {/* Botão Trancar */}
+          <button
+            className={`${styles.lockBtn} ${lockMode ? styles.lockBtnActive : ''}`}
+            onClick={() => { setLockMode(v => !v); setLockSelectedIds(new Set()) }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            {lockMode ? 'Trancando...' : 'Trancar'}
+          </button>
         </div>
 
         {/* Barra de trancar */}
-        {lockMode && !selectMode && (
+        {lockMode && (
           <div className={styles.lockBar}>
             <span className={styles.lockBarText}>
-              {lockSelectedIds.size === 0
-                ? 'Toque nas fotos para selecionar'
-                : `${lockSelectedIds.size} foto(s) selecionada(s)`}
+              {lockSelectedIds.size} selecionado(s) — toque nas fotos para trancar
             </span>
             <button className={styles.lockBarBtn} onClick={handleLockPhotos} disabled={lockSelectedIds.size === 0}>
               Trancar
@@ -1103,38 +981,6 @@ export default function TempoScreen() {
               </button>
               <button className={styles.selectionBtn} onClick={openMoveModal} disabled={selectedIds.size === 0}>
                 Mover
-              </button>
-              <button className={styles.selectionBtn} onClick={async () => {
-                if (selectedIds.size === 0) return
-                const uid = user?.uid || ''
-                try {
-                  let lockedFolder = await localDb.folders
-                    .where('uid').equals(uid)
-                    .and(f => f.name === 'Trancadas')
-                    .first()
-                  if (!lockedFolder) {
-                    const folderId = await localDb.folders.add({
-                      name: 'Trancadas',
-                      emoji: '/icons/pasta-generica.svg',
-                      isAuto: false,
-                      autoRule: null,
-                      uid,
-                      order: 99,
-                      createdAt: new Date().toISOString(),
-                    })
-                    lockedFolder = { id: folderId }
-                  }
-                  for (const id of selectedIds) {
-                    await updateMemory(id, { privacyLevel: 'private', folderId: lockedFolder.id })
-                  }
-                  setMemories(prev => prev.filter(m => !selectedIds.has(m.id)))
-                  toast.success(`${selectedIds.size} item(s) trancado(s)`)
-                } catch {
-                  toast.error('Erro ao trancar')
-                }
-                exitSelectMode()
-              }} disabled={selectedIds.size === 0}>
-                Trancar
               </button>
               <button className={`${styles.selectionBtn} ${styles.selectionBtnDanger}`} onClick={batchDelete} disabled={selectedIds.size === 0}>
                 Excluir
