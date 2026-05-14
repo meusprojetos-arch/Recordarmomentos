@@ -210,9 +210,10 @@ export default function TempoScreen() {
         } else if (m.thumbnail && m.thumbnail instanceof Blob) {
           urls[m.id] = URL.createObjectURL(m.thumbnail)
         } else if (m.fileBlob && m.fileBlob instanceof Blob) {
+          // Usar o blob diretamente — preserva o MIME type original (importante para áudio)
           urls[m.id] = URL.createObjectURL(m.fileBlob)
         } else if (m.fileBlob && !(m.fileBlob instanceof Blob)) {
-          const mimeType = m.type === 'audio' ? 'audio/webm' : m.type === 'video' ? 'video/mp4' : 'image/jpeg'
+          const mimeType = m.type === 'audio' ? 'audio/webm;codecs=opus' : m.type === 'video' ? 'video/mp4' : 'image/jpeg'
           const blob = new Blob([m.fileBlob], { type: mimeType })
           urls[m.id] = URL.createObjectURL(blob)
         }
@@ -1208,19 +1209,30 @@ export default function TempoScreen() {
                 </div>
               )
             })()}
-            {currentMemory.type === 'audio' && (
-              <div className={styles.viewerAudio}>
-                <img src={FILTER_ICONS.audio} alt="" width={64} height={64} aria-hidden="true" />
-                {(thumbUrls[currentMemory.id] || currentMemory.fileUrl) && (
-                  <audio
-                    src={thumbUrls[currentMemory.id] || currentMemory.fileUrl}
-                    controls
-                    autoPlay
-                    className={styles.audioPlayer}
-                  />
-                )}
-              </div>
-            )}
+            {currentMemory.type === 'audio' && (() => {
+              const audioSrc = thumbUrls[currentMemory.id] || currentMemory.fileUrl ||
+                (currentMemory.fileBlob instanceof Blob ? URL.createObjectURL(currentMemory.fileBlob) : null)
+              return (
+                <div className={styles.viewerAudio}>
+                  <img src={FILTER_ICONS.audio} alt="" width={64} height={64} aria-hidden="true" />
+                  <p style={{ color: '#fff', fontSize: 14, margin: '8px 0', textAlign: 'center', opacity: 0.8 }}>
+                    {currentMemory.title || 'Áudio'}
+                  </p>
+                  {audioSrc ? (
+                    <audio
+                      key={currentMemory.id}
+                      src={audioSrc}
+                      controls
+                      autoPlay
+                      className={styles.audioPlayer}
+                      style={{ width: '100%', marginTop: 8 }}
+                    />
+                  ) : (
+                    <p style={{ color: '#f88', fontSize: 13, marginTop: 8 }}>Arquivo de áudio não encontrado</p>
+                  )}
+                </div>
+              )
+            })()}
           </div>
 
           {/* Navegação anterior / próximo */}
