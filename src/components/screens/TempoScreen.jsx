@@ -987,9 +987,13 @@ export default function TempoScreen() {
               <button className={styles.selectionBtn} onClick={openMoveModal} disabled={selectedIds.size === 0}>
                 Mover
               </button>
-              <button className={styles.selectionBtn} onClick={async () => {
+              <button className={styles.selectionBtn} onClick={async (e) => {
+                e.stopPropagation()
                 if (selectedIds.size === 0) return
+                // Capturar IDs antes de qualquer mudança de estado
+                const idsToLock = new Set(selectedIds)
                 const uid = user?.uid || ''
+                exitSelectMode()
                 try {
                   let lockedFolder = await localDb.folders
                     .where('uid').equals(uid)
@@ -1007,15 +1011,14 @@ export default function TempoScreen() {
                     })
                     lockedFolder = { id: folderId }
                   }
-                  for (const id of selectedIds) {
+                  for (const id of idsToLock) {
                     await updateMemory(id, { privacyLevel: 'private', folderId: lockedFolder.id })
                   }
-                  setMemories(prev => prev.filter(m => !selectedIds.has(m.id)))
-                  toast.success(`${selectedIds.size} item(s) trancado(s)`)
+                  setMemories(prev => prev.filter(m => !idsToLock.has(m.id)))
+                  toast.success(`${idsToLock.size} item(s) trancado(s)`)
                 } catch {
                   toast.error('Erro ao trancar')
                 }
-                exitSelectMode()
               }} disabled={selectedIds.size === 0}>
                 Trancar
               </button>
