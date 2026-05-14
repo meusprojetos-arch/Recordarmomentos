@@ -245,18 +245,20 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       {/* Inputs ocultos */}
+      {/* capture="environment" abre câmera diretamente sem menu iOS */}
       <input
         ref={cameraInputRef}
         type="file"
         accept={selectedType?.id === 'video' ? 'video/*' : 'image/*'}
-        capture
+        capture="environment"
         className={styles.hiddenInput}
         onChange={handleFileChange}
       />
+      {/* Sem capture — abre galeria diretamente no iOS */}
       <input
         ref={fileInputRef}
         type="file"
-        accept={selectedType?.id === 'video' ? 'video/*' : 'image/*'}
+        accept={selectedType?.id === 'video' ? 'video/*,video/mp4,video/quicktime' : 'image/*,image/jpeg,image/png,image/heic,image/heif'}
         multiple
         className={styles.hiddenInput}
         onChange={handleFileChange}
