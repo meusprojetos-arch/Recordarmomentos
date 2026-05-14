@@ -133,7 +133,9 @@ export default function HojeScreen() {
   return (
     <div className={styles.screen}>
       <Topbar
-        title="✨ Recordar"
+        title="Recordar"
+        leftIconUrl="/icons/logo-recordar.png"
+        leftIconSize={40}
         subtitle="Seus melhores momentos"
         rightIconUrl={ICONS.notificacao}
         rightIconSize={24}

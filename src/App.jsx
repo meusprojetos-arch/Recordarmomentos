@@ -87,7 +87,7 @@ function AppContent() {
 
   // Tela de configurações
   if (showConfig) {
-    return <ConfigScreen onClose={() => setShowConfig(false)} />
+    return <ConfigScreen onClose={() => setShowConfig(false)} onShowPlans={() => { setShowConfig(false); setShowPlans(true) }} />
   }
 
   return (

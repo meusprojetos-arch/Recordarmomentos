@@ -163,7 +163,7 @@ const FAQ_ITEMS = [
 ]
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ConfigScreen({ onClose }) {
+export default function ConfigScreen({ onClose, onShowPlans }) {
   const { user, logout, changePassword, changeEmail } = useAuth()
 
   // ── Alterar Email ──
@@ -842,7 +842,7 @@ export default function ConfigScreen({ onClose }) {
 
           <div
             className={styles.row}
-            onClick={() => toast('Em breve — Planos e Armazenamento')}
+            onClick={() => onShowPlans?.()}
             role="button"
             tabIndex={0}
           >
