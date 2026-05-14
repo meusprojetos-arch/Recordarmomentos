@@ -622,9 +622,14 @@ export default function TempoScreen() {
             <span className={styles.thumbTitle}>{memory.title}</span>
           </div>
         )}
-        {src && memory.type === 'video' && (
+        {memory.type === 'video' && (
           <>
-            <video src={src} className={styles.thumbImg} muted playsInline preload="metadata" />
+            <div className={styles.thumbPlaceholder} style={{ background: '#1a1a2e' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#D37E65" strokeWidth="1.5" width="36" height="36">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <path d="m16 10-6-4v8l6-4z" fill="#D37E65" stroke="none"/>
+              </svg>
+            </div>
             <div className={styles.playOverlay} aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
                 <path d="M8 5v14l11-7z" />
@@ -1042,14 +1047,27 @@ export default function TempoScreen() {
                 className={styles.viewerImg}
               />
             )}
-            {(thumbUrls[currentMemory.id] || currentMemory.fileUrl) && currentMemory.type === 'video' && (
-              <video
-                src={thumbUrls[currentMemory.id] || currentMemory.fileUrl}
-                controls
-                autoPlay
-                className={styles.viewerImg}
-              />
-            )}
+            {currentMemory.type === 'video' && (() => {
+              const videoSrc = currentMemory.fileUrl ||
+                (currentMemory.fileBlob instanceof Blob ? URL.createObjectURL(currentMemory.fileBlob) : null) ||
+                thumbUrls[currentMemory.id] || null
+              return videoSrc ? (
+                <video
+                  key={currentMemory.id}
+                  src={videoSrc}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className={styles.viewerImg}
+                  style={{ maxHeight: '70vh', width: '100%', objectFit: 'contain' }}
+                />
+              ) : (
+                <div className={styles.thumbPlaceholder}>
+                  <span style={{ fontSize: 48 }}>🎬</span>
+                  <span>Vídeo não disponível</span>
+                </div>
+              )
+            })()}
             {currentMemory.type === 'audio' && (
               <div className={styles.viewerAudio}>
                 <img src={FILTER_ICONS.audio} alt="" width={64} height={64} aria-hidden="true" />
