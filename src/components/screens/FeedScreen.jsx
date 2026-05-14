@@ -10,11 +10,8 @@ import { getSharedWithMe } from '../../services/usersService.js'
 import Topbar from '../layout/Topbar.jsx'
 import styles from './FeedScreen.module.css'
 
-import { useApp } from '../../App.jsx'
-
 export default function FeedScreen() {
   const { user } = useAuth()
-  const { activeTab } = useApp()
   const [posts, setPosts]             = useState([])
   const [newPost, setNewPost]         = useState('')
   const [postDesc, setPostDesc]       = useState('')
@@ -36,7 +33,7 @@ export default function FeedScreen() {
   const [dateTo, setDateTo]           = useState('')
   const [showDateFilter, setShowDateFilter] = useState(false)
 
-  useEffect(() => { loadFeed() }, [activeTab])
+  useEffect(() => { loadFeed() }, [])
 
   /* ── Data load ── */
   const loadFeed = async () => {

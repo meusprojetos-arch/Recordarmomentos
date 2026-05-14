@@ -29,12 +29,10 @@ export function useMemories() {
         const type = file.type.startsWith('video/') ? 'video' : 'photo'
         const date = extractDate(file)
 
-        // Gera thumbnail para fotos e vídeos
+        // Gera thumbnail para fotos
         let thumbnail = null
         if (type === 'photo') {
           thumbnail = await generateThumbnail(file)
-        } else if (type === 'video') {
-          thumbnail = await generateVideoThumbnail(file)
         }
 
         await addMemory({
@@ -109,49 +107,6 @@ function autoTags(dateStr) {
   if (month === 12) tags.push('natal', 'dezembro', 'fim de ano')
   if (month === 1)  tags.push('ano novo', 'janeiro')
   return tags
-}
-
-/** Gera thumbnail do primeiro frame de um vídeo */
-export async function generateVideoThumbnail(file, size = 400) {
-  return new Promise((resolve) => {
-    const video = document.createElement('video')
-    const url = URL.createObjectURL(file)
-    let resolved = false
-
-    const cleanup = (result) => {
-      if (resolved) return
-      resolved = true
-      URL.revokeObjectURL(url)
-      resolve(result)
-    }
-
-    // Timeout de segurança — 8 segundos
-    const timer = setTimeout(() => cleanup(null), 8000)
-
-    const capture = () => {
-      clearTimeout(timer)
-      try {
-        const w = video.videoWidth || 320
-        const h = video.videoHeight || 240
-        const ratio = Math.min(size / w, size / h)
-        const canvas = document.createElement('canvas')
-        canvas.width  = w * ratio
-        canvas.height = h * ratio
-        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
-        canvas.toBlob(blob => cleanup(blob), 'image/jpeg', 0.72)
-      } catch { cleanup(null) }
-    }
-
-    video.preload = 'metadata'
-    video.muted = true
-    video.playsInline = true
-
-    video.onloadedmetadata = () => { video.currentTime = 0.5 }
-    video.onseeked = capture
-    video.onloadeddata = () => { if (video.currentTime > 0) capture() }
-    video.onerror = () => cleanup(null)
-    video.src = url
-  })
 }
 
 /** Gera thumbnail JPEG reduzida */
