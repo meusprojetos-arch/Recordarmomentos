@@ -779,122 +779,136 @@ export default function TempoScreen() {
         )}
 
         {/* ══ TAB: Lixeira ══ */}
-        {activeTab === 'lixeira' && (
-          <div style={{ marginTop: 12 }}>
-            <p className={styles.trashInfo}>Itens excluídos ficam aqui por 90 dias antes de serem apagados permanentemente.</p>
+        {activeTab === 'lixeira' && (() => {
+          const [trashConfirm, setTrashConfirm] = React.useState(null)
+          // trashConfirm: { type: 'delete'|'restore'|'deleteAll', id?, count? }
 
-            {/* Botão excluir tudo */}
-            {!trashLoading && trashItems.length > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-                <button
-                  className={styles.trashDeleteBtn}
-                  onClick={async () => {
-                    if (!window.confirm(`Apagar permanentemente todos os ${trashItems.length} itens?`)) return
-                    const ids = trashItems.map(i => i.id)
-                    setTrashItems([]) // instantâneo
-                    for (const id of ids) {
-                      await permanentDeleteFromTrash(id).catch(() => {})
-                    }
-                    toast.success('Lixeira esvaziada!')
-                  }}
-                >
-                  🗑️ Esvaziar lixeira
-                </button>
-              </div>
-            )}
+          const confirmAction = async () => {
+            if (!trashConfirm) return
+            if (trashConfirm.type === 'delete') {
+              setTrashItems(prev => prev.filter(i => i.id !== trashConfirm.id))
+              permanentDeleteFromTrash(trashConfirm.id).catch(() => {})
+              toast.success('Item excluído permanentemente')
+            } else if (trashConfirm.type === 'restore') {
+              await handleRestore(trashConfirm.id)
+              toast.success('Item restaurado!')
+            } else if (trashConfirm.type === 'deleteAll') {
+              const ids = trashItems.map(i => i.id)
+              setTrashItems([])
+              for (const id of ids) await permanentDeleteFromTrash(id).catch(() => {})
+              toast.success('Lixeira esvaziada!')
+            }
+            setTrashConfirm(null)
+          }
 
-            {trashLoading && <p style={{ textAlign: 'center', color: '#999', padding: 20 }}>Carregando...</p>}
-            {!trashLoading && trashItems.length === 0 && (
-              <div className={styles.emptyState}>
-                <span>🗑️</span>
-                <p>Lixeira vazia</p>
-                <p className={styles.emptySub}>Nenhum item excluído recentemente</p>
-              </div>
-            )}
+          return (
+            <div style={{ marginTop: 12 }}>
+              <p className={styles.trashInfo}>Itens excluídos ficam aqui por 90 dias.</p>
 
-            {/* Grid de miniaturas */}
-            {!trashLoading && trashItems.length > 0 && (
-              <div className={styles.yearGrid}>
-                {trashItems.map(item => (
-                  <div
-                    key={item.id}
-                    className={styles.memThumb}
-                    style={{ position: 'relative', cursor: 'pointer' }}
-                    onClick={() => {
-                      const src = item.fileUrl || null
-                      if (src && (item.type === 'photo' || item.type === 'video')) {
-                        openViewer(item)
-                      }
-                    }}
+              {!trashLoading && trashItems.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                  <button
+                    className={styles.trashDeleteBtn}
+                    onClick={() => setTrashConfirm({ type: 'deleteAll', count: trashItems.length })}
                   >
-                    {/* Miniatura */}
-                    {item.fileUrl && item.type === 'photo' && (
-                      <img src={item.fileUrl} alt={item.title || ''} className={styles.thumbImg} loading="lazy" />
-                    )}
-                    {item.type === 'video' && (
-                      <div className={styles.thumbPlaceholder} style={{ background: '#1a1a2e' }}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="#D37E65" strokeWidth="1.5" width="28" height="28">
-                          <rect x="2" y="3" width="20" height="14" rx="2"/><path d="m16 10-6-4v8l6-4z" fill="#D37E65" stroke="none"/>
-                        </svg>
-                      </div>
-                    )}
-                    {item.type === 'audio' && (
-                      <div className={styles.thumbPlaceholder}>
-                        <img src={FILTER_ICONS.audio} alt="" width={28} height={28} />
-                      </div>
-                    )}
-                    {item.type === 'text' && (
-                      <div className={styles.thumbPlaceholder}>
-                        <span style={{ fontSize: 28 }}>📝</span>
-                      </div>
-                    )}
-                    {!item.fileUrl && item.type === 'photo' && (
-                      <div className={styles.thumbPlaceholder}>
-                        <img src={FILTER_ICONS.photo} alt="" width={28} height={28} />
-                      </div>
-                    )}
+                    Esvaziar lixeira ({trashItems.length})
+                  </button>
+                </div>
+              )}
 
-                    {/* Overlay com ações */}
-                    <div style={{
-                      position: 'absolute', bottom: 0, left: 0, right: 0,
-                      background: 'rgba(0,0,0,0.55)', padding: '4px 6px',
-                      display: 'flex', gap: 4, justifyContent: 'flex-end'
-                    }}>
+              {trashLoading && <p style={{ textAlign: 'center', color: '#999', padding: 20 }}>Carregando...</p>}
+
+              {!trashLoading && trashItems.length === 0 && (
+                <div className={styles.emptyState}>
+                  <span>🗑️</span>
+                  <p>Lixeira vazia</p>
+                  <p className={styles.emptySub}>Nenhum item excluído recentemente</p>
+                </div>
+              )}
+
+              {!trashLoading && trashItems.map(item => {
+                const thumb = item.fileUrl && item.type === 'photo' ? item.fileUrl : null
+                const icon = item.type === 'video' ? '🎬' : item.type === 'audio' ? '🎵' : item.type === 'text' ? '📝' : '📷'
+                const deletedDate = item.deletedAt?.seconds
+                  ? new Date(item.deletedAt.seconds * 1000).toLocaleDateString('pt-BR')
+                  : '—'
+
+                return (
+                  <div key={item.id} className={styles.trashItem}>
+                    {/* Miniatura */}
+                    <div
+                      style={{ width: 56, height: 56, borderRadius: 10, overflow: 'hidden', flexShrink: 0, background: '#2a2a3e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: thumb ? 'pointer' : 'default' }}
+                      onClick={() => { if (item.fileUrl) openViewer(item) }}
+                    >
+                      {thumb
+                        ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontSize: 24 }}>{icon}</span>
+                      }
+                    </div>
+
+                    {/* Info */}
+                    <div className={styles.trashItemInfo}>
+                      <p className={styles.trashItemTitle}>{item.title || 'Sem título'}</p>
+                      <p className={styles.trashItemDate}>Excluído em {deletedDate}</p>
+                    </div>
+
+                    {/* Ações */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
                       <button
                         className={styles.trashRestoreBtn}
-                        style={{ fontSize: 10, padding: '3px 7px' }}
-                        onClick={e => { e.stopPropagation(); handleRestore(item.id) }}
+                        onClick={() => setTrashConfirm({ type: 'restore', id: item.id, title: item.title })}
                       >
-                        ↩
+                        Restaurar
                       </button>
                       <button
                         className={styles.trashDeleteBtn}
-                        style={{ fontSize: 10, padding: '3px 7px' }}
-                        onClick={e => {
-                          e.stopPropagation()
-                          setTrashItems(prev => prev.filter(i => i.id !== item.id)) // instantâneo
-                          permanentDeleteFromTrash(item.id).catch(() => {})
-                        }}
+                        onClick={() => setTrashConfirm({ type: 'delete', id: item.id, title: item.title })}
                       >
-                        ✕
+                        Excluir
                       </button>
                     </div>
+                  </div>
+                )
+              })}
 
-                    {/* Nome */}
-                    <div style={{
-                      position: 'absolute', top: 0, left: 0, right: 0,
-                      background: 'rgba(0,0,0,0.45)', padding: '3px 6px'
-                    }}>
-                      <p style={{ fontSize: 10, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {item.title || 'Sem título'}
-                      </p>
+              {/* Modal de confirmação */}
+              {trashConfirm && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+                  <div style={{ background: 'var(--bege-claro)', borderRadius: 16, padding: 24, width: 300, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+                    <p style={{ fontSize: 32, marginBottom: 8 }}>
+                      {trashConfirm.type === 'restore' ? '↩️' : '🗑️'}
+                    </p>
+                    <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>
+                      {trashConfirm.type === 'restore' ? 'Restaurar item?' :
+                       trashConfirm.type === 'deleteAll' ? 'Esvaziar lixeira?' : 'Excluir permanentemente?'}
+                    </p>
+                    <p style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>
+                      {trashConfirm.type === 'restore'
+                        ? `"${trashConfirm.title || 'Este item'}" voltará para suas memórias.`
+                        : trashConfirm.type === 'deleteAll'
+                        ? `${trashConfirm.count} itens serão apagados para sempre.`
+                        : `"${trashConfirm.title || 'Este item'}" será apagado para sempre.`}
+                    </p>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button
+                        onClick={() => setTrashConfirm(null)}
+                        style={{ flex: 1, padding: '10px 0', borderRadius: 99, border: '1.5px solid #ccc', background: 'transparent', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={confirmAction}
+                        style={{ flex: 1, padding: '10px 0', borderRadius: 99, border: 'none', background: trashConfirm.type === 'restore' ? 'var(--verde)' : '#e53935', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        {trashConfirm.type === 'restore' ? 'Restaurar' : 'Excluir'}
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ══ TAB: Galeria ══ */}
         {activeTab === 'galeria' && (<>
