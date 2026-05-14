@@ -60,6 +60,7 @@ export default function TempoScreen() {
   // Lixeira
   const [trashItems, setTrashItems]     = useState([])
   const [trashLoading, setTrashLoading] = useState(false)
+  const [trashConfirm, setTrashConfirm]   = useState(null)
 
   // Filtro por data
   const [yearFilter, setYearFilter]     = useState('')
@@ -256,6 +257,24 @@ export default function TempoScreen() {
       setTrashItems(prev => prev.filter(i => i.id !== itemId))
       toast.success('Restaurado com sucesso!')
     } catch { toast.error('Erro ao restaurar') }
+  }
+
+  async function confirmTrashAction() {
+    if (!trashConfirm) return
+    if (trashConfirm.type === 'delete') {
+      setTrashItems(prev => prev.filter(i => i.id !== trashConfirm.id))
+      permanentDeleteFromTrash(trashConfirm.id).catch(() => {})
+      toast.success('Item excluído permanentemente')
+    } else if (trashConfirm.type === 'restore') {
+      await handleRestore(trashConfirm.id)
+      toast.success('Item restaurado!')
+    } else if (trashConfirm.type === 'deleteAll') {
+      const ids = trashItems.map(i => i.id)
+      setTrashItems([])
+      for (const id of ids) await permanentDeleteFromTrash(id).catch(() => {})
+      toast.success('Lixeira esvaziada!')
+    }
+    setTrashConfirm(null)
   }
 
   async function handlePermanentDelete(itemId) {
@@ -779,29 +798,7 @@ export default function TempoScreen() {
         )}
 
         {/* ══ TAB: Lixeira ══ */}
-        {activeTab === 'lixeira' && (() => {
-          const [trashConfirm, setTrashConfirm] = React.useState(null)
-          // trashConfirm: { type: 'delete'|'restore'|'deleteAll', id?, count? }
-
-          const confirmAction = async () => {
-            if (!trashConfirm) return
-            if (trashConfirm.type === 'delete') {
-              setTrashItems(prev => prev.filter(i => i.id !== trashConfirm.id))
-              permanentDeleteFromTrash(trashConfirm.id).catch(() => {})
-              toast.success('Item excluído permanentemente')
-            } else if (trashConfirm.type === 'restore') {
-              await handleRestore(trashConfirm.id)
-              toast.success('Item restaurado!')
-            } else if (trashConfirm.type === 'deleteAll') {
-              const ids = trashItems.map(i => i.id)
-              setTrashItems([])
-              for (const id of ids) await permanentDeleteFromTrash(id).catch(() => {})
-              toast.success('Lixeira esvaziada!')
-            }
-            setTrashConfirm(null)
-          }
-
-          return (
+        {activeTab === 'lixeira' && (
             <div style={{ marginTop: 12 }}>
               <p className={styles.trashInfo}>Itens excluídos ficam aqui por 90 dias.</p>
 
@@ -897,7 +894,7 @@ export default function TempoScreen() {
                         Cancelar
                       </button>
                       <button
-                        onClick={confirmAction}
+                        onClick={confirmTrashAction}
                         style={{ flex: 1, padding: '10px 0', borderRadius: 99, border: 'none', background: trashConfirm.type === 'restore' ? 'var(--verde)' : '#e53935', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}
                       >
                         {trashConfirm.type === 'restore' ? 'Restaurar' : 'Excluir'}
@@ -907,8 +904,7 @@ export default function TempoScreen() {
                 </div>
               )}
             </div>
-          )
-        })()}
+        )}
 
         {/* ══ TAB: Galeria ══ */}
         {activeTab === 'galeria' && (<>
