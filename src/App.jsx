@@ -67,6 +67,9 @@ function AppContent() {
   }
 
 
+  // Enquanto Firebase verifica auth, mostra fundo neutro sem piscar nada
+  if (loading) return <div style={{ width:'100%', height:'100dvh', background:'var(--bege)' }} />
+
   if (!user) {
     if (authScreen === 'login') {
       return <LoginScreen onGoSignup={() => setAuthScreen('signup')} onGoWelcome={() => setAuthScreen('welcome')} />
