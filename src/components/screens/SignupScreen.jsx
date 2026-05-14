@@ -26,8 +26,8 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
   const [showPrivacy, setShowPrivacy] = useState(false)
 
   useEffect(() => {
-    document.body.classList.add('auth-screen')
-    return () => document.body.classList.remove('auth-screen')
+    document.documentElement.classList.add('auth-screen')
+    return () => document.documentElement.classList.remove('auth-screen')
   }, [])
 
   const handleNameChange = (val) => {
