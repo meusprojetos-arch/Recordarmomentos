@@ -37,12 +37,26 @@ export default function PerfilScreen() {
   const [showPinModal, setShowPinModal] = useState(false)
 
   useEffect(() => {
-    getMemories().then(mems => {
+    getMemories().then(async mems => {
+      // Excluir fotos trancadas (pasta Trancadas + privacyLevel private)
+      let lockedFolderId = null
+      try {
+        const { db } = await import('../../db/database.js')
+        const uid = user?.uid || ''
+        const lockedFolder = uid
+          ? await db.folders.where('uid').equals(uid).and(f => f.name === 'Trancadas').first()
+          : await db.folders.filter(f => f.name === 'Trancadas').first()
+        if (lockedFolder) lockedFolderId = lockedFolder.id
+      } catch { /* sem pasta trancadas */ }
+
+      const visible = mems.filter(m =>
+        !(lockedFolderId && m.folderId === lockedFolderId && m.privacyLevel === 'private')
+      )
       setStats({
-        photos: mems.filter(m => m.type === 'photo').length,
-        videos: mems.filter(m => m.type === 'video').length,
-        audios: mems.filter(m => m.type === 'audio').length,
-        feed: mems.filter(m => m.type === 'text').length,
+        photos: visible.filter(m => m.type === 'photo').length,
+        videos: visible.filter(m => m.type === 'video').length,
+        audios: visible.filter(m => m.type === 'audio').length,
+        feed: visible.filter(m => m.type === 'text').length,
       })
     }).catch(() => {})
     if (user?.privacyLevel) setIsPrivate(user.privacyLevel === 'private')
