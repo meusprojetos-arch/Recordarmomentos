@@ -641,23 +641,24 @@ export default function TempoScreen() {
   }
 
   function VideoThumb({ memory, src, className }) {
-    const [frameSrc, setFrameSrc] = React.useState(null)
+    // Se já tem videoThumb salvo, usa direto
+    const [frameSrc, setFrameSrc] = React.useState(memory.videoThumb || null)
 
     React.useEffect(() => {
+      // Se já tem capa salva, não precisa gerar
+      if (memory.videoThumb) { setFrameSrc(memory.videoThumb); return }
       if (!src) return
       let cancelled = false
+
+      const timer = setTimeout(() => { cancelled = true }, 8000)
+
       const video = document.createElement('video')
       video.muted = true
       video.playsInline = true
       video.preload = 'metadata'
-      video.crossOrigin = 'anonymous'
-
-      const timer = setTimeout(() => {
-        if (!cancelled) setFrameSrc(src) // fallback: usa o próprio video
-      }, 5000)
 
       video.onloadedmetadata = () => {
-        video.currentTime = Math.min(0.5, video.duration * 0.1 || 0.5)
+        video.currentTime = Math.min(0.5, (video.duration || 1) * 0.1)
       }
       video.onseeked = () => {
         clearTimeout(timer)
@@ -669,34 +670,32 @@ export default function TempoScreen() {
           const canvas = document.createElement('canvas')
           canvas.width = Math.round(w * ratio)
           canvas.height = Math.round(h * ratio)
-          const ctx = canvas.getContext('2d')
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
           const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
-          if (!cancelled) setFrameSrc(dataUrl)
-        } catch {
-          if (!cancelled) setFrameSrc(src)
-        }
+          if (!cancelled) {
+            setFrameSrc(dataUrl)
+            // Persistir no IndexedDB para não perder após reload
+            if (memory.localBlobId) {
+              import('../../db/database.js').then(({ db }) => {
+                db.fileBlobs.where('localBlobId').equals(memory.localBlobId).first()
+                  .then(record => { if (record) db.fileBlobs.update(record.id, { videoThumb: dataUrl }) })
+                  .catch(() => {})
+              }).catch(() => {})
+            }
+          }
+        } catch { /* sem capa */ }
       }
-      video.onerror = () => {
-        clearTimeout(timer)
-        if (!cancelled) setFrameSrc(src)
-      }
+      video.onerror = () => clearTimeout(timer)
       video.src = src
 
       return () => { cancelled = true; clearTimeout(timer) }
-    }, [src])
+    }, [src, memory.videoThumb, memory.localBlobId])
 
-    if (frameSrc && frameSrc.startsWith('data:')) {
+    if (frameSrc) {
       return <img src={frameSrc} alt="" className={className} />
     }
     return (
-      <video
-        src={src}
-        className={className}
-        muted
-        playsInline
-        preload="metadata"
-      />
+      <video src={src} className={className} muted playsInline preload="metadata" />
     )
   }
 

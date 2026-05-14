@@ -158,6 +158,14 @@ export async function getMemories(options = {}) {
       }
       
       if (blob) mem.fileBlob = blob
+
+      // Carregar videoThumb salvo se existir
+      if (mem.type === 'video') {
+        const blobRecord = mem.localBlobId
+          ? await localDb.fileBlobs.where('localBlobId').equals(mem.localBlobId).first()
+          : null
+        if (blobRecord?.videoThumb) mem.videoThumb = blobRecord.videoThumb
+      }
     }
   } catch (e) { console.error('IndexedDB blob retrieval failed:', e) }
 
