@@ -53,6 +53,7 @@ export default function TempoScreen() {
 
   const [memories, setMemories]         = useState([])
   const [thumbUrls, setThumbUrls]       = useState({})
+  const [videoThumbUrls, setVideoThumbUrls] = useState({})
   const [filter, setFilter]             = useState('all')
   const [query, setQuery]               = useState('')
   const [searchResults, setSearchResults] = useState(null)
@@ -217,14 +218,22 @@ export default function TempoScreen() {
       } catch (e) { /* skip invalid blobs */ }
     }
     setThumbUrls(urls)
+
+    // Gerar URLs de thumbnail para vídeos (usa o blob de thumbnail, não o vídeo)
+    const vthumb = {}
+    for (const m of memories) {
+      if (m.type === 'video' && m.thumbnail && m.thumbnail instanceof Blob) {
+        try { vthumb[m.id] = URL.createObjectURL(m.thumbnail) } catch { /* skip */ }
+      }
+    }
+    setVideoThumbUrls(vthumb)
+
     return () => {
       Object.entries(urls).forEach(([id, u]) => {
-        // Não revogar _objectUrl pois é gerenciado externamente
         const mem = memories.find(m => m.id === id)
-        if (!mem?._objectUrl || u !== mem._objectUrl) {
-          URL.revokeObjectURL(u)
-        }
+        if (!mem?._objectUrl || u !== mem._objectUrl) URL.revokeObjectURL(u)
       })
+      Object.values(vthumb).forEach(u => URL.revokeObjectURL(u))
     }
   }, [memories])
 
@@ -622,9 +631,24 @@ export default function TempoScreen() {
             <span className={styles.thumbTitle}>{memory.title}</span>
           </div>
         )}
-        {src && memory.type === 'video' && (
+        {memory.type === 'video' && (
           <>
-            <video src={src} className={styles.thumbImg} muted playsInline preload="metadata" />
+            {videoThumbUrls[memory.id] ? (
+              <img
+                src={videoThumbUrls[memory.id]}
+                alt={memory.title || ''}
+                className={styles.thumbImg}
+                loading="lazy"
+              />
+            ) : src ? (
+              <video src={src} className={styles.thumbImg} muted playsInline preload="metadata" />
+            ) : (
+              <div className={styles.thumbPlaceholder}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              </div>
+            )}
             <div className={styles.playOverlay} aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
                 <path d="M8 5v14l11-7z" />
