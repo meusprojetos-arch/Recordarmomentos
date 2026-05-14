@@ -219,21 +219,63 @@ export default function TempoScreen() {
     }
     setThumbUrls(urls)
 
-    // Gerar URLs de thumbnail para vídeos (usa o blob de thumbnail, não o vídeo)
+    // Gerar capas para vídeos a partir do fileBlob
+    const videoMems = memories.filter(m => m.type === 'video')
     const vthumb = {}
-    for (const m of memories) {
-      if (m.type === 'video' && m.thumbnail && m.thumbnail instanceof Blob) {
-        try { vthumb[m.id] = URL.createObjectURL(m.thumbnail) } catch { /* skip */ }
+    const vthumbCreated = []
+
+    const generateFrameFromBlob = (blob) => new Promise((resolve) => {
+      const videoEl = document.createElement('video')
+      const blobUrl = URL.createObjectURL(blob)
+      let done = false
+      const finish = (result) => {
+        if (done) return
+        done = true
+        URL.revokeObjectURL(blobUrl)
+        resolve(result)
       }
-    }
-    setVideoThumbUrls(vthumb)
+      setTimeout(() => finish(null), 6000)
+      videoEl.muted = true
+      videoEl.playsInline = true
+      videoEl.preload = 'metadata'
+      videoEl.onloadedmetadata = () => { videoEl.currentTime = 0.5 }
+      videoEl.onseeked = () => {
+        try {
+          const w = videoEl.videoWidth || 320
+          const h = videoEl.videoHeight || 240
+          const ratio = Math.min(400 / w, 400 / h)
+          const canvas = document.createElement('canvas')
+          canvas.width = w * ratio
+          canvas.height = h * ratio
+          canvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.72)
+          finish(dataUrl)
+        } catch { finish(null) }
+      }
+      videoEl.onerror = () => finish(null)
+      videoEl.src = blobUrl
+    })
+
+    ;(async () => {
+      for (const m of videoMems) {
+        const blob = m.fileBlob instanceof Blob ? m.fileBlob : null
+        if (!blob) continue
+        try {
+          const dataUrl = await generateFrameFromBlob(blob)
+          if (dataUrl) {
+            vthumb[m.id] = dataUrl
+            vthumbCreated.push(m.id)
+            setVideoThumbUrls(prev => ({ ...prev, [m.id]: dataUrl }))
+          }
+        } catch { /* skip */ }
+      }
+    })()
 
     return () => {
       Object.entries(urls).forEach(([id, u]) => {
         const mem = memories.find(m => m.id === id)
         if (!mem?._objectUrl || u !== mem._objectUrl) URL.revokeObjectURL(u)
       })
-      Object.values(vthumb).forEach(u => URL.revokeObjectURL(u))
     }
   }, [memories])
 
