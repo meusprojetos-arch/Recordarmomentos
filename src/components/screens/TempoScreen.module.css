@@ -14,6 +14,10 @@
   gap: 0;
   border-bottom: 1px solid #e0e0e0;
   margin-bottom: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bege);
 }
 
 .tab {
@@ -144,10 +148,14 @@
 .filters {
   display: flex;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 0;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 8px 0 4px;
   scrollbar-width: none;
+  position: sticky;
+  top: 41px;
+  z-index: 9;
+  background: var(--bege);
 }
 .filters::-webkit-scrollbar { display: none; }
 
@@ -248,6 +256,10 @@
   border-radius: var(--radius-md);
   padding: 10px 12px;
   margin-top: 8px;
+  position: sticky;
+  top: 90px;
+  z-index: 11;
+  box-shadow: var(--shadow-md);
 }
 
 .lockBarText {
@@ -410,8 +422,8 @@
 /* ── Barra de seleção múltipla ── */
 .selectionBar {
   position: sticky;
-  top: 0;
-  z-index: 10;
+  top: 90px;
+  z-index: 11;
   background: #1a1a2e;
   border-radius: var(--radius-md);
   padding: 12px 14px;
