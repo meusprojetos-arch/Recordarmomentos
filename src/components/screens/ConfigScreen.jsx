@@ -809,44 +809,6 @@ export default function ConfigScreen({ onClose }) {
           </div>
         </div>
 
-        {/* ══ 6. Termos e Política de Privacidade ══ */}
-        <h2 className={styles.sectionTitle}>Termos e Política</h2>
-        <div className={styles.card + ' ' + styles.cardNoPad}>
-          <div
-            className={styles.row}
-            onClick={() => setShowTerms(true)}
-            role="button"
-            tabIndex={0}
-          >
-            <div className={styles.rowIconWrap} style={{ background: '#E3F2FD' }}>
-              <img src={ICONS.exportar} alt="" width={20} height={20} aria-hidden="true" />
-            </div>
-            <div className={styles.rowText}>
-              <p className={styles.rowLabel}>Termos de Uso</p>
-              <p className={styles.rowSub}>Regras de uso do aplicativo</p>
-            </div>
-            <span className={styles.chevron} aria-hidden="true">›</span>
-          </div>
-
-          <div className={styles.rowDivider} />
-
-          <div
-            className={styles.row}
-            onClick={() => setShowPrivacy(true)}
-            role="button"
-            tabIndex={0}
-          >
-            <div className={styles.rowIconWrap} style={{ background: '#F0E8FF' }}>
-              <span style={{ fontSize: 16 }}>🔐</span>
-            </div>
-            <div className={styles.rowText}>
-              <p className={styles.rowLabel}>Política de Privacidade</p>
-              <p className={styles.rowSub}>Como protegemos seus dados</p>
-            </div>
-            <span className={styles.chevron} aria-hidden="true">›</span>
-          </div>
-        </div>
-
         {/* ══ Exportar e Planos ══ */}
         <h2 className={styles.sectionTitle}>Exportar e Planos</h2>
         <div className={styles.card + ' ' + styles.cardNoPad}>
@@ -890,6 +852,44 @@ export default function ConfigScreen({ onClose }) {
             <div className={styles.rowText}>
               <p className={styles.rowLabel}>Planos e Armazenamento</p>
               <p className={styles.rowSub}>Proteja suas memórias na nuvem</p>
+            </div>
+            <span className={styles.chevron} aria-hidden="true">›</span>
+          </div>
+        </div>
+
+        {/* ══ Termos e Política ══ */}
+        <h2 className={styles.sectionTitle}>Termos e Política</h2>
+        <div className={styles.card + ' ' + styles.cardNoPad}>
+          <div
+            className={styles.row}
+            onClick={() => setShowTerms(true)}
+            role="button"
+            tabIndex={0}
+          >
+            <div className={styles.rowIconWrap} style={{ background: '#E3F2FD' }}>
+              <img src={ICONS.exportar} alt="" width={20} height={20} aria-hidden="true" />
+            </div>
+            <div className={styles.rowText}>
+              <p className={styles.rowLabel}>Termos de Uso</p>
+              <p className={styles.rowSub}>Regras de uso do aplicativo</p>
+            </div>
+            <span className={styles.chevron} aria-hidden="true">›</span>
+          </div>
+
+          <div className={styles.rowDivider} />
+
+          <div
+            className={styles.row}
+            onClick={() => setShowPrivacy(true)}
+            role="button"
+            tabIndex={0}
+          >
+            <div className={styles.rowIconWrap} style={{ background: '#F0E8FF' }}>
+              <span style={{ fontSize: 16 }}>🔐</span>
+            </div>
+            <div className={styles.rowText}>
+              <p className={styles.rowLabel}>Política de Privacidade</p>
+              <p className={styles.rowSub}>Como protegemos seus dados</p>
             </div>
             <span className={styles.chevron} aria-hidden="true">›</span>
           </div>
