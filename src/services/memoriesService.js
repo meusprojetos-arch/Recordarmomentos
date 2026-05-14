@@ -83,11 +83,8 @@ export async function addMemory(memoryData, file = null) {
     await addStorageUsage(file.size)
   }
 
-  // Separar thumbnail (Blob) do restante — Firestore não aceita Blob
-  const { thumbnail, ...memDataWithoutThumb } = memoryData
-
   const docData = {
-    ...memDataWithoutThumb,
+    ...memoryData,
     fileUrl,
     filePath,
     fileSize,
@@ -103,13 +100,6 @@ export async function addMemory(memoryData, file = null) {
   }
 
   const docRef = await addDoc(memoriesCol(uid), docData)
-
-  // Salvar thumbnail no IndexedDB junto ao blob
-  if (localId && thumbnail instanceof Blob) {
-    try {
-      await localDb.fileBlobs.update(localId, { thumbnail })
-    } catch (e) { console.warn('Erro ao salvar thumbnail:', e) }
-  }
 
   // Atualiza registro local com firestoreId para associação futura
   if (localId) {
