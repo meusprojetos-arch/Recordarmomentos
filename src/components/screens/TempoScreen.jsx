@@ -912,23 +912,6 @@ export default function TempoScreen() {
         {/* ══ TAB: Galeria ══ */}
         {activeTab === 'galeria' && (<>
 
-        {/* ── Busca ── */}
-        <div className={styles.searchBar}>
-          <span aria-hidden="true" style={{ fontSize: 18 }}>🔍</span>
-          <input
-            className={styles.searchInput}
-            placeholder="Buscar por título, pessoa, lugar..."
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            aria-label="Buscar memórias"
-          />
-          {query && (
-            <button className={styles.searchClear} onClick={() => setQuery('')} aria-label="Limpar busca">
-              ✕
-            </button>
-          )}
-        </div>
-
         {/* ── Filtros por tipo ── */}
         <div className={styles.filters} role="tablist" aria-label="Filtrar por tipo">
           {FILTERS.map(f => (
@@ -1050,38 +1033,6 @@ export default function TempoScreen() {
           </div>
         )}
 
-        {/* ── Resultados de busca ── */}
-        {searchResults && (
-          <div className={styles.searchResults}>
-            <p className={styles.searchCount}>
-              {searchResults.length} resultado{searchResults.length !== 1 ? 's' : ''} para &ldquo;{query}&rdquo;
-            </p>
-            {searchResults.filter(m => m.type !== 'text').map(m => {
-              const src = getThumbSrc(m)
-              return (
-                <div
-                  key={m.id}
-                  className={styles.searchItem}
-                  onClick={() => { setQuery(''); openViewer(m) }}
-                  role="button"
-                >
-                  <div className={styles.searchThumb}>
-                    {src && m.type === 'photo' && <img src={src} alt="" className={styles.searchThumbImg} />}
-                    {src && m.type === 'video' && <video src={src} className={styles.searchThumbImg} muted playsInline preload="metadata" />}
-                    {(!src || m.type === 'audio') && (
-                      <img src={FILTER_ICONS[m.type] || FILTER_ICONS.photo} alt="" width={24} height={24} />
-                    )}
-                  </div>
-                  <div>
-                    <p className={styles.searchTitle}>{m.title || 'Sem título'}</p>
-                    <p className={styles.searchDate}>{formatDate(m.date)}</p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
         {/* ── Barra de seleção múltipla ── */}
         {selectMode && (
           <div className={styles.selectionBar}>
@@ -1139,7 +1090,7 @@ export default function TempoScreen() {
         )}
 
         {/* ── Grid de memórias ── */}
-        {!query && (
+        {true && (
           <>
             {filteredMemories.length === 0 && (
               <div className={styles.emptyState}>
