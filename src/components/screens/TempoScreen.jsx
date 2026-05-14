@@ -824,43 +824,44 @@ export default function TempoScreen() {
               )}
 
               {!trashLoading && trashItems.map(item => {
-                const thumb = item.fileUrl && item.type === 'photo' ? item.fileUrl : null
-                const icon = item.type === 'video' ? '🎬' : item.type === 'audio' ? '🎵' : item.type === 'text' ? '📝' : '📷'
+                // Gerar URL da miniatura — fileUrl (nuvem) ou fileBlob (local)
+                const thumbSrc = item.type === 'photo'
+                  ? (item.fileUrl || (item.fileBlob instanceof Blob ? URL.createObjectURL(item.fileBlob) : null))
+                  : null
+                const hasThumb = !!thumbSrc
+                const canView = item.fileUrl || item.fileBlob instanceof Blob
                 const deletedDate = item.deletedAt?.seconds
                   ? new Date(item.deletedAt.seconds * 1000).toLocaleDateString('pt-BR')
                   : '—'
 
                 return (
                   <div key={item.id} className={styles.trashItem}>
-                    {/* Miniatura */}
+                    {/* Miniatura clicável */}
                     <div
-                      style={{ width: 56, height: 56, borderRadius: 10, overflow: 'hidden', flexShrink: 0, background: '#2a2a3e', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: thumb ? 'pointer' : 'default' }}
-                      onClick={() => { if (item.fileUrl) openViewer(item) }}
+                      style={{ width: 64, height: 64, borderRadius: 10, overflow: 'hidden', flexShrink: 0, background: 'var(--bege-claro)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: canView ? 'pointer' : 'default' }}
+                      onClick={() => { if (canView) openViewer({ ...item, _objectUrl: item.fileBlob instanceof Blob ? URL.createObjectURL(item.fileBlob) : item.fileUrl }) }}
                     >
-                      {thumb
-                        ? <img src={thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : <span style={{ fontSize: 24 }}>{icon}</span>
+                      {hasThumb
+                        ? <img src={thumbSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : item.type === 'video'
+                          ? <svg viewBox="0 0 24 24" fill="none" stroke="#D37E65" strokeWidth="1.5" width="28" height="28"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m16 10-6-4v8l6-4z" fill="#D37E65" stroke="none"/></svg>
+                          : item.type === 'audio'
+                            ? <img src={FILTER_ICONS.audio} alt="" width={28} height={28} />
+                            : <span style={{ fontSize: 26 }}>📝</span>
                       }
                     </div>
 
-                    {/* Info */}
+                    {/* Info — só data, sem nome */}
                     <div className={styles.trashItemInfo}>
-                      <p className={styles.trashItemTitle}>{item.title || 'Sem título'}</p>
-                      <p className={styles.trashItemDate}>Excluído em {deletedDate}</p>
+                      <p className={styles.trashItemDate} style={{ marginTop: 0 }}>Excluído em {deletedDate}</p>
                     </div>
 
                     {/* Ações */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                      <button
-                        className={styles.trashRestoreBtn}
-                        onClick={() => setTrashConfirm({ type: 'restore', id: item.id, title: item.title })}
-                      >
+                      <button className={styles.trashRestoreBtn} onClick={() => setTrashConfirm({ type: 'restore', id: item.id, title: item.title })}>
                         Restaurar
                       </button>
-                      <button
-                        className={styles.trashDeleteBtn}
-                        onClick={() => setTrashConfirm({ type: 'delete', id: item.id, title: item.title })}
-                      >
+                      <button className={styles.trashDeleteBtn} onClick={() => setTrashConfirm({ type: 'delete', id: item.id, title: item.title })}>
                         Excluir
                       </button>
                     </div>

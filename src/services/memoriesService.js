@@ -223,7 +223,27 @@ export async function getTrashItems() {
   const trashCol = collection(firestore, 'users', uid, 'trash')
   const q = query(trashCol, orderBy('deletedAt', 'desc'))
   const snap = await getDocs(q)
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+
+  // Enriquecer com blobs locais (igual ao getMemories)
+  try {
+    if (!localDb.isOpen()) await localDb.open()
+    for (const item of items) {
+      if (item.fileBlob || item.fileUrl) continue
+      let blob = null
+      if (!blob && item.localBlobId) {
+        const match = await localDb.fileBlobs.where('localBlobId').equals(item.localBlobId).first()
+        if (match?.blob && (!match.uid || match.uid === uid)) blob = match.blob
+      }
+      if (!blob && item.originalId) {
+        const match = await localDb.fileBlobs.where('firestoreId').equals(item.originalId).first()
+        if (match?.blob && (!match.uid || match.uid === uid)) blob = match.blob
+      }
+      if (blob) item.fileBlob = blob
+    }
+  } catch { /* sem blob local */ }
+
+  return items
 }
 
 /**
