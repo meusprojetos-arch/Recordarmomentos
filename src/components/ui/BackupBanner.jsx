@@ -24,10 +24,16 @@ export default function BackupBanner({ onUpgrade, variant = 'default' }) {
 
   const checkShow = async () => {
     const premium = await isPremium()
-    if (!premium) {
-      setShow(true)
-      setMessage(MESSAGES[Math.floor(Math.random() * MESSAGES.length)])
-    }
+    if (premium) return
+
+    // Mostrar apenas 1 vez por dia
+    const today = new Date().toISOString().substring(0, 10)
+    const lastShown = localStorage.getItem('recordar_backup_banner_date')
+    if (lastShown === today) return
+
+    localStorage.setItem('recordar_backup_banner_date', today)
+    setShow(true)
+    setMessage(MESSAGES[Math.floor(Math.random() * MESSAGES.length)])
   }
 
   if (!show) return null

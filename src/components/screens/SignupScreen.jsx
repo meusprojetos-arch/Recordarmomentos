@@ -19,6 +19,7 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
   const [birthDate, setBirthDate] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
@@ -46,6 +47,10 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
     }
     if (password.length < 6) {
       toast.error('A senha precisa ter pelo menos 6 caracteres')
+      return
+    }
+    if (password !== confirmPassword) {
+      toast.error('As senhas não coincidem')
       return
     }
     if (!/^[a-z0-9.]{3,30}$/.test(username)) {
@@ -127,9 +132,20 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
             <input
               type="password"
               className={styles.input}
-              placeholder="Minimo 6 caracteres"
+              placeholder="Mínimo 6 caracteres"
               value={password}
               onChange={e => setPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label}>Confirmar senha</label>
+            <input
+              type="password"
+              className={styles.input}
+              placeholder="Repita a senha"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
               autoComplete="new-password"
             />
           </div>
