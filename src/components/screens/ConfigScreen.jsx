@@ -258,7 +258,7 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
     setBio(user?.bio || localStorage.getItem(`recordar_profileBio_${uid}`) || '')
     setAvatarSrc(localStorage.getItem(`recordar_avatar_${uid}`) || user?.photoURL || null)
     setIsPrivate(localStorage.getItem('recordar_privacy') !== 'public')
-    setAutoBackup(localStorage.getItem('recordar_autoBackup') === '1')
+    setAutoBackup(localStorage.getItem('recordar_autoBackup') === '1' || localStorage.getItem('recordar_backup_auto') === 'true')
     setBackupFreq(localStorage.getItem('recordar_backupFreq') || 'diario')
 
     // Sincronizar dados locais com Firestore se faltam no servidor
@@ -339,7 +339,8 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
     const next = !autoBackup
     setAutoBackup(next)
     localStorage.setItem('recordar_autoBackup', next ? '1' : '0')
-    toast.success(next ? 'Backup automático ativado' : 'Backup automático desativado')
+    localStorage.setItem('recordar_backup_auto', next ? 'true' : 'false')
+    toast.success(next ? 'Backup automático ativado ✅' : 'Backup automático desativado')
   }
 
   // ── Frequência de backup ──

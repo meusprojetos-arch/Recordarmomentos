@@ -49,38 +49,13 @@ export default function HojeScreen() {
   const [userName, setUserName] = useState('voce')
   const [frase] = useState(() => FRASES[Math.floor(Math.random() * FRASES.length)])
   const [showSearch, setShowSearch] = useState(false)
-  const [showPermissionBanner, setShowPermissionBanner] = useState(false)
+
   const [reminder, setReminder] = useState(null)
   const [recentMemories, setRecentMemories] = useState([])
 
   const today = new Date()
   const todayFormatted = format(today, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })
 
-  // Solicitar permissões na primeira vez
-  useEffect(() => {
-    const asked = localStorage.getItem('recordar_permissions_asked')
-    if (!asked) {
-      setShowPermissionBanner(true)
-    }
-  }, [])
-
-  const handleAllowPermissions = async () => {
-    localStorage.setItem('recordar_permissions_asked', '1')
-    setShowPermissionBanner(false)
-    try {
-      // Solicitar acesso à câmera (isso dispara o prompt do navegador/SO)
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      stream.getTracks().forEach(t => t.stop())
-      toast.success('Permissões concedidas!')
-    } catch {
-      toast('Você pode permitir depois nas configurações do navegador')
-    }
-  }
-
-  const handleDismissPermissions = () => {
-    localStorage.setItem('recordar_permissions_asked', '1')
-    setShowPermissionBanner(false)
-  }
 
   // Carrega nome do usuario
   useEffect(() => {
@@ -144,22 +119,7 @@ export default function HojeScreen() {
 
       <div className={styles.scroll}>
 
-        {/* ── Banner de permissão ── */}
-        {showPermissionBanner && (
-          <div className={styles.permissionBanner}>
-            <div className={styles.permissionContent}>
-              <span className={styles.permissionIcon}>📸</span>
-              <div>
-                <p className={styles.permissionTitle}>Permitir acesso às fotos e câmera</p>
-                <p className={styles.permissionSub}>Para salvar e importar suas memórias automaticamente</p>
-              </div>
-            </div>
-            <div className={styles.permissionActions}>
-              <button className={styles.permissionAllow} onClick={handleAllowPermissions}>Permitir</button>
-              <button className={styles.permissionDismiss} onClick={handleDismissPermissions}>Agora não</button>
-            </div>
-          </div>
-        )}
+
         {/* ── Cartão de saudação ── */}
         <div className={styles.greetingCard}>
           <p className={styles.greetingDate}>{todayFormatted.toUpperCase()}</p>
