@@ -369,6 +369,8 @@ export default function TempoScreen() {
 
   function startLongPress(memory) {
     longPressTimer.current = setTimeout(() => {
+      setLockMode(false)
+      setLockSelectedIds(new Set())
       setSelectMode(true)
       setSelectedIds(new Set([memory.id]))
     }, 500)
@@ -389,6 +391,8 @@ export default function TempoScreen() {
   function exitSelectMode() {
     setSelectMode(false)
     setSelectedIds(new Set())
+    setLockMode(false)
+    setLockSelectedIds(new Set())
   }
 
   function handleThumbClick(memory) {
@@ -778,6 +782,27 @@ export default function TempoScreen() {
         {activeTab === 'lixeira' && (
           <div style={{ marginTop: 12 }}>
             <p className={styles.trashInfo}>Itens excluídos ficam aqui por 90 dias antes de serem apagados permanentemente.</p>
+
+            {/* Botão excluir tudo */}
+            {!trashLoading && trashItems.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                <button
+                  className={styles.trashDeleteBtn}
+                  onClick={async () => {
+                    if (!window.confirm(`Apagar permanentemente todos os ${trashItems.length} itens?`)) return
+                    const ids = trashItems.map(i => i.id)
+                    setTrashItems([]) // instantâneo
+                    for (const id of ids) {
+                      await permanentDeleteFromTrash(id).catch(() => {})
+                    }
+                    toast.success('Lixeira esvaziada!')
+                  }}
+                >
+                  🗑️ Esvaziar lixeira
+                </button>
+              </div>
+            )}
+
             {trashLoading && <p style={{ textAlign: 'center', color: '#999', padding: 20 }}>Carregando...</p>}
             {!trashLoading && trashItems.length === 0 && (
               <div className={styles.emptyState}>
@@ -786,22 +811,88 @@ export default function TempoScreen() {
                 <p className={styles.emptySub}>Nenhum item excluído recentemente</p>
               </div>
             )}
-            {!trashLoading && trashItems.map(item => (
-              <div key={item.id} className={styles.trashItem}>
-                <div className={styles.trashItemInfo}>
-                  <p className={styles.trashItemTitle}>{item.title || item.type || 'Sem título'}</p>
-                  <p className={styles.trashItemDate}>
-                    Excluído em {item.deletedAt?.seconds ? new Date(item.deletedAt.seconds * 1000).toLocaleDateString('pt-BR') : '—'}
-                  </p>
-                </div>
-                <button className={styles.trashRestoreBtn} onClick={() => handleRestore(item.id)}>
-                  Restaurar
-                </button>
-                <button className={styles.trashDeleteBtn} onClick={() => handlePermanentDelete(item.id)}>
-                  Apagar
-                </button>
+
+            {/* Grid de miniaturas */}
+            {!trashLoading && trashItems.length > 0 && (
+              <div className={styles.yearGrid}>
+                {trashItems.map(item => (
+                  <div
+                    key={item.id}
+                    className={styles.memThumb}
+                    style={{ position: 'relative', cursor: 'pointer' }}
+                    onClick={() => {
+                      const src = item.fileUrl || null
+                      if (src && (item.type === 'photo' || item.type === 'video')) {
+                        openViewer(item)
+                      }
+                    }}
+                  >
+                    {/* Miniatura */}
+                    {item.fileUrl && item.type === 'photo' && (
+                      <img src={item.fileUrl} alt={item.title || ''} className={styles.thumbImg} loading="lazy" />
+                    )}
+                    {item.type === 'video' && (
+                      <div className={styles.thumbPlaceholder} style={{ background: '#1a1a2e' }}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#D37E65" strokeWidth="1.5" width="28" height="28">
+                          <rect x="2" y="3" width="20" height="14" rx="2"/><path d="m16 10-6-4v8l6-4z" fill="#D37E65" stroke="none"/>
+                        </svg>
+                      </div>
+                    )}
+                    {item.type === 'audio' && (
+                      <div className={styles.thumbPlaceholder}>
+                        <img src={FILTER_ICONS.audio} alt="" width={28} height={28} />
+                      </div>
+                    )}
+                    {item.type === 'text' && (
+                      <div className={styles.thumbPlaceholder}>
+                        <span style={{ fontSize: 28 }}>📝</span>
+                      </div>
+                    )}
+                    {!item.fileUrl && item.type === 'photo' && (
+                      <div className={styles.thumbPlaceholder}>
+                        <img src={FILTER_ICONS.photo} alt="" width={28} height={28} />
+                      </div>
+                    )}
+
+                    {/* Overlay com ações */}
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0,
+                      background: 'rgba(0,0,0,0.55)', padding: '4px 6px',
+                      display: 'flex', gap: 4, justifyContent: 'flex-end'
+                    }}>
+                      <button
+                        className={styles.trashRestoreBtn}
+                        style={{ fontSize: 10, padding: '3px 7px' }}
+                        onClick={e => { e.stopPropagation(); handleRestore(item.id) }}
+                      >
+                        ↩
+                      </button>
+                      <button
+                        className={styles.trashDeleteBtn}
+                        style={{ fontSize: 10, padding: '3px 7px' }}
+                        onClick={e => {
+                          e.stopPropagation()
+                          setTrashItems(prev => prev.filter(i => i.id !== item.id)) // instantâneo
+                          permanentDeleteFromTrash(item.id).catch(() => {})
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Nome */}
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, right: 0,
+                      background: 'rgba(0,0,0,0.45)', padding: '3px 6px'
+                    }}>
+                      <p style={{ fontSize: 10, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.title || 'Sem título'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
 
@@ -877,7 +968,7 @@ export default function TempoScreen() {
           {!selectMode && (
             <button
               className={`${styles.lockBtn} ${lockMode ? styles.lockBtnActive : ''}`}
-              onClick={() => { setLockMode(v => !v); setLockSelectedIds(new Set()) }}
+              onClick={() => { setSelectMode(false); setSelectedIds(new Set()); setLockMode(v => !v); setLockSelectedIds(new Set()) }}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" aria-hidden="true">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
