@@ -1,7 +1,7 @@
 /**
  * SignupScreen — Tela de criar conta
  */
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import toast from 'react-hot-toast'
 import styles from './AuthScreen.module.css'
@@ -24,6 +24,11 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
   const [showPrivacy, setShowPrivacy] = useState(false)
+
+  useEffect(() => {
+    document.body.classList.add('auth-screen')
+    return () => document.body.classList.remove('auth-screen')
+  }, [])
 
   const handleNameChange = (val) => {
     setName(val)

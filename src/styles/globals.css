@@ -100,10 +100,6 @@ img[src*="/icons/"] {
   filter: brightness(0) opacity(0.85);
 }
 
-[data-theme="light"] button[class*="settingsBtn"] img {
-  filter: brightness(0) opacity(0.75);
-}
-
 [data-theme="light"] [class*="iconWrap"] img[src*="/icons/"],
 [data-theme="light"] [class*="card"] img[src*="/icons/"],
 [data-theme="light"] [class*="row"] img[src*="/icons/"] {
@@ -122,6 +118,13 @@ html, body, #root {
   height: 100%;
   width: 100%;
   overflow: hidden;
+}
+
+/* Telas de autenticação precisam de scroll */
+body.auth-screen, body.auth-screen #root {
+  overflow-y: auto;
+  height: auto;
+  min-height: 100%;
 }
 
 body {

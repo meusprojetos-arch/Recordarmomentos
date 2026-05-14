@@ -1,13 +1,13 @@
 .container {
-  height: 100dvh;
+  min-height: 100dvh;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   background: var(--bege);
-  padding: 24px;
+  padding: 24px 24px 60px;
+  box-sizing: border-box;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  box-sizing: border-box;
 }
 
 .content {
