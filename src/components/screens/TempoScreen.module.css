@@ -36,7 +36,10 @@
 
 .tabActive {
   color: var(--verde);
-  border-bottom-color: var(--verde);
+  border-bottom: 3px solid var(--verde);
+  background: var(--verde-light);
+  border-radius: 8px 8px 0 0;
+  font-size: 15px;
 }
 
 /* ── Trash ── */
