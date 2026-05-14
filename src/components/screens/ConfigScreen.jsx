@@ -467,21 +467,25 @@ export default function ConfigScreen({ onClose }) {
           ) : (
             <>
               <label className={styles.fieldLabel}>Senha atual</label>
-              <input
-                type="password"
-                className={styles.fieldInput}
-                value={emailPwd}
-                onChange={e => setEmailPwd(e.target.value)}
-                placeholder="Digite sua senha atual"
-              />
+              <div className={styles.passwordWrap}>
+                <input
+                  className={styles.input}
+                  type="password"
+                  value={emailPwd}
+                  onChange={e => setEmailPwd(e.target.value)}
+                  placeholder="Digite sua senha atual"
+                />
+              </div>
               <label className={styles.fieldLabel}>Novo e-mail</label>
-              <input
-                type="email"
-                className={styles.fieldInput}
-                value={newEmail}
-                onChange={e => setNewEmail(e.target.value)}
-                placeholder="novo@email.com"
-              />
+              <div className={styles.passwordWrap}>
+                <input
+                  className={styles.input}
+                  type="email"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  placeholder="novo@email.com"
+                />
+              </div>
               <button className={styles.saveBtn} onClick={handleChangeEmail} disabled={savingEmail}>
                 {savingEmail ? 'Enviando…' : 'Enviar verificação'}
               </button>
