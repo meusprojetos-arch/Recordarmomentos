@@ -847,28 +847,6 @@ export default function ConfigScreen({ onClose }) {
           </div>
         </div>
 
-        {/* ══ 6. Ajuda / FAQ ══ */}
-        <h2 className={styles.sectionTitle}>Ajuda / FAQ</h2>
-        <div className={styles.faqList}>
-          {FAQ_ITEMS.map((item, idx) => (
-            <div key={idx} className={styles.faqItem}>
-              <button
-                className={styles.faqQuestion}
-                onClick={() => toggleFaq(idx)}
-                aria-expanded={openFaq === idx}
-              >
-                <span>{item.q}</span>
-                <span className={`${styles.faqArrow} ${openFaq === idx ? styles.faqArrowOpen : ''}`} aria-hidden="true">
-                  ›
-                </span>
-              </button>
-              {openFaq === idx && (
-                <p className={styles.faqAnswer}>{item.a}</p>
-              )}
-            </div>
-          ))}
-        </div>
-
         {/* ══ Exportar e Planos ══ */}
         <h2 className={styles.sectionTitle}>Exportar e Planos</h2>
         <div className={styles.card + ' ' + styles.cardNoPad}>
@@ -915,6 +893,28 @@ export default function ConfigScreen({ onClose }) {
             </div>
             <span className={styles.chevron} aria-hidden="true">›</span>
           </div>
+        </div>
+
+        {/* ══ 6. Ajuda / FAQ ══ */}
+        <h2 className={styles.sectionTitle}>Ajuda / FAQ</h2>
+        <div className={styles.faqList}>
+          {FAQ_ITEMS.map((item, idx) => (
+            <div key={idx} className={styles.faqItem}>
+              <button
+                className={styles.faqQuestion}
+                onClick={() => toggleFaq(idx)}
+                aria-expanded={openFaq === idx}
+              >
+                <span>{item.q}</span>
+                <span className={`${styles.faqArrow} ${openFaq === idx ? styles.faqArrowOpen : ''}`} aria-hidden="true">
+                  ›
+                </span>
+              </button>
+              {openFaq === idx && (
+                <p className={styles.faqAnswer}>{item.a}</p>
+              )}
+            </div>
+          ))}
         </div>
 
         {/* ══ 7. Excluir Conta ══ */}
