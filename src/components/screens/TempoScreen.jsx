@@ -640,6 +640,66 @@ export default function TempoScreen() {
     return thumbUrls[m.id] || m.fileUrl || null
   }
 
+  function VideoThumb({ memory, src, className }) {
+    const [frameSrc, setFrameSrc] = React.useState(null)
+
+    React.useEffect(() => {
+      if (!src) return
+      let cancelled = false
+      const video = document.createElement('video')
+      video.muted = true
+      video.playsInline = true
+      video.preload = 'metadata'
+      video.crossOrigin = 'anonymous'
+
+      const timer = setTimeout(() => {
+        if (!cancelled) setFrameSrc(src) // fallback: usa o próprio video
+      }, 5000)
+
+      video.onloadedmetadata = () => {
+        video.currentTime = Math.min(0.5, video.duration * 0.1 || 0.5)
+      }
+      video.onseeked = () => {
+        clearTimeout(timer)
+        if (cancelled) return
+        try {
+          const w = video.videoWidth || 320
+          const h = video.videoHeight || 240
+          const ratio = Math.min(400 / w, 400 / h)
+          const canvas = document.createElement('canvas')
+          canvas.width = Math.round(w * ratio)
+          canvas.height = Math.round(h * ratio)
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
+          if (!cancelled) setFrameSrc(dataUrl)
+        } catch {
+          if (!cancelled) setFrameSrc(src)
+        }
+      }
+      video.onerror = () => {
+        clearTimeout(timer)
+        if (!cancelled) setFrameSrc(src)
+      }
+      video.src = src
+
+      return () => { cancelled = true; clearTimeout(timer) }
+    }, [src])
+
+    if (frameSrc && frameSrc.startsWith('data:')) {
+      return <img src={frameSrc} alt="" className={className} />
+    }
+    return (
+      <video
+        src={src}
+        className={className}
+        muted
+        playsInline
+        preload="metadata"
+      />
+    )
+  }
+
   function GridItem({ memory }) {
     const src = getThumbSrc(memory)
     const isSelected = selectedIds.has(memory.id)
@@ -675,15 +735,8 @@ export default function TempoScreen() {
         )}
         {memory.type === 'video' && (
           <>
-            {videoThumbUrls[memory.id] ? (
-              <img
-                src={videoThumbUrls[memory.id]}
-                alt={memory.title || ''}
-                className={styles.thumbImg}
-                loading="lazy"
-              />
-            ) : src ? (
-              <video src={src} className={styles.thumbImg} muted playsInline preload="metadata" />
+            {src ? (
+              <VideoThumb memory={memory} src={src} className={styles.thumbImg} />
             ) : (
               <div className={styles.thumbPlaceholder}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="32" height="32">
