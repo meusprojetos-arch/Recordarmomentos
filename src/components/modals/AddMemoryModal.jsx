@@ -12,6 +12,7 @@
 import React, { useState, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { addMemory } from '../../services/memoriesService.js'
+import { generateVideoThumbnail, generateThumbnail } from '../../hooks/useMemories.js'
 import { isPremium } from '../../services/planService.js'
 import styles from './AddMemoryModal.module.css'
 
@@ -169,12 +170,16 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
         const type = f.type.startsWith('video') ? 'video' : 'photo'
         const cleanName = f.name.replace(/\.[^.]+$/, '').replace(/^(IMG|VID|WA\d*)[_-]?/i, '').replace(/[_-]/g, ' ').trim() || 'Sem titulo'
         const fileDate = new Date(f.lastModified || Date.now()).toISOString().substring(0, 10)
+        let thumbnail = null
+        if (type === 'video') thumbnail = await generateVideoThumbnail(f)
+        else if (type === 'photo') thumbnail = await generateThumbnail(f)
         await addMemory({
           type,
           title: cleanName,
           description: '',
           date: fileDate,
           tags: [],
+          thumbnail,
         }, f)
         saved++
       }
@@ -213,6 +218,12 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
 
       if (selectedType?.id === 'text') {
         memData.description = textContent
+      }
+
+      // Gera thumbnail para vídeo
+      if (file && selectedType?.id === 'video') {
+        const thumb = await generateVideoThumbnail(file)
+        if (thumb) memData.thumbnail = thumb
       }
 
       let fileToUpload = file

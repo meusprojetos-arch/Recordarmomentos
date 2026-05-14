@@ -29,10 +29,12 @@ export function useMemories() {
         const type = file.type.startsWith('video/') ? 'video' : 'photo'
         const date = extractDate(file)
 
-        // Gera thumbnail para fotos
+        // Gera thumbnail para fotos e vídeos
         let thumbnail = null
         if (type === 'photo') {
           thumbnail = await generateThumbnail(file)
+        } else if (type === 'video') {
+          thumbnail = await generateVideoThumbnail(file)
         }
 
         await addMemory({
@@ -107,6 +109,31 @@ function autoTags(dateStr) {
   if (month === 12) tags.push('natal', 'dezembro', 'fim de ano')
   if (month === 1)  tags.push('ano novo', 'janeiro')
   return tags
+}
+
+/** Gera thumbnail do primeiro frame de um vídeo */
+export async function generateVideoThumbnail(file, size = 400) {
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    const url = URL.createObjectURL(file)
+    video.preload = 'metadata'
+    video.muted = true
+    video.playsInline = true
+    video.onloadeddata = () => {
+      video.currentTime = 1.0
+    }
+    video.onseeked = () => {
+      const ratio = Math.min(size / video.videoWidth, size / video.videoHeight)
+      const canvas = document.createElement('canvas')
+      canvas.width  = video.videoWidth  * ratio
+      canvas.height = video.videoHeight * ratio
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.72)
+    }
+    video.onerror = () => { URL.revokeObjectURL(url); resolve(null) }
+    video.src = url
+  })
 }
 
 /** Gera thumbnail JPEG reduzida */
