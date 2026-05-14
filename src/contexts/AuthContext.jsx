@@ -10,6 +10,8 @@ import {
   signOut,
   updateProfile,
   updatePassword,
+  updateEmail,
+  verifyBeforeUpdateEmail,
   reauthenticateWithCredential,
   EmailAuthProvider
 } from 'firebase/auth'
@@ -108,7 +110,13 @@ export function AuthProvider({ children }) {
     await updatePassword(auth.currentUser, newPassword)
   }
 
-  const value = { user, loading, signup, login, logout, changePassword }
+  const changeEmail = async (currentPassword, newEmail) => {
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword)
+    await reauthenticateWithCredential(auth.currentUser, credential)
+    await verifyBeforeUpdateEmail(auth.currentUser, newEmail)
+  }
+
+  const value = { user, loading, signup, login, logout, changePassword, changeEmail }
 
   return (
     <AuthContext.Provider value={value}>

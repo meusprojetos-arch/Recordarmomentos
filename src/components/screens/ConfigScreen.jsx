@@ -164,10 +164,39 @@ const FAQ_ITEMS = [
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function ConfigScreen({ onClose }) {
-  const { user, logout, changePassword } = useAuth()
+  const { user, logout, changePassword, changeEmail } = useAuth()
+
+  // ── Alterar Email ──
+  const [showEmailForm, setShowEmailForm] = useState(false)
+  const [newEmail, setNewEmail]           = useState('')
+  const [emailPwd, setEmailPwd]           = useState('')
+  const [savingEmail, setSavingEmail]     = useState(false)
+
+  const handleChangeEmail = async () => {
+    if (!emailPwd) { toast.error('Digite sua senha atual'); return }
+    if (!newEmail || !newEmail.includes('@')) { toast.error('Digite um e-mail válido'); return }
+    if (newEmail === user?.email) { toast.error('Este já é seu e-mail atual'); return }
+    setSavingEmail(true)
+    try {
+      await changeEmail(emailPwd, newEmail)
+      toast.success('E-mail de verificação enviado! Confirme no novo e-mail.')
+      setNewEmail('')
+      setEmailPwd('')
+      setShowEmailForm(false)
+    } catch (err) {
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        toast.error('Senha incorreta')
+      } else if (err.code === 'auth/email-already-in-use') {
+        toast.error('Este e-mail já está em uso')
+      } else {
+        toast.error('Erro ao alterar e-mail')
+      }
+    } finally {
+      setSavingEmail(false)
+    }
+  }
 
   // ── Trocar Senha ──
-  const [showSenhaForm, setShowSenhaForm] = useState(false)
   const [currentPwd, setCurrentPwd]     = useState('')
   const [newPwd, setNewPwd]             = useState('')
   const [confirmPwd, setConfirmPwd]     = useState('')
@@ -188,7 +217,6 @@ export default function ConfigScreen({ onClose }) {
       setCurrentPwd('')
       setNewPwd('')
       setConfirmPwd('')
-      setShowSenhaForm(false)
     } catch (err) {
       if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         toast.error('Senha atual incorreta')
@@ -215,11 +243,6 @@ export default function ConfigScreen({ onClose }) {
 
   // ── FAQ ──
   const [openFaq, setOpenFaq] = useState(null)
-
-  // ── Exportação ZIP ──
-  const [exportando, setExportando] = useState(false)
-  const [exportProgress, setExportProgress] = useState(0)
-  const exportCancelRef = React.useRef(false)
 
   // ── Tema ──
   const [theme, setTheme] = useState(() => localStorage.getItem('recordar_theme') || 'dark')
@@ -419,31 +442,76 @@ export default function ConfigScreen({ onClose }) {
       <div className={styles.scroll}>
         <button className={styles.backBtn} onClick={onClose}>← Voltar</button>
 
-        {/* ══ 1. Trocar Senha ══ */}
-        <h2 className={styles.sectionTitle}>Trocar Senha</h2>
+        {/* ══ 0. E-mail da Conta ══ */}
+        <h2 className={styles.sectionTitle}>E-mail da Conta</h2>
         <div className={styles.card}>
-          {!showSenhaForm ? (
-            <div
-              className={styles.row}
-              onClick={() => setShowSenhaForm(true)}
-              role="button"
-              tabIndex={0}
-              style={{ cursor: 'pointer' }}
-            >
-              <div className={styles.rowIconWrap} style={{ background: '#FFF0EB' }}>
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#D37E65" strokeWidth="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
+          {!showEmailForm ? (
+            <div>
+              <div className={styles.row} style={{ cursor: 'default' }}>
+                <div className={styles.rowIconWrap} style={{ background: '#E3F2FD' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#1976D2" strokeWidth="2" width="20" height="20">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                </div>
+                <div className={styles.rowText}>
+                  <p className={styles.rowLabel}>E-mail atual</p>
+                  <p className={styles.rowSub}>{user?.email || '—'}</p>
+                </div>
               </div>
-              <div className={styles.rowText}>
-                <p className={styles.rowLabel}>Alterar senha</p>
-                <p className={styles.rowSub}>Toque para trocar sua senha</p>
+              <div
+                className={styles.row}
+                onClick={() => setShowEmailForm(true)}
+                role="button" tabIndex={0} style={{ cursor: 'pointer' }}
+              >
+                <div className={styles.rowIconWrap} style={{ background: '#FFF0EB' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#D37E65" strokeWidth="2" width="20" height="20">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </div>
+                <div className={styles.rowText}>
+                  <p className={styles.rowLabel}>Alterar e-mail</p>
+                  <p className={styles.rowSub}>Toque para trocar seu e-mail</p>
+                </div>
+                <span className={styles.chevron}>›</span>
               </div>
-              <span className={styles.chevron}>›</span>
             </div>
           ) : (
             <>
+              <label className={styles.fieldLabel}>Senha atual</label>
+              <input
+                type="password"
+                className={styles.fieldInput}
+                value={emailPwd}
+                onChange={e => setEmailPwd(e.target.value)}
+                placeholder="Digite sua senha atual"
+              />
+              <label className={styles.fieldLabel}>Novo e-mail</label>
+              <input
+                type="email"
+                className={styles.fieldInput}
+                value={newEmail}
+                onChange={e => setNewEmail(e.target.value)}
+                placeholder="novo@email.com"
+              />
+              <button className={styles.saveBtn} onClick={handleChangeEmail} disabled={savingEmail}>
+                {savingEmail ? 'Enviando…' : 'Enviar verificação'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowEmailForm(false); setNewEmail(''); setEmailPwd('') }}
+                style={{ background: 'none', border: 'none', color: '#888', fontSize: 13, cursor: 'pointer', marginTop: 4, padding: '4px 0' }}
+              >
+                Cancelar
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* ══ 1. Trocar Senha ══ */}
+        <h2 className={styles.sectionTitle}>Trocar Senha</h2>
+        <div className={styles.card}>
           <label className={styles.fieldLabel}>Senha atual</label>
           <div className={styles.passwordWrap}>
             <input
@@ -544,15 +612,6 @@ export default function ConfigScreen({ onClose }) {
           >
             {savingPwd ? 'Salvando…' : 'Alterar senha'}
           </button>
-          <button
-            type="button"
-            onClick={() => { setShowSenhaForm(false); setCurrentPwd(''); setNewPwd(''); setConfirmPwd('') }}
-            style={{ background: 'none', border: 'none', color: '#888', fontSize: 13, cursor: 'pointer', marginTop: 4, padding: '4px 0' }}
-          >
-            Cancelar
-          </button>
-            </>
-          )}
         </div>
 
         {/* ══ 3. Armazenamento ══ */}
@@ -795,10 +854,16 @@ export default function ConfigScreen({ onClose }) {
         <div className={styles.card + ' ' + styles.cardNoPad}>
           <div
             className={styles.row}
-            onClick={() => {
-              exportCancelRef.current = false
-              setExportProgress(0)
-              setExportando(true)
+            onClick={async () => {
+              const tid = toast.loading('Preparando exportação...')
+              try {
+                await exportAllAsZip()
+                toast.dismiss(tid)
+                toast.success('Exportação pronta! Verifique seus downloads.')
+              } catch {
+                toast.dismiss(tid)
+                toast.error('Erro na exportação')
+              }
             }}
             role="button"
             tabIndex={0}
@@ -883,100 +948,6 @@ export default function ConfigScreen({ onClose }) {
             </div>
             <button className={styles.legalCloseBtn} onClick={() => setShowPrivacy(false)}>Fechar</button>
           </div>
-        </div>
-      )}
-
-      {/* ── Modal de Exportação ZIP ── */}
-      {exportando && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-        }}>
-          <div style={{
-            background: 'var(--card-bg, #fff)', borderRadius: 16, padding: 28,
-            width: 300, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
-          }}>
-            <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>📦 Exportando...</p>
-            <p style={{ fontSize: 14, color: 'var(--text-secondary, #888)', marginBottom: 16 }}>
-              Preparando seu arquivo ZIP
-            </p>
-            <div style={{
-              background: '#eee', borderRadius: 99, height: 10, marginBottom: 12, overflow: 'hidden'
-            }}>
-              <div style={{
-                background: '#D37E65', height: '100%', borderRadius: 99,
-                width: exportProgress + '%', transition: 'width 0.3s'
-              }} />
-            </div>
-            <p style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>{exportProgress}%</p>
-            <button
-              onClick={() => { exportCancelRef.current = true; setExportando(false); setExportProgress(0) }}
-              style={{
-                background: 'transparent', border: '1.5px solid #D37E65', color: '#D37E65',
-                borderRadius: 99, padding: '10px 32px', fontSize: 15, cursor: 'pointer', fontWeight: 600
-              }}
-            >
-              Cancelar
-            </button>
-          </div>
-          {/* Iniciar exportação assim que o modal abrir */}
-          {exportando && exportProgress === 0 && (() => {
-            setTimeout(async () => {
-              if (exportCancelRef.current) return
-              try {
-                const JSZip = (await import('jszip')).default
-                const memories = await db.memories.toArray()
-                const profile = await db.profile.toCollection().first()
-                const zip = new JSZip()
-                const root = zip.folder('Recordar_Export')
-                const MONTHS = ['01_Janeiro','02_Fevereiro','03_Marco','04_Abril','05_Maio','06_Junho','07_Julho','08_Agosto','09_Setembro','10_Outubro','11_Novembro','12_Dezembro']
-                root.file(
-  'INFO.txt',
-  [
-    'RECORDAR — Exportação',
-    'Exportado em: ' + new Date().toLocaleString('pt-BR'),
-    'Titular: ' + (profile?.name || 'Usuário'),
-    'Total: ' + memories.length
-  ].join('\n')
-)
-                let done = 0
-                for (const m of memories) {
-                  if (exportCancelRef.current) return
-                  const year = m.date?.substring(0,4) || 'SemData'
-                  const month = m.date ? Number(m.date.substring(5,7)) - 1 : -1
-                  const folder = root.folder(year)?.folder(month >= 0 ? MONTHS[month] : 'SemData')
-                  if (m.fileBlob && folder) {
-                    const ext = m.fileBlob.type?.split('/')[1] || 'bin'
-                    const safe = (m.title || m.id).replace(/[^a-zA-Z0-9À-ÿ\s_-]/g,'').trim()
-                    folder.file(safe + '.' + ext, m.fileBlob)
-                  }
-                  done++
-                  setExportProgress(Math.round((done / memories.length) * 50))
-                }
-                if (exportCancelRef.current) return
-                const blob = await zip.generateAsync({ type: 'blob' }, (meta) => {
-                  if (!exportCancelRef.current) setExportProgress(50 + Math.round(meta.percent / 2))
-                })
-                if (exportCancelRef.current) return
-                const url = URL.createObjectURL(blob)
-                const link = document.createElement('a')
-                link.href = url
-                link.download = 'Recordar_' + new Date().toISOString().substring(0,10) + '.zip'
-                link.click()
-                URL.revokeObjectURL(url)
-                setExportando(false)
-                setExportProgress(0)
-                toast.success('📦 Exportação concluída!')
-              } catch(e) {
-                if (!exportCancelRef.current) {
-                  setExportando(false)
-                  setExportProgress(0)
-                  toast.error('Erro na exportação')
-                }
-              }
-            }, 100)
-            return null
-          })()}
         </div>
       )}
     </div>
