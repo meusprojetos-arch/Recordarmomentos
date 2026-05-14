@@ -66,7 +66,8 @@ function AppContent() {
     triggerRefresh,
   }
 
-  if (loading) return <LoadingScreen />
+  // Só mostra loading se não tiver usuário cacheado (primeira vez ou logout)
+  if (loading && !user) return <LoadingScreen />
 
   if (!user) {
     if (authScreen === 'login') {
