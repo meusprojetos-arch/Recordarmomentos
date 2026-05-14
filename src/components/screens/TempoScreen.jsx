@@ -203,16 +203,17 @@ export default function TempoScreen() {
     const urls = {}
     for (const m of memories) {
       try {
-        if (m._objectUrl && (m.type === 'photo' || m.type === 'video')) {
+        if (m._objectUrl) {
           urls[m.id] = m._objectUrl
-        } else if (m.fileUrl && (m.type === 'photo' || m.type === 'video')) {
+        } else if (m.fileUrl) {
           urls[m.id] = m.fileUrl
         } else if (m.thumbnail && m.thumbnail instanceof Blob) {
           urls[m.id] = URL.createObjectURL(m.thumbnail)
-        } else if (m.fileBlob && m.fileBlob instanceof Blob && (m.type === 'photo' || m.type === 'video')) {
+        } else if (m.fileBlob && m.fileBlob instanceof Blob) {
           urls[m.id] = URL.createObjectURL(m.fileBlob)
-        } else if (m.fileBlob && !(m.fileBlob instanceof Blob) && (m.type === 'photo' || m.type === 'video')) {
-          const blob = new Blob([m.fileBlob], { type: m.type === 'photo' ? 'image/jpeg' : 'video/mp4' })
+        } else if (m.fileBlob && !(m.fileBlob instanceof Blob)) {
+          const mimeType = m.type === 'audio' ? 'audio/webm' : m.type === 'video' ? 'video/mp4' : 'image/jpeg'
+          const blob = new Blob([m.fileBlob], { type: mimeType })
           urls[m.id] = URL.createObjectURL(blob)
         }
       } catch (e) { /* skip invalid blobs */ }
@@ -421,7 +422,7 @@ export default function TempoScreen() {
       toggleSelect(memory.id)
     } else {
       const src = thumbUrls[memory.id] || memory.fileUrl
-      if (src) {
+      if (src || memory.type === 'audio') {
         openViewer(memory)
       } else {
         toast('Arquivo indisponível. Re-adicione esta memória.')
