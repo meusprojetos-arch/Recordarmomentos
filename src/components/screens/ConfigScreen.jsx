@@ -22,6 +22,7 @@ import db from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './ConfigScreen.module.css'
+import AutoSyncModal from '../modals/AutoSyncModal.jsx'
 
 const TERMS_CONTENT = `Termos de Uso — Recordar
 
@@ -244,6 +245,9 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
 
   // ── FAQ ──
   const [openFaq, setOpenFaq] = useState(null)
+
+  // ── Auto Sync ──
+  const [showAutoSync, setShowAutoSync] = useState(false)
 
   // ── Tema ──
   const [theme, setTheme] = useState(() => localStorage.getItem('recordar_theme') || 'dark')
@@ -675,103 +679,6 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
         </div>
 
         {/* ══ 3. Privacidade ══ */}
-        <h2 className={styles.sectionTitle}>Privacidade</h2>
-        <div className={styles.card + ' ' + styles.cardNoPad}>
-
-          {/* Toggle perfil privado */}
-          <div
-            className={styles.row}
-            onClick={handleTogglePrivacy}
-            role="switch"
-            aria-checked={isPrivate}
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && handleTogglePrivacy()}
-          >
-            <div className={styles.rowIconWrap} style={{ background: '#FFF0EB' }}>
-              <img src={ICONS.privado} alt="" width={20} height={20} aria-hidden="true" />
-            </div>
-            <div className={styles.rowText}>
-              <p className={styles.rowLabel}>Perfil privado</p>
-              <p className={styles.rowSub}>
-                {isPrivate ? 'Só você pode ver suas memórias' : 'Outros usuários podem ver seu perfil'}
-              </p>
-            </div>
-            <div className={`${styles.toggle} ${isPrivate ? '' : styles.toggleOff}`} aria-hidden="true" />
-          </div>
-
-          <div className={styles.rowDivider} />
-
-          {/* PIN de bloqueio */}
-          <div
-            className={styles.row}
-            onClick={() => setShowPinModal(true)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && setShowPinModal(true)}
-          >
-            <div className={styles.rowIconWrap} style={{ background: '#FFF6DB' }}>
-              <img src={ICONS.biometria} alt="" width={20} height={20} aria-hidden="true" />
-            </div>
-            <div className={styles.rowText}>
-              <p className={styles.rowLabel}>PIN de bloqueio</p>
-              <p className={styles.rowSub}>Protege a pasta "Trancadas" com senha</p>
-            </div>
-            <span className={styles.chevron} aria-hidden="true">›</span>
-          </div>
-        </div>
-
-        {/* ══ 4. Backup Automático ══ */}
-        <h2 className={styles.sectionTitle}>Backup Automático</h2>
-        <div className={styles.card + ' ' + styles.cardNoPad}>
-
-          {/* Toggle backup Wi-Fi */}
-          <div
-            className={styles.row}
-            onClick={handleToggleBackup}
-            role="switch"
-            aria-checked={autoBackup}
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && handleToggleBackup()}
-          >
-            <div className={styles.rowIconWrap} style={{ background: '#E8F5E9' }}>
-              <img src={ICONS.nuvem} alt="" width={20} height={20} aria-hidden="true" />
-            </div>
-            <div className={styles.rowText}>
-              <p className={styles.rowLabel}>Backup pelo Wi-Fi</p>
-              <p className={styles.rowSub}>
-                {autoBackup ? 'Backup automático ativado' : 'Backup automático desativado'}
-              </p>
-            </div>
-            <div className={`${styles.toggle} ${autoBackup ? '' : styles.toggleOff}`} aria-hidden="true" />
-          </div>
-
-          {/* Frequência */}
-          {autoBackup && (
-            <>
-              <div className={styles.rowDivider} />
-              <div className={styles.row}>
-                <div className={styles.rowIconWrap} style={{ background: '#EDE7F6' }}>
-                  <img src={ICONS.config} alt="" width={20} height={20} aria-hidden="true" />
-                </div>
-                <div className={styles.rowText}>
-                  <p className={styles.rowLabel}>Frequência</p>
-                  <p className={styles.rowSub}>Com que regularidade fazer backup</p>
-                </div>
-                <select
-                  className={styles.freqSelect}
-                  value={backupFreq}
-                  onChange={handleFreqChange}
-                  aria-label="Frequência de backup"
-                >
-                  <option value="diario">Diário</option>
-                  <option value="semanal">Semanal</option>
-                  <option value="mensal">Mensal</option>
-                </select>
-              </div>
-            </>
-          )}
-        </div>
-
         {/* ══ 5. Aparência ══ */}
         <h2 className={styles.sectionTitle}>Aparência</h2>
         <div className={styles.card + ' ' + styles.cardNoPad}>
@@ -810,8 +717,27 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
           </div>
         </div>
 
-        {/* ══ Exportar e Planos ══ */}
-        <h2 className={styles.sectionTitle}>Exportar e Planos</h2>
+        {/* ══ Upload Automático ══ */}
+        <h2 className={styles.sectionTitle}>Upload Automático</h2>
+        <div className={styles.card}>
+          <div className={styles.row} onClick={() => setShowAutoSync(true)} role="button" tabIndex={0}>
+            <div className={styles.rowIconWrap} style={{ background: '#E8F5E9' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#4F7C52" strokeWidth="2" width="20" height="20">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <div className={styles.rowText}>
+              <p className={styles.rowLabel}>Importar da galeria</p>
+              <p className={styles.rowSub}>Sincronize fotos e vídeos do seu dispositivo</p>
+            </div>
+            <span className={styles.chevron}>›</span>
+          </div>
+        </div>
+
+        {/* ══ Exportar ══ */}
+        <h2 className={styles.sectionTitle}>Exportar</h2>
         <div className={styles.card + ' ' + styles.cardNoPad}>
           <div
             className={styles.row}
@@ -839,23 +765,6 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
             <span className={styles.chevron} aria-hidden="true">›</span>
           </div>
 
-          <div className={styles.rowDivider} />
-
-          <div
-            className={styles.row}
-            onClick={() => onShowPlans?.()}
-            role="button"
-            tabIndex={0}
-          >
-            <div className={styles.rowIconWrap} style={{ background: '#FFF6DB' }}>
-              <span style={{ fontSize: 16 }}>💎</span>
-            </div>
-            <div className={styles.rowText}>
-              <p className={styles.rowLabel}>Planos e Armazenamento</p>
-              <p className={styles.rowSub}>Proteja suas memórias na nuvem</p>
-            </div>
-            <span className={styles.chevron} aria-hidden="true">›</span>
-          </div>
         </div>
 
         {/* ══ Termos e Política ══ */}
@@ -933,6 +842,13 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
       </div>
 
       {/* Modal PIN */}
+      {showAutoSync && (
+        <AutoSyncModal
+          onClose={() => setShowAutoSync(false)}
+          onDone={() => setShowAutoSync(false)}
+        />
+      )}
+
       {showPinModal && (
         <PinLockModal
           uid={user?.uid}

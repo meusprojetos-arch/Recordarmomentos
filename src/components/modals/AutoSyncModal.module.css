@@ -1,0 +1,182 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 9999;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.modal {
+  background: var(--bege-claro);
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  max-width: 480px;
+  padding: 24px 24px 40px;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--cinza);
+  margin: 0;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #999;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.iconWrap {
+  margin: 8px 0;
+}
+
+.desc {
+  font-size: 15px;
+  color: var(--cinza);
+  line-height: 1.5;
+  max-width: 300px;
+}
+
+.hint {
+  font-size: 13px;
+  color: #888;
+  line-height: 1.4;
+}
+
+.spinnerWrap {
+  margin: 8px 0;
+}
+
+.spinner {
+  animation: rotate 1.2s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.offlineTag {
+  font-size: 13px;
+  color: #e67e22;
+  font-weight: 600;
+  background: #fff3e0;
+  padding: 6px 14px;
+  border-radius: 99px;
+}
+
+.progressBar {
+  width: 100%;
+  height: 10px;
+  background: #e0e0e0;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--verde);
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+.progressText {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--cinza);
+}
+
+.currentFile {
+  font-size: 12px;
+  color: #888;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failedText {
+  font-size: 13px;
+  color: #e53935;
+}
+
+.doneTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--cinza);
+}
+
+.doneDesc {
+  font-size: 14px;
+  color: #666;
+}
+
+.btnPrimary {
+  width: 100%;
+  padding: 14px;
+  background: var(--verde);
+  color: #fff;
+  border: none;
+  border-radius: 99px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  margin-top: 4px;
+}
+
+.btnSecondary {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  color: #888;
+  border: 1.5px solid #ccc;
+  border-radius: 99px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.btnCancel {
+  padding: 10px 28px;
+  background: transparent;
+  color: #888;
+  border: 1.5px solid #ccc;
+  border-radius: 99px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  margin-top: 4px;
+}
