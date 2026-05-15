@@ -6,10 +6,11 @@ import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useApp } from '../../App.jsx'
-import { getMemories } from '../../services/memoriesService.js'
+import { getMemories, uploadFile } from '../../services/memoriesService.js'
 import { setProfilePrivacy } from '../../services/profileService.js'
 import { auth, firestore } from '../../firebase.js'
-import { doc, updateDoc } from 'firebase/firestore'
+import { doc, updateDoc, setDoc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { db as localDb } from '../../db/database.js'
 import PrivacyRow from '../ui/PrivacyRow.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './PerfilScreen.module.css'
@@ -36,6 +37,10 @@ export default function PerfilScreen() {
   const [showEdit, setShowEdit] = useState(false)
   const [showPinModal, setShowPinModal] = useState(false)
 
+  // ── Backup na nuvem ──
+  const [backupSyncing, setBackupSyncing] = useState(false)
+  const [backupStats, setBackupStats] = useState({ total: 0, synced: 0 })
+
   useEffect(() => {
     getMemories().then(async mems => {
       // Excluir fotos trancadas (pasta Trancadas + privacyLevel private)
@@ -60,11 +65,117 @@ export default function PerfilScreen() {
       })
     }).catch(() => {})
     if (user?.privacyLevel) setIsPrivate(user.privacyLevel === 'private')
+
+    // Carregar estado do backup do Firestore
+    if (user?.uid) {
+      getDoc(doc(firestore, 'users', user.uid)).then(snap => {
+        if (snap.exists()) {
+          const data = snap.data()
+          setCloudBackup(data.cloudBackup === true)
+          if (data.cloudBackup) loadBackupStats(user.uid)
+        }
+      }).catch(() => {})
+    }
     const uid = user?.uid || ''
     setEditName(user?.name || user?.displayName || localStorage.getItem(`recordar_profileName_${uid}`) || '')
     setEditBio(user?.bio || localStorage.getItem(`recordar_profileBio_${uid}`) || '')
     setAvatarSrc(localStorage.getItem(`recordar_avatar_${uid}`) || user?.photoURL || null)
   }, [user])
+
+  // Conta memórias locais vs sincronizadas na nuvem
+  const loadBackupStats = async (uid) => {
+    try {
+      const mems = await getMemories()
+      const mediaItems = mems.filter(m => m.type !== 'text')
+      const total = mediaItems.length
+      // IDs salvos como sincronizados no localStorage (persiste entre reloads)
+      const savedIds = new Set(JSON.parse(localStorage.getItem(`recordar_backup_synced_${uid}`) || '[]'))
+      const synced = mediaItems.filter(m => m.fileUrl || savedIds.has(m.id)).length
+      setBackupStats({ total, synced })
+    } catch {}
+  }
+
+  const handleToggleBackup = async () => {
+    const uid = user?.uid
+    if (!uid) return
+    const next = !cloudBackup
+    setCloudBackup(next)
+    try {
+      await updateDoc(doc(firestore, 'users', uid), { cloudBackup: next })
+    } catch {}
+    if (next) {
+      toast.success('Backup ativado!')
+      loadBackupStats(uid)
+      setBackupSyncing(true)
+      try {
+        const mems = await getMemories()
+        const toSync = mems.filter(m => m.type !== 'text' && !m.fileUrl && m.fileBlob instanceof Blob)
+        const total = mems.filter(m => m.type !== 'text').length
+        setBackupStats({ total, synced: total - toSync.length })
+
+        if (toSync.length === 0) {
+          toast('✅ Tudo já sincronizado!')
+          setBackupSyncing(false)
+          return
+        }
+
+        // Upload paralelo com até 5 workers simultâneos
+        const CONCURRENCY = 5
+        let done = 0
+        let failed = 0
+        const queue = [...toSync]
+
+        const worker = async () => {
+          while (queue.length > 0) {
+            const m = queue.shift()
+            if (!m) break
+            try {
+              const blob = m.fileBlob instanceof Blob
+                ? m.fileBlob
+                : new Blob([m.fileBlob], { type: 'application/octet-stream' })
+              const uploaded = await Promise.race([
+                uploadFile(blob),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 45000))
+              ])
+              await updateDoc(doc(firestore, 'users', uid, 'memories', m.id), {
+                fileUrl: uploaded.url,
+                filePath: uploaded.path,
+                localOnly: false,
+                updatedAt: serverTimestamp(),
+              }).catch(() => {})
+              // Persistir progresso no localStorage para sobreviver reload
+              const key = `recordar_backup_synced_${uid}`
+              const saved = JSON.parse(localStorage.getItem(key) || '[]')
+              saved.push(m.id)
+              localStorage.setItem(key, JSON.stringify(saved))
+              done++
+            } catch (e) {
+              console.error('Backup falhou para:', m.title, '| Erro:', e.message, e.code || '')
+              toast.error(`Falha: ${e.message?.substring(0, 50)}`, { duration: 3000 })
+              failed++
+              done++
+            }
+            setBackupStats(prev => ({ ...prev, synced: prev.synced + 1 }))
+          }
+        }
+
+        // Lança N workers em paralelo
+        await Promise.all(Array.from({ length: CONCURRENCY }, worker))
+
+        toast.success(failed > 0
+          ? `${done - failed} sincronizada(s), ${failed} falha(s)`
+          : `✅ ${done} memória(s) sincronizada(s)!`
+        )
+      } catch (e) {
+        console.warn('Erro no backup:', e.message)
+        toast.error('Erro no backup')
+      }
+      setBackupSyncing(false)
+      loadBackupStats(uid)
+    } else {
+      toast('Backup desativado')
+    }
+  }
 
   const handleSaveProfile = async () => {
     if (!editName.trim()) { toast.error('O nome não pode ficar vazio'); return }
@@ -194,14 +305,25 @@ export default function PerfilScreen() {
           <img src={PERFIL_ICONS.nuvem} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
           Backup
         </h2>
-        <div className={styles.exportBtn} onClick={() => {
-          setCloudBackup(v => !v)
-          toast(!cloudBackup ? 'Backup na nuvem ativado!' : 'Backup desativado')
-        }}>
+        <div className={styles.exportBtn} onClick={handleToggleBackup}>
           <img src={PERFIL_ICONS.nuvem} alt="" aria-hidden="true" className={styles.exportIcon} width={28} height={28} />
           <div className={styles.exportText}>
             <p className={styles.exportLabel}>Backup na nuvem</p>
-            <p className={styles.exportSub}>Automático pelo Wi-Fi</p>
+            {cloudBackup ? (
+              backupSyncing ? (
+                <p className={styles.exportSub} style={{ color: '#D37E65' }}>
+                  ⏳ Sincronizando... {backupStats.synced}/{backupStats.total}
+                </p>
+              ) : (
+                <p className={styles.exportSub} style={{ color: '#4F7C52' }}>
+                  {backupStats.synced === backupStats.total && backupStats.total > 0
+                    ? `✅ ${backupStats.total} memória(s) salvas`
+                    : `☁️ ${backupStats.synced} de ${backupStats.total} sincronizadas`}
+                </p>
+              )
+            ) : (
+              <p className={styles.exportSub}>Ative para salvar na nuvem</p>
+            )}
           </div>
           <div className={`${styles.toggle} ${cloudBackup ? '' : styles.toggleOff}`} />
         </div>
