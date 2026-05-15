@@ -4,55 +4,125 @@
 import { firestore, auth } from '../firebase.js'
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore'
 
-// Planos disponiveis
+const GB = 1024 * 1024 * 1024
+const TB = 1024 * GB
+
+// ── Planos disponíveis ──────────────────────────────────────────────────────
 export const PLANS = {
+  // MENSAIS
   free: {
-    id: 'free',
-    name: 'Gratuito',
-    price: 0,
-    storageGB: 1,
-    storageBytes: 1 * 1024 * 1024 * 1024,
-    localStorageGB: 1,
-    localStorageBytes: 1 * 1024 * 1024 * 1024,
-    features: ['Uso offline', '1GB armazenamento local', 'Organizacao por ano/mes'],
+    id: 'free', billing: 'mensal',
+    name: 'Gratuito', price: 0,
+    storageGB: 5, storageBytes: 5 * GB,
+    features: ['5 GB local', 'Uso offline', 'Organização por ano/mês'],
     cloud: false,
   },
-  basic: {
-    id: 'basic',
-    name: 'Basico',
-    price: 9.90,
-    storageGB: 5,
-    storageBytes: 5 * 1024 * 1024 * 1024,
-    features: ['5GB na nuvem', 'Backup automatico', 'Sincronizacao entre dispositivos'],
+  essencial: {
+    id: 'essencial', billing: 'mensal',
+    name: 'Essencial', price: 6.90,
+    storageGB: 20, storageBytes: 20 * GB,
+    features: ['20 GB na nuvem', 'Backup automático', 'Sincronização entre dispositivos'],
     cloud: true,
   },
-  standard: {
-    id: 'standard',
-    name: 'Padrao',
-    price: 19.90,
-    storageGB: 50,
-    storageBytes: 50 * 1024 * 1024 * 1024,
-    features: ['50GB na nuvem', 'Backup automatico', 'Sincronizacao', 'Compartilhamento'],
+  padrao: {
+    id: 'padrao', billing: 'mensal',
+    name: 'Padrão', price: 12.90,
+    storageGB: 100, storageBytes: 100 * GB,
+    features: ['100 GB na nuvem', 'Backup automático', 'Sincronização', 'Compartilhamento'],
     cloud: true,
   },
-  advanced: {
-    id: 'advanced',
-    name: 'Avancado',
-    price: 39.90,
-    storageGB: 200,
-    storageBytes: 200 * 1024 * 1024 * 1024,
-    features: ['200GB na nuvem', 'Backup automatico', 'Sincronizacao', 'Compartilhamento', 'Prioridade no suporte'],
+  avancado: {
+    id: 'avancado', billing: 'mensal',
+    name: 'Avançado', price: 19.90,
+    storageGB: 300, storageBytes: 300 * GB,
+    features: ['300 GB na nuvem', 'Backup automático', 'Sincronização', 'Compartilhamento'],
     cloud: true,
   },
-  large: {
-    id: 'large',
-    name: 'Grande',
-    price: 59.90,
-    storageGB: 1024,
-    storageBytes: 1024 * 1024 * 1024 * 1024,
-    features: ['1TB na nuvem', 'Backup automatico', 'Sincronizacao', 'Compartilhamento', 'Prioridade no suporte'],
+  premium: {
+    id: 'premium', billing: 'mensal',
+    name: 'Premium', price: 39.90,
+    storageGB: 1024, storageBytes: 1 * TB,
+    features: ['1 TB na nuvem', 'Backup automático', 'Sincronização', 'Suporte prioritário'],
     cloud: true,
   },
+  pro: {
+    id: 'pro', billing: 'mensal',
+    name: 'Pro', price: 69.90,
+    storageGB: 2048, storageBytes: 2 * TB,
+    features: ['2 TB na nuvem', 'Backup automático', 'Sincronização', 'Suporte prioritário'],
+    cloud: true,
+  },
+  ultra: {
+    id: 'ultra', billing: 'mensal',
+    name: 'Ultra', price: 129.90,
+    storageGB: 5120, storageBytes: 5 * TB,
+    features: ['5 TB na nuvem', 'Backup automático', 'Sincronização', 'Suporte VIP'],
+    cloud: true,
+  },
+  master: {
+    id: 'master', billing: 'mensal',
+    name: 'Master', price: 199.90,
+    storageGB: 10240, storageBytes: 10 * TB,
+    features: ['10 TB na nuvem', 'Backup automático', 'Sincronização', 'Suporte VIP'],
+    cloud: true,
+  },
+
+  // ANUAIS (15% OFF)
+  essencial_anual: {
+    id: 'essencial_anual', billing: 'anual',
+    name: 'Essencial Anual', price: 69.90,
+    storageGB: 20, storageBytes: 20 * GB,
+    features: ['20 GB na nuvem', 'Backup automático', 'Sincronização', '15% de desconto'],
+    cloud: true, discount: '15% OFF',
+  },
+  padrao_anual: {
+    id: 'padrao_anual', billing: 'anual',
+    name: 'Padrão Anual', price: 131.90,
+    storageGB: 100, storageBytes: 100 * GB,
+    features: ['100 GB na nuvem', 'Backup automático', 'Compartilhamento', '15% de desconto'],
+    cloud: true, discount: '15% OFF',
+  },
+  avancado_anual: {
+    id: 'avancado_anual', billing: 'anual',
+    name: 'Avançado Anual', price: 202.90,
+    storageGB: 300, storageBytes: 300 * GB,
+    features: ['300 GB na nuvem', 'Backup automático', 'Compartilhamento', '15% de desconto'],
+    cloud: true, discount: '15% OFF',
+  },
+  premium_anual: {
+    id: 'premium_anual', billing: 'anual',
+    name: 'Premium Anual', price: 406.90,
+    storageGB: 1024, storageBytes: 1 * TB,
+    features: ['1 TB na nuvem', 'Suporte prioritário', '15% de desconto'],
+    cloud: true, discount: '15% OFF',
+  },
+  pro_anual: {
+    id: 'pro_anual', billing: 'anual',
+    name: 'Pro Anual', price: 712.90,
+    storageGB: 2048, storageBytes: 2 * TB,
+    features: ['2 TB na nuvem', 'Suporte prioritário', '15% de desconto'],
+    cloud: true, discount: '15% OFF',
+  },
+  ultra_anual: {
+    id: 'ultra_anual', billing: 'anual',
+    name: 'Ultra Anual', price: 1325.90,
+    storageGB: 5120, storageBytes: 5 * TB,
+    features: ['5 TB na nuvem', 'Suporte VIP', '15% de desconto'],
+    cloud: true, discount: '15% OFF',
+  },
+  master_anual: {
+    id: 'master_anual', billing: 'anual',
+    name: 'Master Anual', price: 2038.90,
+    storageGB: 10240, storageBytes: 10 * TB,
+    features: ['10 TB na nuvem', 'Suporte VIP', '15% de desconto'],
+    cloud: true, discount: '15% OFF',
+  },
+
+  // Manter compatibilidade com IDs antigos
+  basic:    { id: 'basic',    billing: 'mensal', name: 'Essencial',  price: 6.90,   storageGB: 20,   storageBytes: 20 * GB,   features: ['20 GB na nuvem'],  cloud: true },
+  standard: { id: 'standard', billing: 'mensal', name: 'Padrão',     price: 12.90,  storageGB: 100,  storageBytes: 100 * GB,  features: ['100 GB na nuvem'], cloud: true },
+  advanced: { id: 'advanced', billing: 'mensal', name: 'Avançado',   price: 19.90,  storageGB: 300,  storageBytes: 300 * GB,  features: ['300 GB na nuvem'], cloud: true },
+  large:    { id: 'large',    billing: 'mensal', name: 'Premium',    price: 39.90,  storageGB: 1024, storageBytes: 1 * TB,    features: ['1 TB na nuvem'],   cloud: true },
 }
 
 /**
