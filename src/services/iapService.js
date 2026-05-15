@@ -86,5 +86,5 @@ export function onPurchaseRestored(callback) {
   return () => plugin.removeAllListeners?.('purchaseRestored')
 }
 
-// Mantido para compatibilidadee
+// Mantido para compatibilidade
 export const PRODUCTS = PLAN_TO_PRODUCT
