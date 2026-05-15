@@ -224,8 +224,14 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
         memData.duration = audioDuration
       }
 
-      await addMemory(memData, fileToUpload)
-      toast.success('Memoria salva com carinho!')
+      // Timeout de 45s para nunca travar a UI
+      await Promise.race([
+        addMemory(memData, fileToUpload),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('TIMEOUT')), 45000)
+        )
+      ])
+      toast.success('Memória salva! ✅')
       
       // Aviso para usuarios gratuitos
       const premium = await isPremium()

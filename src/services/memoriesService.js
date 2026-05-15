@@ -69,18 +69,37 @@ export async function addMemory(memoryData, file = null) {
   let fileUrl = ''
   let filePath = ''
   let fileSize = 0
-  const premium = await isPremium()
+
+  // Verificar premium com timeout de 5s — se Firestore demorar, assume gratuito e salva local
+  let premium = false
+  try {
+    premium = await Promise.race([
+      isPremium(),
+      new Promise(resolve => setTimeout(() => resolve(false), 5000))
+    ])
+  } catch { premium = false }
 
   if (file && premium) {
-    const hasSpace = await canUpload(file.size)
-    if (!hasSpace) {
-      throw new Error('STORAGE_FULL')
+    try {
+      const hasSpace = await Promise.race([
+        canUpload(file.size),
+        new Promise(resolve => setTimeout(() => resolve(false), 5000))
+      ])
+      if (hasSpace) {
+        const uploaded = await Promise.race([
+          uploadFile(file),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('UPLOAD_TIMEOUT')), 30000)
+          )
+        ])
+        fileUrl = uploaded.url
+        filePath = uploaded.path
+        fileSize = file.size
+        addStorageUsage(file.size).catch(() => {}) // não bloquear
+      }
+    } catch (uploadErr) {
+      console.warn('Upload nuvem falhou, salvando local:', uploadErr.message)
     }
-    const uploaded = await uploadFile(file)
-    fileUrl = uploaded.url
-    filePath = uploaded.path
-    fileSize = file.size
-    await addStorageUsage(file.size)
   }
 
   const docData = {
@@ -99,7 +118,13 @@ export async function addMemory(memoryData, file = null) {
     sharedWith: [],
   }
 
-  const docRef = await addDoc(memoriesCol(uid), docData)
+  // Timeout de 10s no Firestore — se offline, salva metadados localmente
+  const docRef = await Promise.race([
+    addDoc(memoriesCol(uid), docData),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('FIRESTORE_TIMEOUT')), 10000)
+    )
+  ])
 
   // Atualiza registro local com firestoreId para associação futura
   if (localId) {
