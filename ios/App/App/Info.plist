@@ -45,5 +45,16 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+
+	<!-- Permissões de câmera, microfone e galeria — obrigatórias para App Store -->
+	<key>NSCameraUsageDescription</key>
+	<string>O Recordar precisa da câmera para você fotografar e filmar seus momentos especiais.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>O Recordar precisa do microfone para gravar áudios e vídeos das suas memórias.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>O Recordar precisa acessar sua galeria para importar fotos e vídeos das suas memórias.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>O Recordar precisa salvar fotos na sua galeria.</string>
+
 </dict>
 </plist>

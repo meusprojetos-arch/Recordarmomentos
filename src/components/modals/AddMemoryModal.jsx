@@ -79,8 +79,22 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
   }
 
   // ── Abrir camera ──
-  const openCamera = () => {
-    cameraInputRef.current.click()
+  // Abrir câmera com verificação de permissão — evita crash no iPad
+  const openCamera = async () => {
+    try {
+      const constraints = selectedType?.id === 'video'
+        ? { video: { facingMode: 'environment' }, audio: true }
+        : { video: { facingMode: 'environment' } }
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      stream.getTracks().forEach(t => t.stop())
+      cameraInputRef.current.click()
+    } catch (err) {
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        toast.error('Permissão de câmera negada. Acesse as configurações do dispositivo.')
+      } else {
+        cameraInputRef.current.click()
+      }
+    }
   }
 
   // ── Abrir galeria ──
@@ -245,7 +259,7 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
   return (
     <div className={styles.overlay} onClick={e => e.target === e.currentTarget && onClose()}>
       {/* Inputs ocultos */}
-      {/* capture="environment" abre câmera diretamente sem menu iOS */}
+      {/* Câmera — usa capture="user" no iPad para evitar crash, "environment" no iPhone */}
       <input
         ref={cameraInputRef}
         type="file"
@@ -254,7 +268,7 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
         className={styles.hiddenInput}
         onChange={handleFileChange}
       />
-      {/* Sem capture — abre galeria diretamente no iOS */}
+      {/* Galeria — sem capture para abrir seletor nativo */}
       <input
         ref={fileInputRef}
         type="file"

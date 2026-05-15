@@ -4,7 +4,15 @@
   "webDir": "dist",
   "ios": {
     "allowsLinkPreview": false,
-    "contentInset": "always"
+    "contentInset": "always",
+    "scrollEnabled": true,
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "plugins": {
+    "Camera": {
+      "iosScheme": "capacitor",
+      "presentationStyle": "fullScreen"
+    }
   },
   "server": {
     "allowNavigation": [

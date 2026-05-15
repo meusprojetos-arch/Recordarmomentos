@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { PLANS, getUserPlan, getStorageUsage, upgradePlan, formatBytes } from '../../services/planService.js'
+import { isNativeIAP, getProducts, purchaseProduct, restorePurchases, PRODUCTS } from '../../services/iapService.js'
 import styles from './PlansScreen.module.css'
 
 const PLAN_LIST = [
@@ -33,21 +34,54 @@ export default function PlansScreen({ onClose }) {
   const handleUpgrade = async (planId) => {
     if (planId === currentPlan.id) return
     if (planId === 'free') {
-      toast.error('Voce ja esta no plano gratuito')
+      toast.error('Você já está no plano gratuito')
       return
     }
     setLoading(true)
     try {
-      await upgradePlan(planId)
-      toast.success('Plano atualizado com sucesso!')
-      loadData()
+      // iOS: usar Apple In-App Purchase (StoreKit)
+      if (isNativeIAP()) {
+        const productId = planId === 'basic' || planId === 'standard'
+          ? PRODUCTS.MENSAL
+          : PRODUCTS.ANUAL
+        const result = await purchaseProduct(productId)
+        if (result.status === 'purchased') {
+          await upgradePlan(planId)
+          toast.success('Assinatura ativada! ✅')
+          loadData()
+        }
+      } else {
+        // Web: fluxo atual
+        await upgradePlan(planId)
+        toast.success('Plano atualizado com sucesso!')
+        loadData()
+      }
     } catch (err) {
-      toast.error('Erro ao atualizar plano')
+      if (err.message === 'cancelled') {
+        toast('Compra cancelada')
+      } else {
+        toast.error('Erro ao processar pagamento')
+      }
+    }
+    setLoading(false)
+  }
+
+  const handleRestore = async () => {
+    if (!isNativeIAP()) return
+    setLoading(true)
+    try {
+      await restorePurchases()
+      toast.success('Compras restauradas!')
+      loadData()
+    } catch {
+      toast.error('Nenhuma compra encontrada para restaurar')
     }
     setLoading(false)
   }
 
   const usagePercent = usage.limit > 0 ? Math.min((usage.used / usage.limit) * 100, 100) : 0
+
+  const isIOS = isNativeIAP()
 
   return (
     <div className={styles.screen}>
@@ -118,8 +152,23 @@ export default function PlansScreen({ onClose }) {
       </div>
 
       <p className={styles.disclaimer}>
-        Os pagamentos serao processados pela loja de aplicativos. Voce pode cancelar a qualquer momento.
+        Os pagamentos são processados pela App Store. Você pode cancelar a qualquer momento nas configurações do dispositivo.
       </p>
+
+      {/* Botão obrigatório pela Apple: Restaurar compras */}
+      {isIOS && (
+        <button
+          onClick={handleRestore}
+          disabled={loading}
+          style={{
+            background: 'none', border: 'none', color: '#888',
+            fontSize: 13, cursor: 'pointer', padding: '8px 0',
+            textDecoration: 'underline', display: 'block', margin: '0 auto 16px'
+          }}
+        >
+          Restaurar compras anteriores
+        </button>
+      )}
     </div>
   )
 }
