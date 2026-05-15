@@ -78,23 +78,11 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
     }
   }
 
-  // ── Abrir camera ──
-  // Abrir câmera com verificação de permissão — evita crash no iPad
-  const openCamera = async () => {
-    try {
-      const constraints = selectedType?.id === 'video'
-        ? { video: { facingMode: 'environment' }, audio: true }
-        : { video: { facingMode: 'environment' } }
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      stream.getTracks().forEach(t => t.stop())
-      cameraInputRef.current.click()
-    } catch (err) {
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        toast.error('Permissão de câmera negada. Acesse as configurações do dispositivo.')
-      } else {
-        cameraInputRef.current.click()
-      }
-    }
+  // ── Abrir câmera ──
+  // iOS não permite element.click() após await — o clique deve ser síncrono
+  // A permissão de câmera/microfone é pedida automaticamente pelo sistema ao abrir o input
+  const openCamera = () => {
+    cameraInputRef.current.click()
   }
 
   // ── Abrir galeria ──
