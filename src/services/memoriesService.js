@@ -66,75 +66,47 @@ export async function addMemory(memoryData, file = null) {
     }
   }
 
-  let fileUrl = ''
-  let filePath = ''
-  let fileSize = 0
-
-  // Verificar premium com timeout de 5s — se Firestore demorar, assume gratuito e salva local
-  let premium = false
-  try {
-    premium = await Promise.race([
-      isPremium(),
-      new Promise(resolve => setTimeout(() => resolve(false), 5000))
-    ])
-  } catch { premium = false }
-
-  if (file && premium) {
+  // ── Sincronizar com Firestore e nuvem em BACKGROUND ──
+  // Não bloqueia a UI — retorna instantaneamente após salvar local
+  ;(async () => {
     try {
-      const hasSpace = await Promise.race([
-        canUpload(file.size),
-        new Promise(resolve => setTimeout(() => resolve(false), 5000))
-      ])
-      if (hasSpace) {
-        const uploaded = await Promise.race([
-          uploadFile(file),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('UPLOAD_TIMEOUT')), 30000)
-          )
-        ])
-        fileUrl = uploaded.url
-        filePath = uploaded.path
-        fileSize = file.size
-        addStorageUsage(file.size).catch(() => {}) // não bloquear
+      let fileUrl = ''
+      let filePath = ''
+      let fileSize = 0
+      const premium = await isPremium().catch(() => false)
+      if (file && premium) {
+        const hasSpace = await canUpload(file.size).catch(() => false)
+        if (hasSpace) {
+          const uploaded = await Promise.race([
+            uploadFile(file),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 60000))
+          ]).catch(() => null)
+          if (uploaded) {
+            fileUrl = uploaded.url
+            filePath = uploaded.path
+            fileSize = file.size
+            addStorageUsage(file.size).catch(() => {})
+          }
+        }
       }
-    } catch (uploadErr) {
-      console.warn('Upload nuvem falhou, salvando local:', uploadErr.message)
-    }
-  }
+      const docData = {
+        ...memoryData,
+        fileUrl, filePath, fileSize,
+        localBlobId: file ? localBlobId : '',
+        localOnly: !fileUrl,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        isFavorite: false, isHighlight: false, isShared: false,
+        privacyLevel: memoryData.privacyLevel || 'private',
+        sharedWith: [],
+      }
+      const docRef = await addDoc(memoriesCol(uid), docData)
+      if (localId) localDb.fileBlobs.update(localId, { firestoreId: docRef.id }).catch(() => {})
+    } catch (e) { console.warn('Sync background:', e.message) }
+  })()
 
-  const docData = {
-    ...memoryData,
-    fileUrl,
-    filePath,
-    fileSize,
-    localBlobId: file ? localBlobId : '',
-    localOnly: !premium || !file,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    isFavorite: false,
-    isHighlight: false,
-    isShared: false,
-    privacyLevel: 'private',
-    sharedWith: [],
-  }
-
-  // Timeout de 10s no Firestore — se offline, salva metadados localmente
-  const docRef = await Promise.race([
-    addDoc(memoriesCol(uid), docData),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('FIRESTORE_TIMEOUT')), 10000)
-    )
-  ])
-
-  // Atualiza registro local com firestoreId para associação futura
-  if (localId) {
-    try {
-      await localDb.fileBlobs.update(localId, { firestoreId: docRef.id })
-    } catch (e) { console.warn('Erro ao associar firestoreId:', e) }
-  }
-
-  // Retorna com objectUrl para uso imediato na sessão atual
-  return { id: docRef.id, ...docData, _objectUrl: localObjectUrl }
+  // Retorna IMEDIATAMENTE com URL local — sem esperar Firestore
+  return { id: localBlobId, ...memoryData, _objectUrl: localObjectUrl }
 }
 
 /**
