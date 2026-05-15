@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { PLANS, getUserPlan, getStorageUsage, upgradePlan, formatBytes } from '../../services/planService.js'
-import { isNativeIAP, purchaseProduct, restorePurchases, PRODUCTS } from '../../services/iapService.js'
+import { isNativeIAP, purchaseProduct, restorePurchases, PLAN_TO_PRODUCT } from '../../services/iapService.js'
 import styles from './PlansScreen.module.css'
 
 const MENSAIS = [
@@ -46,8 +46,8 @@ export default function PlansScreen({ onClose }) {
     setLoading(true)
     try {
       if (isNativeIAP()) {
-        const isAnual = planId.includes('anual')
-        const productId = isAnual ? PRODUCTS.ANUAL : PRODUCTS.MENSAL
+        const productId = PLAN_TO_PRODUCT[planId]
+        if (!productId) { toast.error('Produto não encontrado'); setLoading(false); return }
         const result = await purchaseProduct(productId)
         if (result.status === 'purchased') {
           await upgradePlan(planId)
