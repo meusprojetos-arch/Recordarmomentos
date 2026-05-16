@@ -136,18 +136,8 @@ export default function TempoScreen({ pendingMemories }) {
   }, [user?.uid])
 
   useEffect(() => {
-    // Injetar memórias pendentes salvas enquanto esta tela não estava montada
-    if (pendingMemories?.current?.length > 0) {
-      const pending = [...pendingMemories.current]
-      pendingMemories.current = []
-      setMemories(prev => {
-        const ids = new Set(prev.map(m => m.id))
-        const novas = pending.filter(m => !ids.has(m.id))
-        return novas.length > 0 ? [...novas, ...prev] : prev
-      })
-    } else {
-      loadMemories()
-    }
+    // Sempre carrega do IndexedDB/Firestore ao montar
+    loadMemories()
   }, [loadMemories])
 
   // Abrir pasta e carregar suas memórias
@@ -203,12 +193,11 @@ export default function TempoScreen({ pendingMemories }) {
     const handleFocus = () => loadMemories()
     const handleUpdate = () => loadMemories()
 
-    // Injetar nova memória diretamente no estado — sem recarregar do Firestore
+    // Injetar nova memória diretamente no estado — acumula sem substituir
     const handleMemoryAdded = (e) => {
       const newMem = e.detail
-      if (!newMem) { loadMemories(); return }
+      if (!newMem) return
       setMemories(prev => {
-        // Evitar duplicata
         if (prev.find(m => m.id === newMem.id)) return prev
         return [newMem, ...prev]
       })
