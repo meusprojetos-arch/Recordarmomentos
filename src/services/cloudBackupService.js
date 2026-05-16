@@ -1,9 +1,13 @@
 /**
- * cloudBackupService.js — Backup robusto e rápido
+ * cloudBackupService.js — Backup robusto estilo Google Fotos
+ * - Marca cada foto como sincronizada no Firestore após upload
+ * - Nunca re-sincroniza o que já foi feito
+ * - Retoma exatamente de onde parou
+ * - 6 uploads em paralelo
  */
 import { getMemories } from './memoriesService.js'
 import { auth, firestore, storage } from '../firebase.js'
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { v4 as uuid } from 'uuid'
 
@@ -68,7 +72,7 @@ export function cancelBackup() {
   notify()
 }
 
-// Upload direto sem verificações extras — rápido
+// Upload com retry
 async function uploadOne(blob, uid) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -88,16 +92,31 @@ async function uploadOne(blob, uid) {
   }
 }
 
-// Sincroniza um item — sem chamadas extras ao Firestore por item
+// Verifica se memória já tem backup no Firestore (campo backedUp: true)
+function isBackedUp(m) {
+  return m.backedUp === true || (m.fileUrl && m.fileUrl.includes('firebasestorage'))
+}
+
+// Sincroniza um item e marca como backedUp no Firestore
 async function syncOne(m, uid) {
   const blob = m.fileBlob instanceof Blob ? m.fileBlob : null
-  if (!blob) return
+  if (!blob) {
+    // Sem blob local — marca como backedUp para não tentar de novo
+    await updateDoc(doc(firestore, 'users', uid, 'memories', m.id), {
+      backedUp: true,
+      updatedAt: serverTimestamp(),
+    }).catch(() => {})
+    return
+  }
 
   const uploaded = await uploadOne(blob, uid)
+
+  // Marca como backedUp=true — nunca mais será processada
   await updateDoc(doc(firestore, 'users', uid, 'memories', m.id), {
     fileUrl: uploaded.url,
     filePath: uploaded.path,
     localOnly: false,
+    backedUp: true,
     updatedAt: serverTimestamp(),
   }).catch(() => {})
 }
@@ -122,10 +141,12 @@ export async function startBackup() {
   notify()
 
   try {
-    // Carregar memórias — SEM verificar premium (não bloqueia)
-    const mems    = await getMemories()
-    const media   = mems.filter(m => m.type !== 'text')
-    const toSync  = media.filter(m => !m.fileUrl && m.fileBlob instanceof Blob)
+    const mems  = await getMemories()
+    const media = mems.filter(m => m.type !== 'text')
+
+    // Filtrar apenas as que NÃO foram marcadas como backedUp no Firestore
+    // Isso garante retomada correta mesmo após fechar o app ou trocar de dispositivo
+    const toSync = media.filter(m => !isBackedUp(m))
 
     _state.total  = media.length
     _state.synced = media.length - toSync.length
@@ -157,7 +178,6 @@ export async function startBackup() {
       }
     }
 
-    // 6 workers em paralelo
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, toSync.length) }, worker))
 
   } catch (e) {
