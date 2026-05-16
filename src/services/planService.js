@@ -196,17 +196,41 @@ export async function isPremium() {
 }
 
 /**
- * Atualiza o plano do usuario (simulado — em producao usaria Stripe/gateway)
+ * Atualiza o plano do usuario após compra confirmada.
+ *
+ * @param {string} planId - id do plano (ex: 'essencial', 'padrao_anual')
+ * @param {Object} purchaseInfo - dados da compra (StoreKit/Play/Stripe)
+ *   { source: 'apple_iap' | 'google_iap' | 'stripe' | 'manual',
+ *     productId, transactionId, receipt, originalTransactionId }
+ *
+ * ⚠️ TODO PRODUÇÃO: validar receipt em Cloud Function antes de atualizar.
+ * Hoje a UI sempre passa purchaseInfo em iOS (PlansScreen bloqueia o caminho sem).
+ * Mas qualquer cliente malicioso poderia chamar esta função direto.
+ * Próximo passo: mover esta lógica para Cloud Function e validar com Apple/Google.
  */
-export async function upgradePlan(planId) {
+export async function upgradePlan(planId, purchaseInfo = null) {
   const uid = auth.currentUser?.uid
   if (!uid) throw new Error('Nao autenticado')
   if (!PLANS[planId]) throw new Error('Plano invalido')
 
-  await updateDoc(doc(firestore, 'users', uid), {
+  const payload = {
     plan: planId,
     planUpdatedAt: new Date().toISOString(),
-  })
+  }
+
+  // Guarda trilha de auditoria da compra (útil pra suporte e futura validação server-side)
+  if (purchaseInfo) {
+    payload.lastPurchase = {
+      source: purchaseInfo.source || 'unknown',
+      productId: purchaseInfo.productId || null,
+      transactionId: purchaseInfo.transactionId || null,
+      originalTransactionId: purchaseInfo.originalTransactionId || null,
+      receipt: purchaseInfo.receipt || null, // base64 do receipt Apple
+      at: new Date().toISOString(),
+    }
+  }
+
+  await updateDoc(doc(firestore, 'users', uid), payload)
   invalidatePlanCache()
 }
 
