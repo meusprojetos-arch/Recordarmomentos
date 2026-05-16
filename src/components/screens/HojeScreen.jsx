@@ -69,6 +69,9 @@ export default function HojeScreen() {
   // Carrega memorias recentes
   useEffect(() => {
     getRecentMemories(10).then(setRecentMemories).catch(() => {})
+    const handler = () => getRecentMemories(10).then(setRecentMemories).catch(() => {})
+    window.addEventListener('memory-added', handler)
+    return () => window.removeEventListener('memory-added', handler)
   }, [])
 
   // Verifica lembretes de aniversario de memorias

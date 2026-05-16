@@ -224,24 +224,30 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
         memData.duration = audioDuration
       }
 
-      // Timeout de 45s para nunca travar a UI
-      await Promise.race([
+      // Salva e retorna a memória com blob/objectUrl para exibir imediatamente
+      const saved = await Promise.race([
         addMemory(memData, fileToUpload),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('TIMEOUT')), 45000)
         )
       ])
       toast.success('Memória salva! ✅')
-      
+
       // Aviso para usuarios gratuitos
       const premium = await isPremium()
       if (!premium && fileToUpload) {
         setTimeout(() => {
-          toast('⚠️ Essa memoria esta apenas neste dispositivo. Faca backup!', { duration: 4000 })
+          toast('⚠️ Essa memória está apenas neste dispositivo. Faça backup!', { duration: 4000 })
         }, 1500)
       }
-      
-      onSaved?.()
+
+      // Enriquecer memória salva com o blob local para exibir na hora
+      if (saved && fileToUpload) {
+        saved.fileBlob = fileToUpload
+        if (audioBlob) saved.fileBlob = audioBlob
+      }
+
+      onSaved?.(saved)
     } catch (err) {
       console.error(err)
       toast.error('Erro ao salvar. Tente novamente.')

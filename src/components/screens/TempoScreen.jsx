@@ -189,11 +189,25 @@ export default function TempoScreen() {
   useEffect(() => {
     const handleFocus = () => loadMemories()
     const handleUpdate = () => loadMemories()
+
+    // Injetar nova memória diretamente no estado — sem recarregar do Firestore
+    const handleMemoryAdded = (e) => {
+      const newMem = e.detail
+      if (!newMem) { loadMemories(); return }
+      setMemories(prev => {
+        // Evitar duplicata
+        if (prev.find(m => m.id === newMem.id)) return prev
+        return [newMem, ...prev]
+      })
+    }
+
     window.addEventListener('focus', handleFocus)
     window.addEventListener('memories-updated', handleUpdate)
+    window.addEventListener('memory-added', handleMemoryAdded)
     return () => {
       window.removeEventListener('focus', handleFocus)
       window.removeEventListener('memories-updated', handleUpdate)
+      window.removeEventListener('memory-added', handleMemoryAdded)
     }
   }, [loadMemories])
 
@@ -638,7 +652,22 @@ export default function TempoScreen() {
             alt={memory.title || ''}
             className={styles.thumbImg}
             loading="lazy"
-            onError={e => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex') }}
+            onError={async e => {
+              if (memory.filePath && !e.target.dataset.retried) {
+                e.target.dataset.retried = '1'
+                try {
+                  const { getDownloadURL, ref: sRef } = await import('firebase/storage')
+                  const { storage: st } = await import('../../firebase.js')
+                  const freshUrl = await getDownloadURL(sRef(st, memory.filePath))
+                  e.target.src = freshUrl
+                  setThumbUrls(prev => ({ ...prev, [memory.id]: freshUrl }))
+                } catch {
+                  e.target.style.display = 'none'
+                }
+              } else {
+                e.target.style.display = 'none'
+              }
+            }}
           />
         )}
         {src && memory.type === 'photo' && (
@@ -1132,13 +1161,35 @@ export default function TempoScreen() {
 
           {/* Imagem / Vídeo / Áudio */}
           <div className={styles.viewerMedia}>
-            {(thumbUrls[currentMemory.id] || currentMemory.fileUrl) && currentMemory.type === 'photo' && (
-              <img
-                src={thumbUrls[currentMemory.id] || currentMemory.fileUrl}
-                alt={currentMemory.title || ''}
-                className={styles.viewerImg}
-              />
-            )}
+            {currentMemory.type === 'photo' && (() => {
+              const imgSrc = thumbUrls[currentMemory.id] || currentMemory.fileUrl
+              return imgSrc ? (
+                <img
+                  key={currentMemory.id}
+                  src={imgSrc}
+                  alt={currentMemory.title || ''}
+                  className={styles.viewerImg}
+                  onError={async e => {
+                    // URL expirada — tentar renovar via filePath
+                    if (currentMemory.filePath) {
+                      try {
+                        const { getDownloadURL, ref } = await import('firebase/storage')
+                        const { storage } = await import('../../firebase.js')
+                        const freshUrl = await getDownloadURL(ref(storage, currentMemory.filePath))
+                        e.target.src = freshUrl
+                        // Atualizar thumbUrls com URL fresca
+                        setThumbUrls(prev => ({ ...prev, [currentMemory.id]: freshUrl }))
+                      } catch {}
+                    }
+                  }}
+                />
+              ) : (
+                <div className={styles.thumbPlaceholder}>
+                  <span style={{ fontSize: 48 }}>📷</span>
+                  <p style={{ color: '#fff', fontSize: 13, marginTop: 8 }}>Foto indisponível</p>
+                </div>
+              )
+            })()}
             {currentMemory.type === 'video' && (() => {
               const videoSrc = currentMemory.fileUrl ||
                 (currentMemory.fileBlob instanceof Blob ? URL.createObjectURL(currentMemory.fileBlob) : null) ||

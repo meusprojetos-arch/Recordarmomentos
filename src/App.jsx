@@ -110,7 +110,7 @@ function AppContent() {
           <AddMemoryModal
             initialType={typeof showAddModal === 'string' ? showAddModal : null}
             onClose={() => setShowAddModal(false)}
-            onSaved={() => { setShowAddModal(false); triggerRefresh() }}
+            onSaved={(newMemory) => { setShowAddModal(false); window.dispatchEvent(new CustomEvent('memory-added', { detail: newMemory })) }}
           />
         )}
 
