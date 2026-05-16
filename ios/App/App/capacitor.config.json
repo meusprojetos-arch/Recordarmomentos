@@ -2,5 +2,26 @@
 	"appId": "com.recordar.memorias",
 	"appName": "Recordar",
 	"webDir": "dist",
+	"ios": {
+		"allowsLinkPreview": false,
+		"contentInset": "always",
+		"scrollEnabled": true,
+		"limitsNavigationsToAppBoundDomains": false
+	},
+	"plugins": {
+		"Camera": {
+			"iosScheme": "capacitor",
+			"presentationStyle": "fullScreen"
+		}
+	},
+	"server": {
+		"allowNavigation": [
+			"*.googleapis.com",
+			"*.gstatic.com",
+			"*.firebaseio.com",
+			"*.firebaseapp.com",
+			"*.firebase.google.com"
+		]
+	},
 	"packageClassList": []
 }

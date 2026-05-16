@@ -1,17 +1,20 @@
 /**
  * cloudBackupService.js — Backup robusto estilo Google Fotos
  *
- * Princípios:
- *  - Cada startBackup() começa do zero (não acumula contadores entre execuções)
- *  - A fonte da verdade é o Firestore (campo backedUp), não o localStorage
- *  - Workers respeitam cancelled antes de incrementar contadores
- *  - synced NUNCA ultrapassa total (clamp)
- *  - 6 uploads paralelos, compressão de imagem, resumable pra vídeo
+ * Arquitetura:
+ *  - Firestore é a FONTE ÚNICA DA VERDADE dos contadores.
+ *  - total e synced são contados via getCountFromServer (1 read cada, barato).
+ *  - localStorage só guarda flag de "habilitado".
+ *  - Lock global previne execuções simultâneas (não importa quantas vezes
+ *    startBackup() seja chamado em paralelo, só roda 1).
+ *  - cancelBackup() apenas sinaliza; workers respeitam o flag e saem limpo.
+ *  - Ao terminar (sucesso, falha ou cancel), recarrega os contadores reais
+ *    do Firestore. Isso garante que a UI sempre mostra o estado correto.
  */
 import { auth, firestore, storage } from '../firebase.js'
 import {
   collection, doc, updateDoc, serverTimestamp,
-  query, where, getDocs,
+  query, where, getDocs, getCountFromServer,
 } from 'firebase/firestore'
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { v4 as uuid } from 'uuid'
@@ -25,14 +28,24 @@ const TIMEOUT_IMG_MS   = 60_000
 const TIMEOUT_VIDEO_MS = 5 * 60_000
 
 const _state = {
-  running: false, cancelled: false,
-  total: 0, synced: 0, failed: 0,
+  running: false,
+  cancelled: false,
+  total: 0,      // total de mídias do usuário (no Firestore)
+  synced: 0,     // quantas já têm backedUp=true (no Firestore)
+  failed: 0,     // falhas só na sessão atual (reseta a cada startBackup)
   listeners: new Set(),
-  pendingAutoStart: null, // debounce do memory-added
+  pendingAutoStart: null,
 }
 
+let _currentRun = null // Promise da execução atual (lock)
+
 function notify() {
-  const s = { running: _state.running, total: _state.total, synced: _state.synced, failed: _state.failed }
+  const s = {
+    running: _state.running,
+    total: _state.total,
+    synced: _state.synced,
+    failed: _state.failed,
+  }
   _state.listeners.forEach(fn => { try { fn(s) } catch {} })
 }
 
@@ -46,19 +59,6 @@ export function getBackupState() {
   return { running: _state.running, total: _state.total, synced: _state.synced, failed: _state.failed }
 }
 
-/**
- * loadSavedProgress — mantido por compatibilidade com PerfilScreen.
- * Antes carregava contadores do localStorage (causa do bug de inflar).
- * Agora limpa o storage antigo e devolve contadores zerados.
- */
-export function loadSavedProgress(uid) {
-  try { localStorage.removeItem(PROGRESS_KEY_OLD(uid)) } catch {}
-  _state.total = 0
-  _state.synced = 0
-  _state.failed = 0
-  notify()
-}
-
 export function isBackupEnabled(uid) {
   return localStorage.getItem(ENABLED_KEY(uid)) === 'true'
 }
@@ -69,12 +69,48 @@ export function setBackupEnabled(uid, val) {
 
 export function cancelBackup() {
   _state.cancelled = true
-  // Não setamos running=false aqui — deixamos os workers terminarem o item atual
-  // e o startBackup() finaliza naturalmente. Senão dá race condition.
   notify()
 }
 
-// Upload com retry exponencial + escolha de método por tipo
+/**
+ * Conta total e sincronizadas direto do Firestore (servidor).
+ * Usa getCountFromServer — 1 read agregado por query, barato.
+ */
+async function refreshCountersFromFirestore(uid) {
+  try {
+    const colRef = collection(firestore, 'users', uid, 'memories')
+    const [totalSnap, syncedSnap] = await Promise.all([
+      getCountFromServer(query(colRef, where('type', 'in', ['photo', 'video', 'audio']))),
+      getCountFromServer(query(colRef, where('backedUp', '==', true))),
+    ])
+    const total  = totalSnap.data().count
+    const synced = Math.min(syncedSnap.data().count, total)
+    _state.total  = total
+    _state.synced = synced
+    return { total, synced }
+  } catch (e) {
+    console.warn('refreshCounters falhou:', e.message)
+    return null
+  }
+}
+
+/**
+ * loadSavedProgress — chamado pelo PerfilScreen ao montar.
+ * Atualiza contadores com a realidade do Firestore.
+ * NUNCA zera nada se já tem backup rodando (evita race com workers).
+ */
+export async function loadSavedProgress(uid) {
+  if (!uid) return
+  // Limpa storage antigo (não usamos mais)
+  try { localStorage.removeItem(PROGRESS_KEY_OLD(uid)) } catch {}
+  // Se está rodando, mantém o estado vivo — não atrapalha workers
+  if (_state.running) { notify(); return }
+  await refreshCountersFromFirestore(uid)
+  notify()
+}
+
+// ─── Upload ──────────────────────────────────────────────────────────────────
+
 async function uploadOne(blob, uid) {
   const compressed = await smartCompress(blob).catch(() => blob)
   const isVideo = compressed.type?.startsWith('video/')
@@ -132,6 +168,7 @@ async function syncOne(m, uid) {
   const blob = (m.fileBlob instanceof Blob) ? m.fileBlob : await getLocalBlob(m, uid)
 
   if (!blob) {
+    // Sem blob local — marca como backedUp para não tentar de novo
     await updateDoc(doc(firestore, 'users', uid, 'memories', m.id), {
       backedUp: true,
       updatedAt: serverTimestamp(),
@@ -151,23 +188,22 @@ async function syncOne(m, uid) {
   }).catch(() => {})
 }
 
-// Detectar novas fotos automaticamente — com debounce (uma única chamada por janela)
+// ─── Detectar novas fotos automaticamente (com debounce) ─────────────────────
+
 if (typeof window !== 'undefined') {
   window.addEventListener('memory-added', () => {
     const uid = auth.currentUser?.uid
     if (!uid || !isBackupEnabled(uid)) return
-    if (_state.pendingAutoStart) return // já tem agendado
+    if (_state.pendingAutoStart) return
     _state.pendingAutoStart = setTimeout(() => {
       _state.pendingAutoStart = null
-      if (!_state.running) startBackup()
+      if (!_currentRun) startBackup()
     }, 1000)
   })
 }
 
-/**
- * Busca apenas memórias pendentes de backup direto no Firestore.
- * Sem duplicatas (usa Map com id como chave).
- */
+// ─── Fetch pendentes ─────────────────────────────────────────────────────────
+
 async function fetchPendingMemories(uid) {
   const colRef = collection(firestore, 'users', uid, 'memories')
   const pending = new Map()
@@ -186,46 +222,57 @@ async function fetchPendingMemories(uid) {
     })
   } catch (e) { console.warn('Query localOnly==true falhou:', e.message) }
 
+  // Fallback: se nada veio, busca tudo e filtra (docs antigos sem backedUp/localOnly)
+  if (pending.size === 0) {
+    try {
+      const allSnap = await getDocs(colRef)
+      allSnap.docs.forEach(d => {
+        const m = { id: d.id, ...d.data() }
+        if (m.type !== 'text' && !isBackedUp(m)) pending.set(d.id, m)
+      })
+    } catch (e) { console.warn('Query fallback (all) falhou:', e.message) }
+  }
+
   return Array.from(pending.values()).filter(m =>
     m.type !== 'text' && !isBackedUp(m)
   )
 }
 
-export async function startBackup() {
-  // Guard atômico — JS é single-threaded, então a checagem + atribuição é segura.
-  if (_state.running) return
+// ─── Execução principal (com lock) ───────────────────────────────────────────
+
+/**
+ * startBackup — entrypoint público.
+ * Garante UMA execução por vez (lock via _currentRun Promise).
+ * Múltiplas chamadas simultâneas recebem a mesma Promise.
+ */
+export function startBackup() {
+  if (_currentRun) return _currentRun
+  _currentRun = _runBackupOnce()
+    .catch(e => { console.error('Backup falhou:', e?.message || e) })
+    .finally(() => { _currentRun = null })
+  return _currentRun
+}
+
+async function _runBackupOnce() {
   const uid = auth.currentUser?.uid
   if (!uid) return
 
-  // RESET COMPLETO — cada execução começa do zero.
-  // Os contadores refletem APENAS esta execução, não acumulam com runs anteriores.
+  // Estado inicial: marca rodando e sincroniza contadores com Firestore
   _state.running = true
   _state.cancelled = false
-  _state.total = 0
-  _state.synced = 0
   _state.failed = 0
+  await refreshCountersFromFirestore(uid) // total/synced reais
   notify()
 
-  // Limpa progresso antigo persistido (causa do bug original)
+  // Limpa progresso antigo (legado)
   try { localStorage.removeItem(PROGRESS_KEY_OLD(uid)) } catch {}
 
   try {
     const toSync = await fetchPendingMemories(uid)
-
-    // Se foi cancelado durante o fetch, sai limpo
-    if (_state.cancelled) {
-      _state.running = false
-      notify()
-      return
-    }
-
-    // total = APENAS o que vamos processar agora (sem somar com synced antigo)
-    _state.total = toSync.length
-    notify()
+    if (_state.cancelled) return
 
     if (toSync.length === 0) {
-      _state.running = false
-      notify()
+      // Já está tudo backupado — atualiza display e sai
       return
     }
 
@@ -233,9 +280,7 @@ export async function startBackup() {
 
     const worker = async () => {
       while (queue.length > 0) {
-        // Checa cancel ANTES de pegar o próximo item
         if (_state.cancelled) return
-
         const m = queue.shift()
         if (!m) return
 
@@ -247,14 +292,14 @@ export async function startBackup() {
           console.warn('Falhou:', m.title, e.message)
         }
 
-        // Checa cancel DEPOIS do await — se cancelaram durante o upload,
-        // não conta este item no progresso (evita synced > total)
         if (_state.cancelled) return
 
         if (ok) {
+          // Re-conta do Firestore garante sincronia com a realidade
+          // (caso outro dispositivo também esteja sincronizando)
           _state.synced = Math.min(_state.synced + 1, _state.total)
         } else {
-          _state.failed = Math.min(_state.failed + 1, _state.total)
+          _state.failed++
         }
         notify()
       }
@@ -268,8 +313,11 @@ export async function startBackup() {
 
   } catch (e) {
     console.error('Backup error:', e.message)
+  } finally {
+    // Recarrega contadores reais do Firestore — fonte da verdade.
+    // Isso corrige qualquer drift que tenha acontecido durante a execução.
+    await refreshCountersFromFirestore(uid).catch(() => {})
+    _state.running = false
+    notify()
   }
-
-  _state.running = false
-  notify()
 }
