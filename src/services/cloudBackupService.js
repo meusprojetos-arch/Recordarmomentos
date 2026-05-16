@@ -1,66 +1,58 @@
 /**
- * cloudBackupService.js — Backup em segundo plano, independente de navegação
- * Singleton: roda fora dos componentes React, persiste entre trocas de tela
+ * cloudBackupService.js — Backup singleton global
+ * Roda completamente fora do React — não para ao trocar de tela
  */
-
-import { uploadFile } from './memoriesService.js'
 import { getMemories } from './memoriesService.js'
-import { auth, firestore } from '../firebase.js'
+import { auth, firestore, storage } from '../firebase.js'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
+import { v4 as uuid } from 'uuid'
 
-const CONCURRENCY = 5
-const PROGRESS_KEY = uid => `recordar_backup_progress_${uid}`
 const ENABLED_KEY  = uid => `recordar_backup_enabled_${uid}`
+const PROGRESS_KEY = uid => `recordar_backup_progress_${uid}`
+const CONCURRENCY  = 3
 
-// Estado global do backup
-const state = {
-  running: false,
+// Estado singleton — vive enquanto o app estiver aberto
+const _state = {
+  running:   false,
   cancelled: false,
-  total: 0,
-  synced: 0,
-  failed: 0,
+  total:     0,
+  synced:    0,
+  failed:    0,
   listeners: new Set(),
 }
 
-/** Notifica todos os listeners registrados */
 function notify() {
-  state.listeners.forEach(fn => fn({ ...state }))
+  const snap = { running: _state.running, total: _state.total, synced: _state.synced, failed: _state.failed }
+  _state.listeners.forEach(fn => { try { fn(snap) } catch {} })
 }
 
-/** Registra listener de progresso — retorna função para remover */
 export function onBackupProgress(fn) {
-  state.listeners.add(fn)
-  fn({ ...state }) // dispara imediatamente com estado atual
-  return () => state.listeners.delete(fn)
+  _state.listeners.add(fn)
+  fn({ running: _state.running, total: _state.total, synced: _state.synced, failed: _state.failed })
+  return () => _state.listeners.delete(fn)
 }
 
-/** Retorna estado atual */
 export function getBackupState() {
-  return { ...state }
+  return { running: _state.running, total: _state.total, synced: _state.synced, failed: _state.failed }
 }
 
-/** Persiste progresso no localStorage para sobreviver reloads */
-function saveProgress(uid) {
+function persist(uid) {
   try {
     localStorage.setItem(PROGRESS_KEY(uid), JSON.stringify({
-      total: state.total,
-      synced: state.synced,
-      failed: state.failed,
-      running: state.running,
+      total: _state.total, synced: _state.synced, failed: _state.failed
     }))
   } catch {}
 }
 
-/** Carrega progresso salvo */
 export function loadSavedProgress(uid) {
   try {
-    const saved = localStorage.getItem(PROGRESS_KEY(uid))
-    if (saved) {
-      const p = JSON.parse(saved)
-      state.total  = p.total  || 0
-      state.synced = p.synced || 0
-      state.failed = p.failed || 0
-      state.running = false // nunca reinicia automaticamente
+    const raw = localStorage.getItem(PROGRESS_KEY(uid))
+    if (raw) {
+      const p = JSON.parse(raw)
+      _state.total  = p.total  || 0
+      _state.synced = p.synced || 0
+      _state.failed = p.failed || 0
       notify()
     }
   } catch {}
@@ -74,78 +66,123 @@ export function setBackupEnabled(uid, val) {
   localStorage.setItem(ENABLED_KEY(uid), val ? 'true' : 'false')
 }
 
-/** Cancela o backup em andamento */
 export function cancelBackup() {
-  state.cancelled = true
-  state.running = false
+  _state.cancelled = true
+  _state.running   = false
   notify()
 }
 
-/** Inicia o backup em background */
+/** Upload com progresso real usando uploadBytesResumable — suporta arquivos grandes */
+async function uploadWithProgress(blob, uid) {
+  const ext  = blob.type?.split('/')[1] || 'bin'
+  const path = `${uid}/memories/${uuid()}.${ext}`
+  const sRef = ref(storage, path)
+
+  return new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(sRef, blob)
+    const timer = setTimeout(() => { task.cancel(); reject(new Error('timeout')) }, 120000)
+
+    task.on('state_changed',
+      () => {}, // progresso por arquivo (não usamos aqui)
+      err => { clearTimeout(timer); reject(err) },
+      async () => {
+        clearTimeout(timer)
+        try {
+          const url = await getDownloadURL(task.snapshot.ref)
+          resolve({ url, path })
+        } catch (e) { reject(e) }
+      }
+    )
+  })
+}
+
+/** Processa um único item */
+async function syncOne(m, uid) {
+  const blob = m.fileBlob instanceof Blob ? m.fileBlob : null
+  if (!blob) return
+
+  const uploaded = await uploadWithProgress(blob, uid)
+
+  await updateDoc(doc(firestore, 'users', uid, 'memories', m.id), {
+    fileUrl:   uploaded.url,
+    filePath:  uploaded.path,
+    localOnly: false,
+    updatedAt: serverTimestamp(),
+  }).catch(() => {})
+}
+
+// Ouvir novas memórias adicionadas e sincronizar automaticamente
+if (typeof window !== 'undefined') {
+  window.addEventListener('memory-added', (e) => {
+    const mem = e.detail
+    if (!mem || !mem.fileBlob) return
+    const uid = auth.currentUser?.uid
+    if (!uid || !isBackupEnabled(uid)) return
+    // Adicionar à fila e sincronizar em background
+    setTimeout(() => {
+      if (!_state.running) startBackup()
+    }, 2000) // pequeno delay para não conflitar com salvamento
+  })
+}
+
 export async function startBackup() {
-  if (state.running) return // já rodando
+  if (_state.running) return
   const uid = auth.currentUser?.uid
   if (!uid) return
 
-  state.running = true
-  state.cancelled = false
-  state.failed = 0
+  _state.running   = true
+  _state.cancelled = false
+  _state.failed    = 0
   notify()
 
   try {
-    const mems = await getMemories()
-    const mediaItems = mems.filter(m => m.type !== 'text')
-    const toSync = mediaItems.filter(m => !m.fileUrl && m.fileBlob instanceof Blob)
+    const mems      = await getMemories()
+    const media     = mems.filter(m => m.type !== 'text')
+    const toSync    = media.filter(m => !m.fileUrl && m.fileBlob instanceof Blob)
 
-    state.total  = mediaItems.length
-    state.synced = mediaItems.length - toSync.length
-    saveProgress(uid)
+    _state.total  = media.length
+    _state.synced = media.length - toSync.length
+    persist(uid)
     notify()
 
     if (toSync.length === 0) {
-      state.running = false
-      saveProgress(uid)
+      _state.running = false
+      persist(uid)
       notify()
       return
     }
 
+    // Fila compartilhada entre workers
     const queue = [...toSync]
 
     const worker = async () => {
-      while (queue.length > 0 && !state.cancelled) {
+      while (queue.length > 0 && !_state.cancelled) {
         const m = queue.shift()
         if (!m) break
+
         try {
-          const uploaded = await Promise.race([
-            uploadFile(m.fileBlob),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 60000))
-          ])
-          await updateDoc(doc(firestore, 'users', uid, 'memories', m.id), {
-            fileUrl: uploaded.url,
-            filePath: uploaded.path,
-            localOnly: false,
-            updatedAt: serverTimestamp(),
-          }).catch(() => {})
-          state.synced++
+          await syncOne(m, uid)
         } catch (e) {
-          state.failed++
-          state.synced++ // avança mesmo com falha para não travar
+          _state.failed++
           console.warn('Backup falhou:', m.title, e.message)
         }
-        saveProgress(uid)
-        notify()
+
+        // Atualiza contador IMEDIATAMENTE após cada arquivo
+        _state.synced++
+        persist(uid)
+        notify() // ← dispara para todos os listeners agora
       }
     }
 
-    // N workers em paralelo
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker))
+    // Workers sequenciais dentro do mesmo arquivo mas paralelos entre si
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, toSync.length) }, worker))
 
   } catch (e) {
-    console.error('Erro geral no backup:', e.message)
-    state.failed++
+    console.error('Erro geral backup:', e.message)
+    _state.failed++
   }
 
-  state.running = false
-  saveProgress(uid)
+  _state.running = false
+  persist(uid)
   notify()
 }
