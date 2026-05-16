@@ -14,6 +14,7 @@ import { doc, updateDoc, setDoc, getDoc, collection, addDoc, serverTimestamp } f
 import { db as localDb } from '../../db/database.js'
 import PrivacyRow from '../ui/PrivacyRow.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
+import BackupLogsModal from '../modals/BackupLogsModal.jsx'
 import styles from './PerfilScreen.module.css'
 
 const PERFIL_ICONS = {
@@ -37,6 +38,7 @@ export default function PerfilScreen() {
   const [savingProfile, setSavingProfile] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [showPinModal, setShowPinModal] = useState(false)
+  const [showBackupLogs, setShowBackupLogs] = useState(false)
 
   // ── Backup na nuvem ──
   const [backupProgress, setBackupProgress] = useState(getBackupState())
@@ -258,6 +260,20 @@ export default function PerfilScreen() {
           <div className={`${styles.toggle} ${cloudBackup ? '' : styles.toggleOff}`} />
         </div>
 
+        {/* Botão de logs (debug) — pequeno e discreto */}
+        <button
+          onClick={() => setShowBackupLogs(true)}
+          style={{
+            background: 'none', border: 'none',
+            color: '#888', fontSize: 12,
+            textDecoration: 'underline',
+            cursor: 'pointer', padding: '8px 0 0',
+            display: 'block', marginLeft: 4,
+          }}
+        >
+          🔍 Ver logs técnicos do backup
+        </button>
+
         <div style={{ height: 16 }} />
 
         {/* ── Planos ── */}
@@ -348,6 +364,11 @@ export default function PerfilScreen() {
           onClose={() => setShowPinModal(false)}
           onUnlock={() => setShowPinModal(false)}
         />
+      )}
+
+      {/* Modal de logs do backup (debug) */}
+      {showBackupLogs && (
+        <BackupLogsModal onClose={() => setShowBackupLogs(false)} />
       )}
     </div>
   )
