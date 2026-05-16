@@ -34,65 +34,59 @@ export async function uploadFile(file, folder = 'memories') {
  * - Usuario premium: envia arquivo para nuvem
  * - Usuario gratuito: salva apenas metadados (arquivo fica local)
  */
-export async function addMemory(memoryData, file = null) {
+export function addMemory(memoryData, file = null) {
   const uid = auth.currentUser?.uid
   if (!uid) throw new Error('Nao autenticado')
 
-  // Salva blob LOCALMENTE primeiro (garante que a foto fica acessível)
-  let localId = null
-  const localBlobId = uuid() // ID único para associar blob
-  let localObjectUrl = null
-  if (file) {
-    try {
-      // Garante que o banco está aberto antes de escrever
-      if (!localDb.isOpen()) await localDb.open()
-      const blob = file instanceof Blob ? file : new Blob([file])
-      localObjectUrl = URL.createObjectURL(blob)
-      localId = await localDb.fileBlobs.add({
-        localBlobId,
-        uid,
-        type: memoryData.type || 'photo',
-        title: memoryData.title || '',
-        date: memoryData.date || '',
-        blob: blob,
-        createdAt: new Date().toISOString(),
-      })
-    } catch (e) {
-      console.error('FALHA ao salvar blob no IndexedDB:', e)
-      // Cria objectUrl de fallback mesmo se IndexedDB falhar
-      if (!localObjectUrl && file instanceof Blob) {
-        localObjectUrl = URL.createObjectURL(file)
-      }
-    }
-  }
+  const localBlobId = uuid()
+  const blob = file instanceof Blob ? file : (file ? new Blob([file]) : null)
 
-  // ── Sincronizar com Firestore e nuvem em BACKGROUND ──
-  // Não bloqueia a UI — retorna instantaneamente após salvar local
+  // ObjectUrl SÍNCRONO — zero espera
+  const localObjectUrl = blob ? URL.createObjectURL(blob) : null
+
+  // Tudo o resto roda em background — IndexedDB, Firestore, Storage
   ;(async () => {
     try {
-      let fileUrl = ''
-      let filePath = ''
-      let fileSize = 0
+      // 1. Salvar no IndexedDB (background)
+      let localId = null
+      if (blob) {
+        try {
+          if (!localDb.isOpen()) await localDb.open()
+          localId = await localDb.fileBlobs.add({
+            localBlobId, uid,
+            type: memoryData.type || 'photo',
+            title: memoryData.title || '',
+            date: memoryData.date || '',
+            blob,
+            createdAt: new Date().toISOString(),
+          })
+        } catch {}
+      }
+
+      // 2. Upload para nuvem se premium (background)
+      let fileUrl = '', filePath = '', fileSize = 0
       const premium = await isPremium().catch(() => false)
-      if (file && premium) {
-        const hasSpace = await canUpload(file.size).catch(() => false)
+      if (blob && premium) {
+        const hasSpace = await canUpload(blob.size).catch(() => false)
         if (hasSpace) {
           const uploaded = await Promise.race([
-            uploadFile(file),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 60000))
+            uploadFile(blob),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 60000))
           ]).catch(() => null)
           if (uploaded) {
             fileUrl = uploaded.url
             filePath = uploaded.path
-            fileSize = file.size
-            addStorageUsage(file.size).catch(() => {})
+            fileSize = blob.size
+            addStorageUsage(blob.size).catch(() => {})
           }
         }
       }
+
+      // 3. Salvar metadados no Firestore (background)
       const docData = {
         ...memoryData,
         fileUrl, filePath, fileSize,
-        localBlobId: file ? localBlobId : '',
+        localBlobId: blob ? localBlobId : '',
         localOnly: !fileUrl,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -102,11 +96,11 @@ export async function addMemory(memoryData, file = null) {
       }
       const docRef = await addDoc(memoriesCol(uid), docData)
       if (localId) localDb.fileBlobs.update(localId, { firestoreId: docRef.id }).catch(() => {})
-    } catch (e) { console.warn('Sync background:', e.message) }
+    } catch (e) { console.warn('addMemory background error:', e.message) }
   })()
 
-  // Retorna IMEDIATAMENTE com URL local — sem esperar Firestore
-  return { id: localBlobId, ...memoryData, _objectUrl: localObjectUrl }
+  // Retorna SINCRONAMENTE — zero espera, zero await
+  return { id: localBlobId, ...memoryData, fileBlob: blob, _objectUrl: localObjectUrl }
 }
 
 /**

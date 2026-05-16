@@ -162,37 +162,31 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
     return `${m}:${s}`
   }
 
-  // ── Salvar múltiplos ──
+  // ── Salvar múltiplos — paralelo para ser instantâneo ──
   const handleSaveMultiple = async () => {
     setIsSaving(true)
-    let saved = 0
     try {
-      for (const f of files) {
+      // addMemory é síncrono — dispara tudo na hora
+      const results = files.map(f => {
         const type = f.type.startsWith('video') ? 'video' : 'photo'
         const cleanName = f.name.replace(/\.[^.]+$/, '').replace(/^(IMG|VID|WA\d*)[_-]?/i, '').replace(/[_-]/g, ' ').trim() || 'Sem titulo'
         const fileDate = new Date(f.lastModified || Date.now()).toISOString().substring(0, 10)
-        await addMemory({
-          type,
-          title: cleanName,
-          description: '',
-          date: fileDate,
-          tags: [],
-        }, f)
-        saved++
-      }
-      toast.success(`${saved} memória(s) salva(s)!`)
-      window.dispatchEvent(new Event('memories-updated'))
+        const saved = addMemory({ type, title: cleanName, description: '', date: fileDate, tags: [] }, f)
+        window.dispatchEvent(new CustomEvent('memory-added', { detail: saved }))
+        return saved
+      })
+      toast.success(`${results.length} memória(s) salva(s)!`)
       onSaved?.()
     } catch (err) {
       console.error(err)
-      toast.error(`Erro: ${saved} de ${files.length} salvos`)
+      toast.error('Erro ao salvar arquivos')
     } finally {
       setIsSaving(false)
     }
   }
 
   // ── Salvar ──
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!description.trim() && !textContent.trim() && !file && !audioBlob) {
       toast.error('Adicione uma descricao ou conteudo')
       return
@@ -202,58 +196,26 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
       return
     }
 
-    setIsSaving(true)
-    try {
-      const memData = {
-        type:        selectedType?.id || 'text',
-        title:       description.trim().substring(0, 60) || (selectedType?.id === 'text' ? textContent.substring(0, 60) : 'Sem titulo'),
-        description: description,
-        date:        new Date().toISOString().substring(0, 10),
-        tags:        [],
-        privacyLevel: privacy,
-      }
-
-      if (selectedType?.id === 'text') {
-        memData.description = textContent
-      }
-
-      let fileToUpload = file
-      if (audioBlob) {
-        const audioExt = audioBlob.type.includes('mp4') ? 'mp4' : audioBlob.type.includes('ogg') ? 'ogg' : 'webm'
-        fileToUpload = new File([audioBlob], `audio_${Date.now()}.${audioExt}`, { type: audioBlob.type })
-        memData.duration = audioDuration
-      }
-
-      // Salva e retorna a memória com blob/objectUrl para exibir imediatamente
-      const saved = await Promise.race([
-        addMemory(memData, fileToUpload),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('TIMEOUT')), 45000)
-        )
-      ])
-      toast.success('Memória salva! ✅')
-
-      // Aviso para usuarios gratuitos
-      const premium = await isPremium()
-      if (!premium && fileToUpload) {
-        setTimeout(() => {
-          toast('⚠️ Essa memória está apenas neste dispositivo. Faça backup!', { duration: 4000 })
-        }, 1500)
-      }
-
-      // Enriquecer memória salva com o blob local para exibir na hora
-      if (saved && fileToUpload) {
-        saved.fileBlob = fileToUpload
-        if (audioBlob) saved.fileBlob = audioBlob
-      }
-
-      onSaved?.(saved)
-    } catch (err) {
-      console.error(err)
-      toast.error('Erro ao salvar. Tente novamente.')
-    } finally {
-      setIsSaving(false)
+    const memData = {
+      type:        selectedType?.id || 'text',
+      title:       description.trim().substring(0, 60) || (selectedType?.id === 'text' ? textContent.substring(0, 60) : 'Sem titulo'),
+      description: selectedType?.id === 'text' ? textContent : description,
+      date:        new Date().toISOString().substring(0, 10),
+      tags:        [],
+      privacyLevel: privacy,
     }
+
+    let fileToUpload = file
+    if (audioBlob) {
+      const audioExt = audioBlob.type.includes('mp4') ? 'mp4' : audioBlob.type.includes('ogg') ? 'ogg' : 'webm'
+      fileToUpload = new File([audioBlob], `audio_${Date.now()}.${audioExt}`, { type: audioBlob.type })
+      memData.duration = audioDuration
+    }
+
+    // SÍNCRONO — zero await, zero async, zero espera
+    const saved = addMemory(memData, fileToUpload)
+    toast.success('Memória salva! ✅')
+    onSaved?.(saved)
   }
 
   return (

@@ -28,6 +28,7 @@ function AppContent() {
   const { user, loading } = useAuth()
   const [authScreen, setAuthScreen] = useState('welcome')
   const [activeTab, setActiveTab]         = useState('hoje')
+  const pendingMemories = React.useRef([]) // memórias salvas aguardando tela
   const [showAddModal, setShowAddModal]   = useState(false) // false ou string do tipo ('photo','text','audio','location')
   const [showPlans, setShowPlans]         = useState(false)
   const [showConfig, setShowConfig]       = useState(false)
@@ -96,7 +97,7 @@ function AppContent() {
         <main className={styles.main}>
           {activeTab === 'hoje'   && <HojeScreen  key={refreshKey} />}
           {activeTab === 'feed'   && <FeedScreen  key={refreshKey} />}
-          {activeTab === 'tempo'  && <TempoScreen key={refreshKey} />}
+          {activeTab === 'tempo'  && <TempoScreen key={refreshKey} pendingMemories={pendingMemories} />}
           {activeTab === 'perfil' && <PerfilScreen />}
         </main>
 
@@ -110,7 +111,15 @@ function AppContent() {
           <AddMemoryModal
             initialType={typeof showAddModal === 'string' ? showAddModal : null}
             onClose={() => setShowAddModal(false)}
-            onSaved={(newMemory) => { setShowAddModal(false); window.dispatchEvent(new CustomEvent('memory-added', { detail: newMemory })) }}
+            onSaved={(newMemory) => {
+              setShowAddModal(false)
+              if (newMemory) {
+                // Disparar evento — se a tela estiver montada recebe na hora
+                window.dispatchEvent(new CustomEvent('memory-added', { detail: newMemory }))
+                // Guardar também na fila para quando a tela montar
+                pendingMemories.current.push(newMemory)
+              }
+            }}
           />
         )}
 

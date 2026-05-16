@@ -47,7 +47,7 @@ function formatDate(dateStr) {
 
 // ─── Componente principal ───────────────────────────────────────────────────────
 
-export default function TempoScreen() {
+export default function TempoScreen({ pendingMemories }) {
   // Tab ativa: galeria | pastas | lixeira
   const [activeTab, setActiveTab]       = useState('galeria')
 
@@ -135,7 +135,20 @@ export default function TempoScreen() {
     }
   }, [user?.uid])
 
-  useEffect(() => { loadMemories() }, [loadMemories])
+  useEffect(() => {
+    // Injetar memórias pendentes salvas enquanto esta tela não estava montada
+    if (pendingMemories?.current?.length > 0) {
+      const pending = [...pendingMemories.current]
+      pendingMemories.current = []
+      setMemories(prev => {
+        const ids = new Set(prev.map(m => m.id))
+        const novas = pending.filter(m => !ids.has(m.id))
+        return novas.length > 0 ? [...novas, ...prev] : prev
+      })
+    } else {
+      loadMemories()
+    }
+  }, [loadMemories])
 
   // Abrir pasta e carregar suas memórias
   const handleOpenFolder = async (folder) => {
