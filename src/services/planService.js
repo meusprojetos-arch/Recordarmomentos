@@ -125,19 +125,38 @@ export const PLANS = {
   large:    { id: 'large',    billing: 'mensal', name: 'Premium',    price: 39.90,  storageGB: 1024, storageBytes: 1 * TB,    features: ['1 TB na nuvem'],   cloud: true },
 }
 
+// ─── Cache de plano (TTL 60s) — evita 1 round-trip Firestore por upload ──────
+const _planCache = { uid: null, plan: null, ts: 0 }
+const PLAN_CACHE_TTL = 60_000 // 60s
+
+export function invalidatePlanCache() {
+  _planCache.uid = null
+  _planCache.plan = null
+  _planCache.ts = 0
+}
+
 /**
- * Busca o plano atual do usuario
+ * Busca o plano atual do usuario (com cache de 60s)
  */
 export async function getUserPlan() {
   const uid = auth.currentUser?.uid
   if (!uid) return PLANS.free
+
+  const now = Date.now()
+  if (_planCache.uid === uid && _planCache.plan && (now - _planCache.ts) < PLAN_CACHE_TTL) {
+    return _planCache.plan
+  }
 
   const snap = await getDoc(doc(firestore, 'users', uid))
   if (!snap.exists()) return PLANS.free
 
   const data = snap.data()
   const planId = data.plan || 'free'
-  return PLANS[planId] || PLANS.free
+  const plan = PLANS[planId] || PLANS.free
+  _planCache.uid = uid
+  _planCache.plan = plan
+  _planCache.ts = now
+  return plan
 }
 
 /**
@@ -188,6 +207,7 @@ export async function upgradePlan(planId) {
     plan: planId,
     planUpdatedAt: new Date().toISOString(),
   })
+  invalidatePlanCache()
 }
 
 /**

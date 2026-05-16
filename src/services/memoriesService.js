@@ -8,25 +8,54 @@ import {
   serverTimestamp, Timestamp
 } from 'firebase/firestore'
 import {
-  ref, uploadBytes, getDownloadURL, deleteObject
+  ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject
 } from 'firebase/storage'
 import { v4 as uuid } from 'uuid'
 import { isPremium, canUpload, addStorageUsage } from './planService.js'
 import { db as localDb } from '../db/database.js'
+import { smartCompress } from '../utils/imageCompressor.js'
 
 const memoriesCol = (uid) => collection(firestore, 'users', uid, 'memories')
 
 /**
- * Upload de arquivo para Firebase Storage
+ * Upload de arquivo para Firebase Storage.
+ * - Imagens: comprime antes de subir (smartCompress)
+ * - Vídeos: usa uploadBytesResumable (retoma queda de rede automaticamente)
+ * - Outros: uploadBytes simples
  */
-export async function uploadFile(file, folder = 'memories') {
+export async function uploadFile(file, folder = 'memories', onProgress = null) {
   const uid = auth.currentUser?.uid
   if (!uid) throw new Error('Nao autenticado')
-  const fileName = `${uuid()}_${file.name || 'file'}`
+
+  // Comprimir se for imagem (no-op para vídeo/áudio)
+  const compressed = await smartCompress(file).catch(() => file)
+
+  const ext = (compressed.type?.split('/')[1] || file.name?.split('.').pop() || 'bin').split(';')[0]
+  const fileName = `${uuid()}.${ext}`
   const storageRef = ref(storage, `${uid}/${folder}/${fileName}`)
-  const snap = await uploadBytes(storageRef, file)
+
+  // Vídeos: upload resumable (melhor para arquivos grandes / redes instáveis)
+  if (compressed.type?.startsWith('video/') || compressed.size > 5 * 1024 * 1024) {
+    const task = uploadBytesResumable(storageRef, compressed, {
+      cacheControl: 'public, max-age=31536000',
+    })
+    if (onProgress) {
+      task.on('state_changed', (snap) => {
+        const pct = snap.totalBytes ? (snap.bytesTransferred / snap.totalBytes) : 0
+        onProgress(pct)
+      })
+    }
+    const snap = await task
+    const url = await getDownloadURL(snap.ref)
+    return { url, path: snap.ref.fullPath, size: compressed.size }
+  }
+
+  // Imagens pequenas / outros: upload simples
+  const snap = await uploadBytes(storageRef, compressed, {
+    cacheControl: 'public, max-age=31536000',
+  })
   const url = await getDownloadURL(snap.ref)
-  return { url, path: snap.ref.fullPath }
+  return { url, path: snap.ref.fullPath, size: compressed.size }
 }
 
 /**
@@ -69,15 +98,18 @@ export function addMemory(memoryData, file = null) {
       if (blob && premium) {
         const hasSpace = await canUpload(blob.size).catch(() => false)
         if (hasSpace) {
+          // Timeout maior para vídeos (5 min); imagens 60s
+          const isVideo = blob.type?.startsWith('video/')
+          const timeoutMs = isVideo ? 5 * 60_000 : 60_000
           const uploaded = await Promise.race([
             uploadFile(blob),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 60000))
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs))
           ]).catch(() => null)
           if (uploaded) {
             fileUrl = uploaded.url
             filePath = uploaded.path
-            fileSize = blob.size
-            addStorageUsage(blob.size).catch(() => {})
+            fileSize = uploaded.size ?? blob.size
+            addStorageUsage(fileSize).catch(() => {})
           }
         }
       }
@@ -88,6 +120,7 @@ export function addMemory(memoryData, file = null) {
         fileUrl, filePath, fileSize,
         localBlobId: blob ? localBlobId : '',
         localOnly: !fileUrl,
+        backedUp: !!fileUrl, // marca explicitamente para query filtrada no backup
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         isFavorite: false, isHighlight: false, isShared: false,
@@ -101,6 +134,79 @@ export function addMemory(memoryData, file = null) {
 
   // Retorna SINCRONAMENTE — zero espera, zero await
   return { id: localBlobId, ...memoryData, fileBlob: blob, _objectUrl: localObjectUrl }
+}
+
+/**
+ * Versão Promise-based de addMemory — espera o upload terminar de verdade.
+ * Usada pelo autoSyncService para garantir que markSynced só roda APÓS o upload.
+ *
+ * @param {Object} memoryData
+ * @param {File|Blob} file
+ * @returns {Promise<{id, fileUrl, filePath, fileSize, backedUp}>}
+ */
+export async function addMemoryAndWait(memoryData, file = null) {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('Nao autenticado')
+
+  const localBlobId = uuid()
+  const blob = file instanceof Blob ? file : (file ? new Blob([file]) : null)
+
+  // 1. Salvar no IndexedDB
+  let localId = null
+  if (blob) {
+    try {
+      if (!localDb.isOpen()) await localDb.open()
+      localId = await localDb.fileBlobs.add({
+        localBlobId, uid,
+        type: memoryData.type || 'photo',
+        title: memoryData.title || '',
+        date: memoryData.date || '',
+        blob,
+        createdAt: new Date().toISOString(),
+      })
+    } catch (e) { console.warn('IndexedDB add falhou:', e.message) }
+  }
+
+  // 2. Upload para nuvem se premium
+  let fileUrl = '', filePath = '', fileSize = 0
+  const premium = await isPremium().catch(() => false)
+  if (blob && premium) {
+    const hasSpace = await canUpload(blob.size).catch(() => false)
+    if (hasSpace) {
+      const isVideo = blob.type?.startsWith('video/')
+      const timeoutMs = isVideo ? 5 * 60_000 : 60_000
+      const uploaded = await Promise.race([
+        uploadFile(blob),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('upload timeout')), timeoutMs))
+      ])
+      if (uploaded) {
+        fileUrl = uploaded.url
+        filePath = uploaded.path
+        fileSize = uploaded.size ?? blob.size
+        addStorageUsage(fileSize).catch(() => {})
+      }
+    } else {
+      throw new Error('Sem espaço no plano')
+    }
+  }
+
+  // 3. Firestore
+  const docData = {
+    ...memoryData,
+    fileUrl, filePath, fileSize,
+    localBlobId: blob ? localBlobId : '',
+    localOnly: !fileUrl,
+    backedUp: !!fileUrl,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    isFavorite: false, isHighlight: false, isShared: false,
+    privacyLevel: memoryData.privacyLevel || 'private',
+    sharedWith: [],
+  }
+  const docRef = await addDoc(memoriesCol(uid), docData)
+  if (localId) localDb.fileBlobs.update(localId, { firestoreId: docRef.id }).catch(() => {})
+
+  return { id: docRef.id, fileUrl, filePath, fileSize, backedUp: !!fileUrl }
 }
 
 /**
