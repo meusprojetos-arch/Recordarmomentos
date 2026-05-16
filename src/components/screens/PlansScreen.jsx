@@ -30,8 +30,21 @@ export default function PlansScreen({ onClose }) {
   const [usage, setUsage]             = useState({ used: 0, limit: 0 })
   const [loading, setLoading]         = useState(false)
   const [billing, setBilling]         = useState('mensal') // 'mensal' | 'anual'
+  const [iapProducts, setIapProducts]  = useState({})
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    loadData()
+    // Carregar produtos do StoreKit ao abrir a tela
+    if (isNativeIAP()) {
+      import('../../services/iapService.js').then(({ getProducts }) => {
+        getProducts().then(prods => {
+          const map = {}
+          prods.forEach(p => { map[p.productId] = p })
+          setIapProducts(map)
+        }).catch(() => {})
+      })
+    }
+  }, [])
 
   const loadData = async () => {
     const plan = await getUserPlan().catch(() => PLANS.free)
@@ -48,6 +61,12 @@ export default function PlansScreen({ onClose }) {
       if (isNativeIAP()) {
         const productId = PLAN_TO_PRODUCT[planId]
         if (!productId) { toast.error('Produto não encontrado'); setLoading(false); return }
+        // Verificar se produto foi carregado do StoreKit
+        if (!iapProducts[productId]) {
+          toast.error('Produto não disponível. Verifique sua conexão.')
+          setLoading(false)
+          return
+        }
         const result = await purchaseProduct(productId)
         if (result.status === 'purchased') {
           await upgradePlan(planId)
