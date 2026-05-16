@@ -790,7 +790,7 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
 
           <div
             className={styles.row}
-            onClick={() => setShowPrivacy(true)}
+            onClick={() => window.open('https://recordarmomentos.vercel.app/privacidade.html', '_blank')}
             role="button"
             tabIndex={0}
           >

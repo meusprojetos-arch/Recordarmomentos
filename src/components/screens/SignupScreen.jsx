@@ -170,7 +170,7 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
               Li e aceito os{' '}
               <span className={styles.termsLink} onClick={e => { e.preventDefault(); setShowTerms(true) }}>Termos de Uso</span>
               {' '}e a{' '}
-              <span className={styles.termsLink} onClick={e => { e.preventDefault(); setShowPrivacy(true) }}>Política de Privacidade</span>
+              <span className={styles.termsLink} onClick={e => { e.preventDefault(); window.open('https://recordarmomentos.vercel.app/privacidade.html', '_blank') }}>Política de Privacidade</span>
             </label>
           </div>
         </form>

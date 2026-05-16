@@ -1,27 +1,11 @@
 /**
- * PlansScreen — Planos mensais e anuais (compatível Apple Guideline 3.1.2)
- *
- * Regras de Compliance Apple:
- *  - Em iOS, NUNCA ativa plano sem comprovação de compra do StoreKit
- *  - Mostra preço vindo do StoreKit (localizado pela região do usuário)
- *  - Textos obrigatórios: renovação automática, como cancelar
- *  - Links visíveis: Privacy Policy, Terms of Use (EULA), Suporte
- *  - Botão "Restaurar Compras"
+ * PlansScreen — Planos mensais e anuais
  */
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
-import { Capacitor } from '@capacitor/core'
 import { PLANS, getUserPlan, getStorageUsage, upgradePlan, formatBytes } from '../../services/planService.js'
-import {
-  isNativeIAP, purchaseProduct, restorePurchases,
-  onPurchaseRestored, PLAN_TO_PRODUCT, PRODUCT_TO_PLAN,
-} from '../../services/iapService.js'
+import { isNativeIAP, purchaseProduct, restorePurchases, PLAN_TO_PRODUCT } from '../../services/iapService.js'
 import styles from './PlansScreen.module.css'
-
-// URLs legais (Apple exige links visíveis na tela de assinatura)
-const PRIVACY_URL = 'https://recordarmomentos.vercel.app/'
-const TERMS_URL   = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'
-const SUPPORT_URL = 'https://recordarmomentos.vercel.app/suporte.html'
 
 const MENSAIS = [
   PLANS.free, PLANS.essencial, PLANS.padrao, PLANS.avancado,
@@ -59,23 +43,6 @@ export default function PlansScreen({ onClose }) {
           setIapProducts(map)
         }).catch(() => {})
       })
-
-      // Escuta compras restauradas (cada transação restored vira upgrade)
-      const off = onPurchaseRestored(async ({ productId, transactionId }) => {
-        const planId = PRODUCT_TO_PLAN[productId]
-        if (!planId) return
-        try {
-          await upgradePlan(planId, {
-            source: 'apple_iap',
-            productId,
-            transactionId,
-            originalTransactionId: transactionId,
-            // Sem receipt aqui (vem só na compra original) — restore confia no StoreKit
-          })
-          loadData()
-        } catch (e) { console.warn('restore upgradePlan falhou:', e.message) }
-      })
-      return () => { off?.() }
     }
   }, [])
 
@@ -89,55 +56,33 @@ export default function PlansScreen({ onClose }) {
   const handleUpgrade = async (planId) => {
     if (planId === currentPlan.id) return
     if (planId === 'free') { toast.error('Você já está no plano gratuito'); return }
-
-    const platform = Capacitor.getPlatform?.() || 'web'
-
-    // 🍎 iOS: SEMPRE exige compra via StoreKit. Sem bypass.
-    if (platform === 'ios') {
-      if (!isNativeIAP()) {
-        toast.error('Loja indisponível. Atualize o app pela App Store.')
-        return
-      }
-      const productId = PLAN_TO_PRODUCT[planId]
-      if (!productId) { toast.error('Produto não encontrado'); return }
-      if (!iapProducts[productId]) {
-        toast.error('Produto não carregou da App Store. Verifique sua conexão e tente novamente.')
-        return
-      }
-
-      setLoading(true)
-      try {
-        const result = await purchaseProduct(productId)
-        // Só ativa se o StoreKit confirmou pagamento E retornou receipt
-        if (result?.status === 'purchased' && result?.receipt) {
-          await upgradePlan(planId, {
-            source: 'apple_iap',
-            productId,
-            transactionId: result.transactionId,
-            receipt: result.receipt,
-          })
-          toast.success('Assinatura ativada!')
-          loadData()
-        } else {
-          toast.error('Compra não confirmada. Tente novamente.')
+    setLoading(true)
+    try {
+      if (isNativeIAP()) {
+        const productId = PLAN_TO_PRODUCT[planId]
+        if (!productId) { toast.error('Produto não encontrado'); setLoading(false); return }
+        // Verificar se produto foi carregado do StoreKit
+        if (!iapProducts[productId]) {
+          toast.error('Produto não disponível. Verifique sua conexão.')
+          setLoading(false)
+          return
         }
-      } catch (err) {
-        if (err?.message === 'cancelled') toast('Compra cancelada')
-        else toast.error('Erro ao processar pagamento')
+        const result = await purchaseProduct(productId)
+        if (result.status === 'purchased') {
+          await upgradePlan(planId)
+          toast.success('Assinatura ativada! ✅')
+          loadData()
+        }
+      } else {
+        await upgradePlan(planId)
+        toast.success('Plano atualizado!')
+        loadData()
       }
-      setLoading(false)
-      return
+    } catch (err) {
+      if (err.message === 'cancelled') toast('Compra cancelada')
+      else toast.error('Erro ao processar pagamento')
     }
-
-    // 🤖 Android: TODO — implementar Google Play Billing (mesmo padrão do iOS).
-    if (platform === 'android') {
-      toast.error('Pagamento Android em breve. Use o app iOS por enquanto.')
-      return
-    }
-
-    // 🌐 Web (browser): assinatura precisa ser feita pelo app nativo na loja oficial.
-    // Não ativamos nada client-side aqui pra evitar fraude.
-    toast.error('Assine pelo app no seu iPhone ou iPad (App Store).')
+    setLoading(false)
   }
 
   const handleRestore = async () => {
@@ -220,13 +165,7 @@ export default function PlansScreen({ onClose }) {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <p className={styles.planPrice}>
-                    {(() => {
-                      if (plan.price === 0) return 'Grátis'
-                      // Em iOS, usa o preço localizado vindo do StoreKit (regra Apple)
-                      const productId = PLAN_TO_PRODUCT[plan.id]
-                      const storeKitPrice = isIOS && productId ? iapProducts[productId]?.priceString : null
-                      return storeKitPrice || `R$ ${plan.price.toFixed(2).replace('.', ',')}`
-                    })()}
+                    {plan.price === 0 ? 'Grátis' : `R$ ${plan.price.toFixed(2).replace('.', ',')}`}
                   </p>
                   {plan.price > 0 && (
                     <span className={styles.planPeriod}>
@@ -262,60 +201,15 @@ export default function PlansScreen({ onClose }) {
         })}
       </div>
 
-      {/* ─── Seção legal exigida pela Apple Guideline 3.1.2(a) ─── */}
-      <div style={{
-        margin: '8px 16px 16px',
-        padding: 16,
-        background: 'var(--bege-claro)',
-        borderRadius: 12,
-        fontSize: 12,
-        lineHeight: 1.55,
-        color: '#555',
-      }}>
-        <p style={{ margin: '0 0 8px', fontWeight: 700, color: '#333' }}>
-          Informações da assinatura
-        </p>
-        <p style={{ margin: '0 0 6px' }}>
-          • O pagamento será cobrado na sua conta da Apple ao confirmar a compra.
-        </p>
-        <p style={{ margin: '0 0 6px' }}>
-          • A assinatura é renovada automaticamente pelo mesmo período (mensal ou anual),
-          salvo se cancelada com pelo menos 24 horas de antecedência do fim do período atual.
-        </p>
-        <p style={{ margin: '0 0 6px' }}>
-          • A cobrança da renovação ocorre nas 24 horas anteriores ao fim do período vigente.
-        </p>
-        <p style={{ margin: '0 0 6px' }}>
-          • Você pode gerenciar ou cancelar sua assinatura em{' '}
-          <strong>Ajustes &gt; seu nome &gt; Assinaturas</strong> no seu iPhone ou iPad.
-        </p>
-        <p style={{ margin: '12px 0 0', display: 'flex', flexWrap: 'wrap', gap: 14 }}>
-          <a
-            href={PRIVACY_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: 'var(--verde, #4F7C52)', textDecoration: 'underline', fontWeight: 600 }}
-          >
-            Política de Privacidade
-          </a>
-          <a
-            href={TERMS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: 'var(--verde, #4F7C52)', textDecoration: 'underline', fontWeight: 600 }}
-          >
-            Termos de Uso (EULA)
-          </a>
-          <a
-            href={SUPPORT_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: 'var(--verde, #4F7C52)', textDecoration: 'underline', fontWeight: 600 }}
-          >
-            Suporte
-          </a>
-        </p>
-      </div>
+      <p className={styles.disclaimer}>
+        Os pagamentos são processados com segurança. Cancele a qualquer momento nas configurações do dispositivo.{' '}
+        <span
+          onClick={() => window.open('https://recordarmomentos.vercel.app/privacidade.html', '_blank')}
+          style={{ color: '#D37E65', cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          Política de Privacidade
+        </span>
+      </p>
 
       {isIOS && (
         <button
