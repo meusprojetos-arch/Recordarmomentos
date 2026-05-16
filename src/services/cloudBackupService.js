@@ -1,26 +1,26 @@
 /**
  * cloudBackupService.js — Backup robusto estilo Google Fotos
- * - Marca cada foto como sincronizada no Firestore após upload
- * - Nunca re-sincroniza o que já foi feito
- * - Retoma exatamente de onde parou
- * - 6 uploads em paralelo
- * - Comprime imagens antes do upload (smartCompress)
- * - Vídeos via uploadBytesResumable (retomada automática)
- * - Query Firestore filtrada (não baixa o que já foi feito)
+ *
+ * Princípios:
+ *  - Cada startBackup() começa do zero (não acumula contadores entre execuções)
+ *  - A fonte da verdade é o Firestore (campo backedUp), não o localStorage
+ *  - Workers respeitam cancelled antes de incrementar contadores
+ *  - synced NUNCA ultrapassa total (clamp)
+ *  - 6 uploads paralelos, compressão de imagem, resumable pra vídeo
  */
 import { auth, firestore, storage } from '../firebase.js'
 import {
   collection, doc, updateDoc, serverTimestamp,
-  query, where, orderBy, getDocs, limit as fbLimit,
+  query, where, getDocs,
 } from 'firebase/firestore'
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage'
 import { v4 as uuid } from 'uuid'
 import { db as localDb } from '../db/database.js'
 import { smartCompress } from '../utils/imageCompressor.js'
 
-const ENABLED_KEY  = uid => `recordar_backup_enabled_${uid}`
-const PROGRESS_KEY = uid => `recordar_backup_progress_${uid}`
-const CONCURRENCY  = 6
+const ENABLED_KEY      = uid => `recordar_backup_enabled_${uid}`
+const PROGRESS_KEY_OLD = uid => `recordar_backup_progress_${uid}` // legado — limpa
+const CONCURRENCY      = 6
 const TIMEOUT_IMG_MS   = 60_000
 const TIMEOUT_VIDEO_MS = 5 * 60_000
 
@@ -28,6 +28,7 @@ const _state = {
   running: false, cancelled: false,
   total: 0, synced: 0, failed: 0,
   listeners: new Set(),
+  pendingAutoStart: null, // debounce do memory-added
 }
 
 function notify() {
@@ -45,25 +46,17 @@ export function getBackupState() {
   return { running: _state.running, total: _state.total, synced: _state.synced, failed: _state.failed }
 }
 
-function persist(uid) {
-  try {
-    localStorage.setItem(PROGRESS_KEY(uid), JSON.stringify({
-      total: _state.total, synced: _state.synced, failed: _state.failed
-    }))
-  } catch {}
-}
-
+/**
+ * loadSavedProgress — mantido por compatibilidade com PerfilScreen.
+ * Antes carregava contadores do localStorage (causa do bug de inflar).
+ * Agora limpa o storage antigo e devolve contadores zerados.
+ */
 export function loadSavedProgress(uid) {
-  try {
-    const raw = localStorage.getItem(PROGRESS_KEY(uid))
-    if (raw) {
-      const p = JSON.parse(raw)
-      _state.total = p.total || 0
-      _state.synced = p.synced || 0
-      _state.failed = p.failed || 0
-      notify()
-    }
-  } catch {}
+  try { localStorage.removeItem(PROGRESS_KEY_OLD(uid)) } catch {}
+  _state.total = 0
+  _state.synced = 0
+  _state.failed = 0
+  notify()
 }
 
 export function isBackupEnabled(uid) {
@@ -76,13 +69,13 @@ export function setBackupEnabled(uid, val) {
 
 export function cancelBackup() {
   _state.cancelled = true
-  _state.running = false
+  // Não setamos running=false aqui — deixamos os workers terminarem o item atual
+  // e o startBackup() finaliza naturalmente. Senão dá race condition.
   notify()
 }
 
 // Upload com retry exponencial + escolha de método por tipo
 async function uploadOne(blob, uid) {
-  // 1) Comprime imagens (vídeo passa direto)
   const compressed = await smartCompress(blob).catch(() => blob)
   const isVideo = compressed.type?.startsWith('video/')
   const timeoutMs = isVideo ? TIMEOUT_VIDEO_MS : TIMEOUT_IMG_MS
@@ -95,7 +88,6 @@ async function uploadOne(blob, uid) {
 
       let snap
       if (isVideo || compressed.size > 5 * 1024 * 1024) {
-        // Resumable para arquivos grandes (melhor em redes instáveis)
         const task = uploadBytesResumable(sRef, compressed, {
           cacheControl: 'public, max-age=31536000',
         })
@@ -114,18 +106,15 @@ async function uploadOne(blob, uid) {
       return { url, path, size: compressed.size }
     } catch (e) {
       if (attempt === 2) throw e
-      // Backoff exponencial: 1s, 2s, 4s
       await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
     }
   }
 }
 
-// Verifica se memória já tem backup no Firestore (campo backedUp: true)
 function isBackedUp(m) {
   return m.backedUp === true || (m.fileUrl && m.fileUrl.includes('firebasestorage'))
 }
 
-// Recupera blob local pelo localBlobId ou firestoreId (igual ao memoriesService)
 async function getLocalBlob(m, uid) {
   try {
     if (!localDb.isOpen()) await localDb.open()
@@ -139,13 +128,10 @@ async function getLocalBlob(m, uid) {
   return null
 }
 
-// Sincroniza um item e marca como backedUp no Firestore
 async function syncOne(m, uid) {
-  // Carrega blob do IndexedDB se ainda não veio anexado
   const blob = (m.fileBlob instanceof Blob) ? m.fileBlob : await getLocalBlob(m, uid)
 
   if (!blob) {
-    // Sem blob local — marca como backedUp para não tentar de novo
     await updateDoc(doc(firestore, 'users', uid, 'memories', m.id), {
       backedUp: true,
       updatedAt: serverTimestamp(),
@@ -155,7 +141,6 @@ async function syncOne(m, uid) {
 
   const uploaded = await uploadOne(blob, uid)
 
-  // Marca como backedUp=true — nunca mais será processada
   await updateDoc(doc(firestore, 'users', uid, 'memories', m.id), {
     fileUrl: uploaded.url,
     filePath: uploaded.path,
@@ -166,31 +151,33 @@ async function syncOne(m, uid) {
   }).catch(() => {})
 }
 
-// Detectar novas fotos automaticamente
+// Detectar novas fotos automaticamente — com debounce (uma única chamada por janela)
 if (typeof window !== 'undefined') {
   window.addEventListener('memory-added', () => {
     const uid = auth.currentUser?.uid
     if (!uid || !isBackupEnabled(uid)) return
-    setTimeout(() => { if (!_state.running) startBackup() }, 1000)
+    if (_state.pendingAutoStart) return // já tem agendado
+    _state.pendingAutoStart = setTimeout(() => {
+      _state.pendingAutoStart = null
+      if (!_state.running) startBackup()
+    }, 1000)
   })
 }
 
 /**
- * Busca apenas memórias pendentes de backup direto no Firestore (sem baixar tudo).
- * Faz 2 queries: media com backedUp=false E media sem o campo backedUp (legado).
+ * Busca apenas memórias pendentes de backup direto no Firestore.
+ * Sem duplicatas (usa Map com id como chave).
  */
 async function fetchPendingMemories(uid) {
   const colRef = collection(firestore, 'users', uid, 'memories')
-  const pending = new Map() // id -> data
+  const pending = new Map()
 
-  // 1) Itens explicitamente não-backedUp
   try {
     const q1 = query(colRef, where('backedUp', '==', false))
     const s1 = await getDocs(q1)
     s1.docs.forEach(d => pending.set(d.id, { id: d.id, ...d.data() }))
   } catch (e) { console.warn('Query backedUp==false falhou:', e.message) }
 
-  // 2) Itens marcados como localOnly (compatibilidade com docs antigos sem backedUp)
   try {
     const q2 = query(colRef, where('localOnly', '==', true))
     const s2 = await getDocs(q2)
@@ -199,32 +186,45 @@ async function fetchPendingMemories(uid) {
     })
   } catch (e) { console.warn('Query localOnly==true falhou:', e.message) }
 
-  // Filtra texto fora (não tem arquivo) e itens já com fileUrl válida
   return Array.from(pending.values()).filter(m =>
     m.type !== 'text' && !isBackedUp(m)
   )
 }
 
 export async function startBackup() {
+  // Guard atômico — JS é single-threaded, então a checagem + atribuição é segura.
   if (_state.running) return
   const uid = auth.currentUser?.uid
   if (!uid) return
 
+  // RESET COMPLETO — cada execução começa do zero.
+  // Os contadores refletem APENAS esta execução, não acumulam com runs anteriores.
   _state.running = true
   _state.cancelled = false
+  _state.total = 0
+  _state.synced = 0
   _state.failed = 0
   notify()
+
+  // Limpa progresso antigo persistido (causa do bug original)
+  try { localStorage.removeItem(PROGRESS_KEY_OLD(uid)) } catch {}
 
   try {
     const toSync = await fetchPendingMemories(uid)
 
-    _state.total  = (_state.synced || 0) + toSync.length
-    persist(uid)
+    // Se foi cancelado durante o fetch, sai limpo
+    if (_state.cancelled) {
+      _state.running = false
+      notify()
+      return
+    }
+
+    // total = APENAS o que vamos processar agora (sem somar com synced antigo)
+    _state.total = toSync.length
     notify()
 
     if (toSync.length === 0) {
       _state.running = false
-      persist(uid)
       notify()
       return
     }
@@ -232,29 +232,44 @@ export async function startBackup() {
     const queue = [...toSync]
 
     const worker = async () => {
-      while (queue.length > 0 && !_state.cancelled) {
+      while (queue.length > 0) {
+        // Checa cancel ANTES de pegar o próximo item
+        if (_state.cancelled) return
+
         const m = queue.shift()
-        if (!m) break
+        if (!m) return
+
+        let ok = false
         try {
           await syncOne(m, uid)
+          ok = true
         } catch (e) {
-          _state.failed++
           console.warn('Falhou:', m.title, e.message)
         }
-        _state.synced++
-        persist(uid)
+
+        // Checa cancel DEPOIS do await — se cancelaram durante o upload,
+        // não conta este item no progresso (evita synced > total)
+        if (_state.cancelled) return
+
+        if (ok) {
+          _state.synced = Math.min(_state.synced + 1, _state.total)
+        } else {
+          _state.failed = Math.min(_state.failed + 1, _state.total)
+        }
         notify()
       }
     }
 
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, toSync.length) }, worker))
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY, toSync.length) },
+      () => worker()
+    )
+    await Promise.all(workers)
 
   } catch (e) {
     console.error('Backup error:', e.message)
-    _state.failed++
   }
 
   _state.running = false
-  persist(uid)
   notify()
 }
