@@ -19,6 +19,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   isNativePhotoLibrary,
+  isNativePhotoLibraryReady,
   waitForNativePlugin,
   getPlatform,
   checkPhotoPermission,
@@ -102,7 +103,11 @@ export default function AutoSyncModal({ onClose, onDone }) {
         }
         if (cancelled) return
 
-        const native = isNativePhotoLibrary()
+        // Verificar se o plugin nativo REALMENTE funciona (não apenas stub JS)
+        let native = isNativePhotoLibrary()
+        if (native) {
+          native = await isNativePhotoLibraryReady()
+        }
         setIsNative(native)
 
         if ((platform === 'ios' || platform === 'android') && !native) {

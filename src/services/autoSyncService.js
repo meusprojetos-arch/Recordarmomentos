@@ -72,10 +72,16 @@ export async function isNativePhotoLibraryReady() {
   if (platform !== 'ios' && platform !== 'android') return false
   if (!window?.Capacitor?.Plugins?.PhotoLibraryPlugin) return false
   try {
+    // Testa uma chamada real leve para verificar se o nativo responde
     await window.Capacitor.Plugins.PhotoLibraryPlugin.checkPhotoPermissions()
     return true
   } catch (e) {
-    return !String(e?.message || e).toLowerCase().includes('not implemented')
+    const msg = String(e?.message || e).toLowerCase()
+    // "not implemented" = stub JS sem nativo real
+    // "not available" = plugin não registrado
+    if (msg.includes('not implemented') || msg.includes('not available')) return false
+    // Qualquer outro erro = plugin existe mas teve outro problema
+    return true
   }
 }
 

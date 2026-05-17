@@ -19,6 +19,7 @@
 		A1B2C3D4000000000000IA04 /* IAPPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4000000000000IA03 /* IAPPlugin.m */; };
 		A1B2C3D4000000000000PH02 /* PhotoLibraryPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4000000000000PH01 /* PhotoLibraryPlugin.swift */; };
 		A1B2C3D4000000000000PH04 /* PhotoLibraryPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4000000000000PH03 /* PhotoLibraryPlugin.m */; };
+		A1B2C3D4000000000000VC02 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4000000000000VC01 /* ViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +39,7 @@
 		A1B2C3D4000000000000IA03 /* IAPPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = IAPPlugin.m; sourceTree = "<group>"; };
 		A1B2C3D4000000000000PH01 /* PhotoLibraryPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibraryPlugin.swift; sourceTree = "<group>"; };
 		A1B2C3D4000000000000PH03 /* PhotoLibraryPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PhotoLibraryPlugin.m; sourceTree = "<group>"; };
+		A1B2C3D4000000000000VC01 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +89,7 @@
 				A1B2C3D4000000000000IA03 /* IAPPlugin.m */,
 				A1B2C3D4000000000000PH01 /* PhotoLibraryPlugin.swift */,
 				A1B2C3D4000000000000PH03 /* PhotoLibraryPlugin.m */,
+				A1B2C3D4000000000000VC01 /* ViewController.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -226,6 +229,7 @@
 				A1B2C3D4000000000000IA04 /* IAPPlugin.m in Sources */,
 				A1B2C3D4000000000000PH02 /* PhotoLibraryPlugin.swift in Sources */,
 				A1B2C3D4000000000000PH04 /* PhotoLibraryPlugin.m in Sources */,
+				A1B2C3D4000000000000VC02 /* ViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,7 +373,7 @@
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 2.5;
+				MARKETING_VERSION = 2.6;
 				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.recordar.memorias;
@@ -391,7 +395,7 @@
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 2.5;
+				MARKETING_VERSION = 2.6;
 				OTHER_LDFLAGS = "$(inherited) -ObjC";
 				PRODUCT_BUNDLE_IDENTIFIER = com.recordar.memorias;
 				PRODUCT_NAME = "$(TARGET_NAME)";
