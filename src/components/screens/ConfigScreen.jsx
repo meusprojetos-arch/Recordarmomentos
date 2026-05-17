@@ -22,7 +22,7 @@ import db from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './ConfigScreen.module.css'
-import AutoSyncModal from '../modals/AutoSyncModal.jsx'
+// AutoSyncModal foi movido para PerfilScreen
 
 const TERMS_CONTENT = `Termos de Uso — Recordar
 
@@ -246,8 +246,7 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
   // ── FAQ ──
   const [openFaq, setOpenFaq] = useState(null)
 
-  // ── Auto Sync ──
-  const [showAutoSync, setShowAutoSync] = useState(false)
+  // ── Auto Sync (movido para PerfilScreen) ──
 
   // ── Tema ──
   const [theme, setTheme] = useState(() => localStorage.getItem('recordar_theme') || 'dark')
@@ -717,24 +716,7 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
           </div>
         </div>
 
-        {/* ══ Upload Automático ══ */}
-        <h2 className={styles.sectionTitle}>Upload Automático</h2>
-        <div className={styles.card}>
-          <div className={styles.row} onClick={() => setShowAutoSync(true)} role="button" tabIndex={0}>
-            <div className={styles.rowIconWrap} style={{ background: '#E8F5E9' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="#4F7C52" strokeWidth="2" width="20" height="20">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/>
-                <line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-            </div>
-            <div className={styles.rowText}>
-              <p className={styles.rowLabel}>Importar da galeria</p>
-              <p className={styles.rowSub}>Sincronize fotos e vídeos do seu dispositivo</p>
-            </div>
-            <span className={styles.chevron}>›</span>
-          </div>
-        </div>
+        {/* Upload Automático moveu para o Perfil */}
 
         {/* ══ Exportar ══ */}
         <h2 className={styles.sectionTitle}>Exportar</h2>
@@ -841,13 +823,7 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
         <div style={{ height: 32 }} />
       </div>
 
-      {/* Modal PIN */}
-      {showAutoSync && (
-        <AutoSyncModal
-          onClose={() => setShowAutoSync(false)}
-          onDone={() => setShowAutoSync(false)}
-        />
-      )}
+      {/* AutoSyncModal removido — agora está em PerfilScreen */}
 
       {showPinModal && (
         <PinLockModal

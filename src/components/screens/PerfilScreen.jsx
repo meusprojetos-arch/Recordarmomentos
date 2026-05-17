@@ -15,6 +15,7 @@ import { db as localDb } from '../../db/database.js'
 import PrivacyRow from '../ui/PrivacyRow.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import BackupLogsModal from '../modals/BackupLogsModal.jsx'
+import AutoSyncModal from '../modals/AutoSyncModal.jsx'
 import styles from './PerfilScreen.module.css'
 
 const PERFIL_ICONS = {
@@ -39,6 +40,7 @@ export default function PerfilScreen() {
   const [showEdit, setShowEdit] = useState(false)
   const [showPinModal, setShowPinModal] = useState(false)
   const [showBackupLogs, setShowBackupLogs] = useState(false)
+  const [showAutoSync, setShowAutoSync] = useState(false)
 
   // ── Backup na nuvem ──
   const [backupProgress, setBackupProgress] = useState(getBackupState())
@@ -263,6 +265,33 @@ export default function PerfilScreen() {
 
         <div style={{ height: 16 }} />
 
+        {/* ── Upload Automático ── */}
+        <h2 className={styles.sectionTitle}>
+          <span style={{ verticalAlign: 'middle', marginRight: 6, fontSize: 18 }}>⬆️</span>
+          Upload Automático
+        </h2>
+        <button className={styles.exportBtn} onClick={() => setShowAutoSync(true)}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: '#DBEAFE',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginRight: 12, flexShrink: 0,
+          }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" width="20" height="20">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div className={styles.exportText}>
+            <p className={styles.exportLabel}>Importar da galeria</p>
+            <p className={styles.exportSub}>Sincronize fotos e vídeos do seu iPhone</p>
+          </div>
+          <span className={styles.exportArrow}>›</span>
+        </button>
+
+        <div style={{ height: 16 }} />
+
         {/* ── Planos ── */}
         <button className={styles.exportBtn} onClick={() => setShowPlans(true)}>
           <span style={{ fontSize: 24 }}>💎</span>
@@ -356,6 +385,14 @@ export default function PerfilScreen() {
       {/* Modal de logs do backup (debug) */}
       {showBackupLogs && (
         <BackupLogsModal onClose={() => setShowBackupLogs(false)} />
+      )}
+
+      {/* Modal de Upload Automático */}
+      {showAutoSync && (
+        <AutoSyncModal
+          onClose={() => setShowAutoSync(false)}
+          onDone={() => { /* mantém aberto pra mostrar tela final */ }}
+        />
       )}
     </div>
   )
