@@ -1,7 +1,16 @@
-// useMemories.js — Recordar
-// CORREÇÃO: substituído PhotoLibraryPlugin (sem implementação nativa iOS)
-// por @capacitor/camera oficial — funciona em iOS, Android e web sem alterações.
-// Toda a lógica existente de CRUD, Dexie, exportação etc. foi preservada.
+// src/hooks/useMemories.js
+// ─────────────────────────────────────────────────────────────────────────────
+// CORREÇÃO APLICADA:
+//   Substituído PhotoLibraryPlugin (plugin customizado sem implementação nativa)
+//   por @capacitor/camera v6 (oficial).
+//
+//   API usada (compatível com @capacitor/camera ^6 instalado no projeto):
+//     • getPhoto()   → câmera ou galeria, 1 item, funciona na WEB também
+//     • pickImages() → galeria múltipla (backup), funciona na WEB via <input>
+//
+//   Na WEB o Capacitor faz fallback automático para <input type="file"> —
+//   não é necessário nenhum código extra. Por isso o teste no PC funciona.
+// ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from 'react';
 import { Camera, CameraSource, CameraResultType } from '@capacitor/camera';
@@ -9,112 +18,90 @@ import { Capacitor } from '@capacitor/core';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/database';
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// ─── helpers internos ────────────────────────────────────────────────────────
 
-/** Converte um webPath/dataUrl em Blob para persistir no IndexedDB */
-async function uriToBlob(uri) {
-  const response = await fetch(uri);
-  return response.blob();
+/** webPath/dataUrl → Blob para salvar no IndexedDB */
+async function uriParaBlob(uri) {
+  const res = await fetch(uri);
+  return res.blob();
 }
 
-/** Gera thumbnail 200×200 a partir de um Blob de imagem */
-async function gerarThumbnailImagem(blob) {
+/** Thumbnail 200×200 recortado ao centro de uma imagem */
+async function thumbImagem(blob) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const size = 200;
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      // crop centralizado
-      const menor = Math.min(img.width, img.height);
-      const sx = (img.width - menor) / 2;
-      const sy = (img.height - menor) / 2;
-      ctx.drawImage(img, sx, sy, menor, menor, 0, 0, size, size);
+      const c = document.createElement('canvas');
+      c.width = 200; c.height = 200;
+      const ctx = c.getContext('2d');
+      const min = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, 200, 200);
       URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
+      resolve(c.toDataURL('image/jpeg', 0.7));
     };
     img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
     img.src = url;
   });
 }
 
-/** Gera thumbnail de vídeo a partir do primeiro frame */
-async function gerarThumbnailVideo(blob) {
+/** Thumbnail 200×200 do primeiro frame de um vídeo */
+async function thumbVideo(blob) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
-    const video = document.createElement('video');
-    video.muted = true;
-    video.playsInline = true;
-    video.onloadeddata = () => {
-      video.currentTime = 0;
-    };
-    video.onseeked = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 200;
-      canvas.height = 200;
-      const ctx = canvas.getContext('2d');
-      const menor = Math.min(video.videoWidth, video.videoHeight);
-      const sx = (video.videoWidth - menor) / 2;
-      const sy = (video.videoHeight - menor) / 2;
-      ctx.drawImage(video, sx, sy, menor, menor, 0, 0, 200, 200);
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true;
+    v.onloadeddata = () => { v.currentTime = 0; };
+    v.onseeked = () => {
+      const c = document.createElement('canvas');
+      c.width = 200; c.height = 200;
+      const ctx = c.getContext('2d');
+      const min = Math.min(v.videoWidth, v.videoHeight);
+      ctx.drawImage(v, (v.videoWidth - min) / 2, (v.videoHeight - min) / 2, min, min, 0, 0, 200, 200);
       URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
+      resolve(c.toDataURL('image/jpeg', 0.7));
     };
-    video.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-    video.src = url;
+    v.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    v.src = url;
   });
 }
 
-// ─── permissões ─────────────────────────────────────────────────────────────
+/** Detecta se é vídeo pelo mimeType ou extensão do nome de arquivo */
+function ehVideo(blob, nome) {
+  return (
+    blob?.type?.startsWith('video/') ||
+    /\.(mp4|mov|avi|mkv|m4v|3gp|webm)$/i.test(nome || '')
+  );
+}
 
-/**
- * Solicita permissão de galeria/câmera ao usuário.
- * Retorna true se concedida, false caso contrário.
- */
-async function solicitarPermissoes() {
+// ─── permissões (só relevante em nativo) ─────────────────────────────────────
+
+async function pedirPermissoes() {
+  if (!Capacitor.isNativePlatform()) return true; // web não precisa
   try {
-    // Em plataformas nativas (iOS/Android) verifica e solicita
-    if (Capacitor.isNativePlatform()) {
-      const permissao = await Camera.checkPermissions();
-
-      // 'photos' cobre iOS; 'camera' + 'photos' cobre Android
-      const precisaSolicitar =
-        permissao.photos !== 'granted' ||
-        permissao.camera !== 'granted';
-
-      if (precisaSolicitar) {
-        const resultado = await Camera.requestPermissions({
-          permissions: ['photos', 'camera'],
-        });
-        return (
-          resultado.photos === 'granted' ||
-          resultado.photos === 'limited' // iOS permite acesso limitado
-        );
-      }
-      return true;
+    const status = await Camera.checkPermissions();
+    const falta = status.photos !== 'granted' && status.photos !== 'limited';
+    if (falta) {
+      const r = await Camera.requestPermissions({ permissions: ['photos', 'camera'] });
+      return r.photos === 'granted' || r.photos === 'limited';
     }
-    // Web: permissão é solicitada automaticamente pelo browser
     return true;
-  } catch (err) {
-    console.warn('[useMemories] Erro ao solicitar permissões:', err);
-    return false;
+  } catch {
+    return true; // se falhar a checagem, tenta de qualquer forma
   }
 }
 
-// ─── hook principal ──────────────────────────────────────────────────────────
+// ─── hook ────────────────────────────────────────────────────────────────────
 
 export function useMemories() {
   const [importando, setImportando] = useState(false);
   const [progresso, setProgresso] = useState({ atual: 0, total: 0 });
   const [erro, setErro] = useState(null);
 
-  // ── salvar uma memória individual ──────────────────────────────────────────
+  // ── salvar uma memória individual no Dexie ──────────────────────────────
   const salvarMemoria = useCallback(async ({
-    tipo,       // 'foto' | 'video' | 'audio' | 'texto'
-    blob,       // Blob do arquivo
+    tipo,          // 'foto' | 'video' | 'audio' | 'texto'
+    blob,
     nomeArquivo,
     titulo = '',
     descricao = '',
@@ -123,13 +110,11 @@ export function useMemories() {
     thumbnail = null,
   }) => {
     const id = uuidv4();
-    const mimeType = blob.type || (tipo === 'foto' ? 'image/jpeg' : 'video/mp4');
 
-    // Gera thumbnail se não foi fornecido
-    let thumbFinal = thumbnail;
-    if (!thumbFinal) {
-      if (tipo === 'foto') thumbFinal = await gerarThumbnailImagem(blob);
-      if (tipo === 'video') thumbFinal = await gerarThumbnailVideo(blob);
+    let thumb = thumbnail;
+    if (!thumb) {
+      if (tipo === 'foto')  thumb = await thumbImagem(blob);
+      if (tipo === 'video') thumb = await thumbVideo(blob);
     }
 
     await db.memories.add({
@@ -141,8 +126,8 @@ export function useMemories() {
       pasta,
       arquivo: blob,
       nomeArquivo: nomeArquivo || `${id}.${tipo === 'foto' ? 'jpg' : 'mp4'}`,
-      mimeType,
-      thumbnail: thumbFinal,
+      mimeType: blob.type || (tipo === 'foto' ? 'image/jpeg' : 'video/mp4'),
+      thumbnail: thumb,
       destaque: false,
       criadoEm: Date.now(),
     });
@@ -150,7 +135,7 @@ export function useMemories() {
     return id;
   }, []);
 
-  // ── capturar com câmera ────────────────────────────────────────────────────
+  // ── capturar foto com câmera ────────────────────────────────────────────
   const capturarFoto = useCallback(async () => {
     try {
       const foto = await Camera.getPhoto({
@@ -159,155 +144,110 @@ export function useMemories() {
         resultType: CameraResultType.Uri,
         saveToGallery: false,
       });
-
-      const blob = await uriToBlob(foto.webPath);
-      const id = await salvarMemoria({
-        tipo: 'foto',
-        blob,
-        nomeArquivo: `foto_${Date.now()}.jpg`,
-      });
-      return id;
-    } catch (err) {
-      if (err?.message?.includes('cancelled') || err?.message?.includes('User cancelled')) {
-        return null; // usuário cancelou, não é erro
-      }
-      console.error('[useMemories] Erro ao capturar foto:', err);
+      const blob = await uriParaBlob(foto.webPath);
+      return await salvarMemoria({ tipo: 'foto', blob, nomeArquivo: `foto_${Date.now()}.jpg` });
+    } catch (e) {
+      if (/cancel/i.test(e?.message)) return null;
+      console.error('[useMemories] capturarFoto:', e);
       setErro('Não foi possível abrir a câmera.');
       return null;
     }
   }, [salvarMemoria]);
 
-  // ── selecionar UMA foto/vídeo da galeria (fluxo do modal existente) ────────
+  // ── selecionar 1 item da galeria (usado no modal de nova memória) ───────
   const selecionarDaGaleria = useCallback(async () => {
     try {
-      const concedida = await solicitarPermissoes();
-      if (!concedida) {
-        setErro('Permissão de galeria negada. Habilite nas configurações do iPhone.');
-        return null;
-      }
+      const ok = await pedirPermissoes();
+      if (!ok) { setErro('Permissão de galeria negada.'); return null; }
 
       const foto = await Camera.getPhoto({
         quality: 85,
-        source: CameraSource.Photos,
+        source: CameraSource.Photos,   // abre galeria
         resultType: CameraResultType.Uri,
       });
-
-      const blob = await uriToBlob(foto.webPath);
-      const tipo = foto.format === 'gif' ? 'foto' : 'foto'; // extensível
-      const id = await salvarMemoria({
-        tipo,
-        blob,
-        nomeArquivo: `galeria_${Date.now()}.${foto.format || 'jpg'}`,
-      });
-      return id;
-    } catch (err) {
-      if (err?.message?.includes('cancelled') || err?.message?.includes('User cancelled')) {
-        return null;
-      }
-      console.error('[useMemories] Erro ao selecionar da galeria:', err);
+      const blob = await uriParaBlob(foto.webPath);
+      const nome = `galeria_${Date.now()}.${foto.format || 'jpg'}`;
+      return await salvarMemoria({ tipo: 'foto', blob, nomeArquivo: nome });
+    } catch (e) {
+      if (/cancel/i.test(e?.message)) return null;
+      console.error('[useMemories] selecionarDaGaleria:', e);
       setErro('Não foi possível acessar a galeria.');
       return null;
     }
   }, [salvarMemoria]);
 
-  // ── BACKUP AUTOMÁTICO — importar toda a galeria ───────────────────────────
+  // ── BACKUP AUTOMÁTICO — importar múltiplos itens da galeria ────────────
   //
-  // @capacitor/camera v6 expõe Camera.pickImages() que abre o seletor
-  // múltiplo nativo do iOS (PHPickerViewController) e do Android (Intents).
-  // "limit: 0" significa sem limite — o usuário pode selecionar quantas quiser.
+  //  Camera.pickImages() com limit:0  →  seletor nativo múltiplo
+  //  • iOS/Android : PHPickerViewController / Android Photo Picker (nativo)
+  //  • WEB (PC)    : <input type="file" multiple accept="image/*"> automático
+  //                  via fallback do Capacitor — sem código extra necessário
   //
-  // DIFERENÇA DO PhotoLibraryPlugin antigo:
-  //   - PhotoLibraryPlugin tentava acesso programático TOTAL à galeria (requer
-  //     NSPhotoLibraryUsageDescription + aprovação rigorosa da Apple)
-  //   - pickImages() abre o seletor NATIVO — o usuário escolhe o que importar,
-  //     o que é aprovado pela App Store e não exige permissão especial no iOS 14+
+  //  Retorna { importadas, erros }
   //
-  const importarGaleria = useCallback(async ({
-    onProgresso = null, // callback (atual, total) => void
-  } = {}) => {
+  const importarGaleria = useCallback(async ({ onProgresso } = {}) => {
     setErro(null);
     setImportando(true);
     setProgresso({ atual: 0, total: 0 });
 
     try {
-      const concedida = await solicitarPermissoes();
-      if (!concedida) {
-        setErro('Permissão de galeria negada. Habilite nas configurações do iPhone.');
-        setImportando(false);
+      const ok = await pedirPermissoes();
+      if (!ok) {
+        setErro('Permissão de galeria negada. Habilite nas configurações.');
         return { importadas: 0, erros: 0 };
       }
 
-      // Abre o seletor nativo múltiplo — funciona em iOS 14+ e Android
-      let fotos;
+      // Abre seletor múltiplo — pickImages é a API correta para Capacitor 6
+      let galeria;
       try {
-        fotos = await Camera.pickImages({
+        galeria = await Camera.pickImages({
           quality: 80,
-          limit: 0, // sem limite
+          limit: 0, // 0 = sem limite
         });
-      } catch (err) {
-        if (err?.message?.includes('cancelled') || err?.message?.includes('User cancelled')) {
-          setImportando(false);
-          return { importadas: 0, erros: 0 };
-        }
-        throw err;
+      } catch (e) {
+        if (/cancel/i.test(e?.message)) return { importadas: 0, erros: 0 };
+        throw e;
       }
 
-      const lista = fotos.photos ?? [];
+      const lista = galeria.photos ?? [];
       const total = lista.length;
       setProgresso({ atual: 0, total });
 
-      let importadas = 0;
-      let errosCount = 0;
-
-      // Busca IDs já existentes para evitar duplicatas por nome de arquivo
-      const idsExistentes = new Set(
+      // Evitar duplicatas: checa nomes já salvos
+      const nomesExistentes = new Set(
         (await db.memories.toArray()).map((m) => m.nomeArquivo)
       );
+
+      let importadas = 0;
+      let erros = 0;
 
       for (let i = 0; i < lista.length; i++) {
         const item = lista[i];
         try {
-          // webPath é o URI local temporário que o Capacitor fornece
-          const blob = await uriToBlob(item.webPath);
-          const nomeArquivo = item.webPath.split('/').pop() || `import_${i}.jpg`;
+          const blob = await uriParaBlob(item.webPath);
+          const nome = item.webPath.split('/').pop() || `import_${Date.now()}_${i}.jpg`;
 
-          // Pula duplicatas
-          if (idsExistentes.has(nomeArquivo)) {
-            setProgresso({ atual: i + 1, total });
-            onProgresso?.(i + 1, total);
-            continue;
+          if (!nomesExistentes.has(nome)) {
+            const tipo = ehVideo(blob, nome) ? 'video' : 'foto';
+            await salvarMemoria({ tipo, blob, nomeArquivo: nome });
+            nomesExistentes.add(nome);
+            importadas++;
           }
-
-          // Detecta se é vídeo pelo mimeType ou extensão
-          const isVideo =
-            blob.type?.startsWith('video/') ||
-            /\.(mp4|mov|avi|mkv|m4v|3gp)$/i.test(nomeArquivo);
-
-          await salvarMemoria({
-            tipo: isVideo ? 'video' : 'foto',
-            blob,
-            nomeArquivo,
-          });
-
-          idsExistentes.add(nomeArquivo);
-          importadas++;
         } catch (itemErr) {
-          console.warn(`[useMemories] Falha ao importar item ${i}:`, itemErr);
-          errosCount++;
+          console.warn(`[useMemories] item ${i} falhou:`, itemErr);
+          erros++;
         }
 
         setProgresso({ atual: i + 1, total });
         onProgresso?.(i + 1, total);
 
-        // Pausa curta a cada 10 itens para não travar a UI
-        if ((i + 1) % 10 === 0) {
-          await new Promise((r) => setTimeout(r, 30));
-        }
+        // Pausa a cada 10 itens para não travar a UI
+        if ((i + 1) % 10 === 0) await new Promise((r) => setTimeout(r, 20));
       }
 
-      return { importadas, erros: errosCount };
-    } catch (err) {
-      console.error('[useMemories] Erro no backup automático:', err);
+      return { importadas, erros };
+    } catch (e) {
+      console.error('[useMemories] importarGaleria:', e);
       setErro('Erro ao acessar a galeria. Tente novamente.');
       return { importadas: 0, erros: 0 };
     } finally {
@@ -315,21 +255,19 @@ export function useMemories() {
     }
   }, [salvarMemoria]);
 
-  // ── CRUD básico (preservado do original) ──────────────────────────────────
+  // ── CRUD (preservado do original) ──────────────────────────────────────
 
   const listarMemórias = useCallback(async (filtros = {}) => {
-    let query = db.memories.orderBy('data').reverse();
-    if (filtros.tipo) query = query.filter((m) => m.tipo === filtros.tipo);
-    if (filtros.pasta) query = query.filter((m) => m.pasta === filtros.pasta);
+    let q = db.memories.orderBy('data').reverse();
+    if (filtros.tipo)  q = q.filter((m) => m.tipo === filtros.tipo);
+    if (filtros.pasta) q = q.filter((m) => m.pasta === filtros.pasta);
     if (filtros.busca) {
-      const termo = filtros.busca.toLowerCase();
-      query = query.filter(
-        (m) =>
-          m.titulo?.toLowerCase().includes(termo) ||
-          m.descricao?.toLowerCase().includes(termo)
+      const t = filtros.busca.toLowerCase();
+      q = q.filter((m) =>
+        m.titulo?.toLowerCase().includes(t) || m.descricao?.toLowerCase().includes(t)
       );
     }
-    return query.toArray();
+    return q.toArray();
   }, []);
 
   const atualizarMemória = useCallback(async (id, dados) => {
@@ -341,20 +279,20 @@ export function useMemories() {
   }, []);
 
   const toggleDestaque = useCallback(async (id) => {
-    const mem = await db.memories.get(id);
-    if (mem) await db.memories.update(id, { destaque: !mem.destaque });
+    const m = await db.memories.get(id);
+    if (m) await db.memories.update(id, { destaque: !m.destaque });
   }, []);
 
-  // ── retorno ───────────────────────────────────────────────────────────────
+  // ── retorno do hook ─────────────────────────────────────────────────────
   return {
-    // estado
+    // estado do backup
     importando,
     progresso,
     erro,
-    // ações de galeria/câmera
+    // ações de mídia
     capturarFoto,
     selecionarDaGaleria,
-    importarGaleria,      // ← backup automático corrigido
+    importarGaleria,       // ← backup automático (corrigido)
     // CRUD
     salvarMemoria,
     listarMemórias,
