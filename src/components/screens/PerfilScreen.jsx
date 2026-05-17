@@ -265,10 +265,10 @@ export default function PerfilScreen() {
 
         <div style={{ height: 16 }} />
 
-        {/* ── Upload Automático ── */}
+        {/* ── Importação Automática da Galeria ── */}
         <h2 className={styles.sectionTitle}>
-          <span style={{ verticalAlign: 'middle', marginRight: 6, fontSize: 18 }}>⬆️</span>
-          Upload Automático
+          <span style={{ verticalAlign: 'middle', marginRight: 6, fontSize: 18 }}>&#128247;</span>
+          Importação da Galeria
         </h2>
         <button className={styles.exportBtn} onClick={() => setShowAutoSync(true)}>
           <div style={{
@@ -278,16 +278,16 @@ export default function PerfilScreen() {
             marginRight: 12, flexShrink: 0,
           }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" width="20" height="20">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
             </svg>
           </div>
           <div className={styles.exportText}>
-            <p className={styles.exportLabel}>Importar da galeria</p>
-            <p className={styles.exportSub}>Sincronize fotos e vídeos do seu celular</p>
+            <p className={styles.exportLabel}>Importar da galeria automaticamente</p>
+            <p className={styles.exportSub}>Importa todas as fotos e vídeos do seu celular</p>
           </div>
-          <span className={styles.exportArrow}>›</span>
+          <span className={styles.exportArrow}>&#8250;</span>
         </button>
 
         <div style={{ height: 16 }} />

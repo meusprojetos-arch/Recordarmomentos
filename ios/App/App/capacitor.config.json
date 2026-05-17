@@ -23,5 +23,7 @@
 			"*.firebase.google.com"
 		]
 	},
-	"packageClassList": []
+	"packageClassList": [
+		"CAPCameraPlugin"
+	]
 }

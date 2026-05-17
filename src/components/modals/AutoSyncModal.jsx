@@ -1,19 +1,20 @@
 /**
- * AutoSyncModal — Upload automático estilo Google Photos / Play Store
+ * AutoSyncModal — Importação automática da galeria (estilo Google Photos)
  *
  * Layout responsivo:
  *  - Header sticky no topo (sempre visível)
  *  - Body com scroll vertical (conteúdo grande não corta)
- *  - Footer sticky no fundo com o botão de ação (SEMPRE visível, mesmo em iPhone SE)
+ *  - Footer sticky no fundo com o botão de ação (SEMPRE visível)
  *
  * Fluxo:
- *  1. init   → carregando contagem
- *  2. idle   → tela informativa + botão "Permitir e começar"
- *  3. asking → modal nativo do iOS pedindo permissão
- *  4. syncing→ spinner azul + barra de progresso + métricas
- *  5. done   → check verde + estatísticas
- *  6. denied → instrução pra ir nas Configurações do iOS
- *  7. error  → plugin nativo não detectado (build problemático)
+ *  1. init    → carregando contagem + verificando importação pendente
+ *  2. idle    → tela informativa + botão "Iniciar importação automática"
+ *  3. resume  → importação pendente detectada + botão "Retomar"
+ *  4. asking  → modal nativo pedindo permissão
+ *  5. syncing → spinner + barra de progresso + métricas detalhadas
+ *  6. done    → check verde + estatísticas finais
+ *  7. denied  → instrução para ir nas Configurações
+ *  8. error   → plugin nativo não detectado
  */
 import React, { useState, useEffect, useRef } from 'react'
 import {
@@ -24,10 +25,14 @@ import {
   getGalleryStats,
   runAutoSyncNative,
   runAutoSync,
+  countSyncedAssets,
   countSynced,
   getPluginDiagnostics,
   getAutoSyncLogs,
   subscribeToAutoSyncLogs,
+  clearAutoSyncLogs,
+  hasPendingImport,
+  getPendingImportSummary,
 } from '../../services/autoSyncService.js'
 
 const C = {
@@ -41,23 +46,30 @@ const C = {
   blue:      '#3B82F6',
   blueLight: '#DBEAFE',
   red:       '#e53935',
+  orange:    '#F59E0B',
+  orangeLight: '#FEF3C7',
 }
 
 export default function AutoSyncModal({ onClose, onDone }) {
   const [phase, setPhase] = useState('init')
   const [stats, setStats] = useState(null)
-  const [progress, setProgress] = useState({ done: 0, total: 0, current: null, failed: 0 })
+  const [progress, setProgress] = useState({ done: 0, total: 0, current: null, failed: 0, skipped: 0 })
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [showDiag, setShowDiag] = useState(false)
   const [diag, setDiag] = useState(null)
   const [logs, setLogs] = useState(getAutoSyncLogs())
+  const [showLogs, setShowLogs] = useState(false)
+  const [alreadySynced, setAlreadySynced] = useState(0)
+  const [pendingSummary, setPendingSummary] = useState(null)
+  const [startTime, setStartTime] = useState(null)
+  const [elapsed, setElapsed] = useState(0)
   const fileInputRef = useRef(null)
   const signalRef = useRef({ cancelled: false })
+  const logsEndRef = useRef(null)
 
   const [isNative, setIsNative] = useState(isNativePhotoLibrary())
   const platform = getPlatform()
-  const alreadySynced = countSynced()
 
   // Subscreve aos logs em tempo real
   useEffect(() => {
@@ -65,13 +77,27 @@ export default function AutoSyncModal({ onClose, onDone }) {
     return () => unsub()
   }, [])
 
-  // Init: aguarda plugin nativo (até 3s) e carrega estatísticas
+  // Auto-scroll dos logs
+  useEffect(() => {
+    if (showLogs && logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [logs, showLogs])
+
+  // Timer de tempo decorrido
+  useEffect(() => {
+    if (phase !== 'syncing' || !startTime) return
+    const iv = setInterval(() => setElapsed(Date.now() - startTime), 1000)
+    return () => clearInterval(iv)
+  }, [phase, startTime])
+
+  // Init: aguarda plugin + carrega estatísticas + verifica importação pendente
   useEffect(() => {
     let cancelled = false
     const init = async () => {
       try {
-        // No iOS, o plugin pode demorar 1-2s pra aparecer após o WebView carregar
-        if (platform === 'ios' && !isNativePhotoLibrary()) {
+        // Aguardar plugin nativo se necessário
+        if ((platform === 'ios' || platform === 'android') && !isNativePhotoLibrary()) {
           await waitForNativePlugin(3000)
         }
         if (cancelled) return
@@ -79,12 +105,15 @@ export default function AutoSyncModal({ onClose, onDone }) {
         const native = isNativePhotoLibrary()
         setIsNative(native)
 
-        if (platform === 'ios' && !native) {
-          // É iOS mas o plugin não foi detectado — provável problema de build
+        if ((platform === 'ios' || platform === 'android') && !native) {
           setDiag(getPluginDiagnostics())
           setPhase('error')
           return
         }
+
+        // Contar já sincronizados
+        const syncedCount = await countSyncedAssets().catch(() => countSynced())
+        if (!cancelled) setAlreadySynced(syncedCount)
 
         if (native) {
           try {
@@ -99,9 +128,20 @@ export default function AutoSyncModal({ onClose, onDone }) {
               if (!cancelled) setStats(s)
             }
           } catch (e) {
-            if (!cancelled) { setError(e.message); }
+            if (!cancelled) setError(e.message)
           }
         }
+
+        // Verificar importação pendente
+        if (hasPendingImport()) {
+          const summary = getPendingImportSummary()
+          if (!cancelled) {
+            setPendingSummary(summary)
+            setPhase('resume')
+            return
+          }
+        }
+
         setPhase('idle')
       } catch (e) {
         if (!cancelled) {
@@ -117,6 +157,7 @@ export default function AutoSyncModal({ onClose, onDone }) {
   const handleStart = async () => {
     setError(null)
     signalRef.current = { cancelled: false }
+    setStartTime(Date.now())
 
     if (isNative) {
       setPhase('asking')
@@ -132,8 +173,8 @@ export default function AutoSyncModal({ onClose, onDone }) {
 
         if (res.denied) { setPhase('denied'); return }
         setResult(res)
-        setPhase('done')
-        onDone?.()
+        setPhase(res.cancelled ? 'idle' : 'done')
+        if (!res.cancelled) onDone?.()
       } catch (e) {
         setError(e.message || 'Erro inesperado')
         setPhase('idle')
@@ -147,19 +188,43 @@ export default function AutoSyncModal({ onClose, onDone }) {
     const files = e.target.files
     if (!files || files.length === 0) return
     signalRef.current = { cancelled: false }
+    setStartTime(Date.now())
     setPhase('syncing')
-    setProgress({ done: 0, total: files.length, current: null, failed: 0 })
+    setProgress({ done: 0, total: files.length, current: null, failed: 0, skipped: 0 })
     const res = await runAutoSync(files, (p) => setProgress(p), signalRef.current)
     setResult(res)
     setPhase('done')
     onDone?.()
   }
 
-  const handleCancel = () => { signalRef.current.cancelled = true }
+  const handleCancel = () => {
+    signalRef.current.cancelled = true
+  }
 
+  // Métricas
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
   const remaining = Math.max(0, progress.total - progress.done - progress.failed)
   const isInteractionLocked = phase === 'syncing' || phase === 'asking' || phase === 'init'
+
+  // Estimativa de tempo restante
+  const imported = progress.done - (progress.skipped || 0)
+  const speed = imported > 0 && elapsed > 0 ? (imported / (elapsed / 1000)) : 0
+  const etaSeconds = speed > 0 && remaining > 0 ? Math.round(remaining / speed) : 0
+
+  function formatTime(ms) {
+    if (ms < 1000) return '< 1s'
+    const s = Math.round(ms / 1000)
+    if (s < 60) return `${s}s`
+    const m = Math.floor(s / 60)
+    return `${m}m ${s % 60}s`
+  }
+
+  function formatEta(seconds) {
+    if (seconds <= 0) return 'calculando...'
+    if (seconds < 60) return `~${seconds}s`
+    const m = Math.floor(seconds / 60)
+    return `~${m}m ${seconds % 60}s`
+  }
 
   // ─── Estilos ──────────────────────────────────────────────────────────────
 
@@ -167,24 +232,22 @@ export default function AutoSyncModal({ onClose, onDone }) {
     position: 'fixed', inset: 0, zIndex: 9999,
     background: 'rgba(0,0,0,0.6)',
     display: 'flex',
-    alignItems: 'center',     // ← centro vertical
-    justifyContent: 'center', // ← centro horizontal
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: '20px',
   }
   const modal = {
     background: C.bg,
     width: '100%', maxWidth: 460,
     height: 'auto',
-    maxHeight: 'calc(100vh - 40px)', // sempre cabe na tela
-    borderRadius: 20,         // ← arredondado em todos os cantos
+    maxHeight: 'calc(100vh - 40px)',
+    borderRadius: 20,
     overflow: 'hidden',
     display: 'flex', flexDirection: 'column',
     fontFamily: 'var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif)',
     position: 'relative',
     boxShadow: '0 20px 60px rgba(0,0,0,0.35)',
   }
-  // Handle não é mais necessário (modal centralizado), mas mantido invisível pra não quebrar o resto
-  const handle = { display: 'none' }
   const closeBtn = {
     position: 'absolute', top: 14, right: 16, zIndex: 2,
     background: 'transparent', border: 'none', color: C.textMuted,
@@ -195,7 +258,7 @@ export default function AutoSyncModal({ onClose, onDone }) {
     overflowY: 'auto',
     WebkitOverflowScrolling: 'touch',
     padding: '14px 22px 16px',
-    minHeight: 0, // permite encolher
+    minHeight: 0,
   }
   const footer = {
     flex: '0 0 auto',
@@ -242,11 +305,34 @@ export default function AutoSyncModal({ onClose, onDone }) {
     fontSize: 15, fontWeight: 700, cursor: 'pointer',
     boxShadow: '0 2px 8px rgba(59,130,246,0.25)',
   }
+  const resumeBtn = {
+    ...primaryBtn, background: C.orange,
+    boxShadow: '0 2px 8px rgba(245,158,11,0.25)',
+  }
   const secondaryBtn = {
     width: '100%', background: 'transparent', color: C.textMuted,
     border: 'none', padding: '10px', fontSize: 13, cursor: 'pointer',
   }
   const dangerBtn = { ...secondaryBtn, color: C.red }
+  const logsBtnStyle = {
+    display: 'block', margin: '8px auto 0',
+    background: 'transparent', border: 'none',
+    color: C.textMuted, fontSize: 11.5,
+    textDecoration: 'underline', cursor: 'pointer',
+  }
+  const logsContainer = {
+    background: '#1e1e1e', color: '#d4d4d4',
+    padding: 10, borderRadius: 8, fontSize: 10.5,
+    overflowX: 'auto', overflowY: 'auto',
+    maxHeight: 180, margin: '8px 0 0',
+    fontFamily: 'ui-monospace, Menlo, Monaco, monospace',
+    lineHeight: 1.4,
+  }
+  const metricRow = {
+    display: 'flex', justifyContent: 'space-between',
+    padding: '4px 0', fontSize: 12, color: C.textMuted,
+    borderBottom: `1px solid ${C.bege}`,
+  }
 
   const spinnerCSS = `
     @keyframes recordar-spin { to { transform: rotate(360deg) } }
@@ -261,15 +347,52 @@ export default function AutoSyncModal({ onClose, onDone }) {
     </svg>
   )
 
-  // Botão do footer muda conforme a fase
+  // Componente de logs
+  const LogsSection = () => (
+    <>
+      <button onClick={() => setShowLogs(!showLogs)} style={logsBtnStyle}>
+        {showLogs ? 'Ocultar' : 'Ver'} logs de importação ({logs.length})
+      </button>
+      {showLogs && (
+        <div style={{ position: 'relative' }}>
+          <pre style={logsContainer}>
+            {logs.length > 0
+              ? logs.map((l, i) => (
+                  <span key={i} style={{ color: l.level === 'error' ? '#EF4444' : l.level === 'warn' ? '#F59E0B' : '#d4d4d4' }}>
+                    {`[${l.ts}] ${l.msg}\n`}
+                  </span>
+                ))
+              : 'Nenhum log ainda'}
+            <span ref={logsEndRef} />
+          </pre>
+          <button
+            onClick={() => { clearAutoSyncLogs(); setLogs([]) }}
+            style={{
+              position: 'absolute', top: 4, right: 4,
+              background: 'rgba(255,255,255,0.1)', border: 'none',
+              color: '#888', fontSize: 10, cursor: 'pointer', padding: '2px 6px',
+              borderRadius: 4,
+            }}
+          >
+            Limpar
+          </button>
+        </div>
+      )}
+    </>
+  )
+
+  // Footer muda conforme a fase
   const renderFooter = () => {
     if (phase === 'init' || phase === 'asking') return null
     if (phase === 'syncing') {
       return (
         <div style={footer}>
           <button style={dangerBtn} onClick={handleCancel}>
-            Pausar sincronização
+            Pausar importação
           </button>
+          <p style={{ fontSize: 11, color: C.textMuted, textAlign: 'center', margin: '6px 0 0' }}>
+            A importação pode ser retomada a qualquer momento
+          </p>
         </div>
       )
     }
@@ -282,11 +405,27 @@ export default function AutoSyncModal({ onClose, onDone }) {
         </div>
       )
     }
+    if (phase === 'resume') {
+      return (
+        <div style={footer}>
+          <button style={resumeBtn} onClick={handleStart}>
+            Retomar importação
+          </button>
+          <button style={secondaryBtn} onClick={() => setPhase('idle')}>
+            Iniciar do zero
+          </button>
+        </div>
+      )
+    }
     // idle
     return (
       <div style={footer}>
         <button style={primaryBtn} onClick={handleStart}>
-          {isNative ? 'Permitir e começar' : (platform === 'ios' ? 'Tentar novamente' : 'Selecionar arquivos')}
+          {isNative
+            ? 'Iniciar importação automática'
+            : (platform === 'ios' || platform === 'android')
+              ? 'Tentar novamente'
+              : 'Selecionar arquivos'}
         </button>
         {!isNative && (
           <input
@@ -304,9 +443,8 @@ export default function AutoSyncModal({ onClose, onDone }) {
     <div style={overlay} onClick={() => !isInteractionLocked && onClose()}>
       <style>{spinnerCSS}</style>
       <div style={modal} onClick={e => e.stopPropagation()}>
-        <div style={handle} />
         {!isInteractionLocked && (
-          <button style={closeBtn} onClick={onClose}>✕</button>
+          <button style={closeBtn} onClick={onClose}>&#10005;</button>
         )}
 
         <div style={scrollBody}>
@@ -315,7 +453,7 @@ export default function AutoSyncModal({ onClose, onDone }) {
           {phase === 'init' && (
             <div style={{ padding: '32px 0', textAlign: 'center' }}>
               {SpinnerSVG}
-              <p style={{ ...subtitle, marginTop: 12 }}>Preparando...</p>
+              <p style={{ ...subtitle, marginTop: 12 }}>Preparando importação...</p>
             </div>
           )}
 
@@ -324,30 +462,30 @@ export default function AutoSyncModal({ onClose, onDone }) {
             <>
               <div style={heroIconWrap}>
                 <svg viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="1.7" width="38" height="38">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
                 </svg>
               </div>
 
-              <h1 style={h1}>Backup automático</h1>
+              <h1 style={h1}>Importação automática da galeria</h1>
               <p style={subtitle}>
                 {isNative
-                  ? 'Suas fotos e vídeos do iPhone serão salvos na nuvem automaticamente, igual ao Google Photos.'
-                  : platform === 'ios'
-                    ? 'Plugin de galeria indisponível neste build. Toque em "Tentar novamente" ou veja diagnóstico abaixo.'
-                    : 'No navegador, é necessário selecionar manualmente. Pelo app no iPhone funciona automático.'}
+                  ? `Todas as fotos e vídeos do seu ${platform === 'ios' ? 'iPhone' : 'celular'} serão importados automaticamente para o Recordar. Nenhuma seleção manual necessária.`
+                  : (platform === 'ios' || platform === 'android')
+                    ? 'Plugin de galeria indisponível neste build. Toque em "Tentar novamente" ou veja o diagnóstico abaixo.'
+                    : 'No navegador, é necessário selecionar os arquivos manualmente. Pelo app nativo a importação é automática.'}
               </p>
 
               {stats && (
                 <div style={statCardRow}>
                   <div style={statCard}>
                     <p style={statNumber(C.blue)}>{stats.photos.toLocaleString('pt-BR')}</p>
-                    <p style={statLabel}>fotos</p>
+                    <p style={statLabel}>fotos na galeria</p>
                   </div>
                   <div style={statCard}>
                     <p style={statNumber(C.terra)}>{stats.videos.toLocaleString('pt-BR')}</p>
-                    <p style={statLabel}>vídeos</p>
+                    <p style={statLabel}>vídeos na galeria</p>
                   </div>
                   <div style={statCard}>
                     <p style={statNumber(C.verde)}>{stats.total.toLocaleString('pt-BR')}</p>
@@ -358,23 +496,27 @@ export default function AutoSyncModal({ onClose, onDone }) {
 
               <ul style={bulletList}>
                 <li style={bulletItem}>
-                  <span style={checkDot}>✓</span>
+                  <span style={checkDot}>&#10003;</span>
                   <span>{isNative
-                    ? 'Sincronização automática de TODA a galeria — sem precisar escolher'
-                    : 'Selecione fotos e vídeos pra importar'}</span>
+                    ? 'Importa TODA a galeria automaticamente — sem escolher arquivos'
+                    : 'Selecione fotos e vídeos para importar'}</span>
                 </li>
                 <li style={bulletItem}>
-                  <span style={checkDot}>✓</span>
-                  <span>Compressão inteligente economiza dados</span>
+                  <span style={checkDot}>&#10003;</span>
+                  <span>Compressão inteligente para economizar espaço</span>
                 </li>
                 <li style={bulletItem}>
-                  <span style={checkDot}>✓</span>
-                  <span>Pode pausar a qualquer momento</span>
+                  <span style={checkDot}>&#10003;</span>
+                  <span>Pode pausar e retomar a qualquer momento</span>
+                </li>
+                <li style={bulletItem}>
+                  <span style={checkDot}>&#10003;</span>
+                  <span>Se o app fechar, a importação continua de onde parou</span>
                 </li>
                 {alreadySynced > 0 && (
                   <li style={bulletItem}>
-                    <span style={checkDot}>↻</span>
-                    <span>{alreadySynced} arquivo(s) já sincronizado(s) — não serão reenviados</span>
+                    <span style={{ ...checkDot, background: '#E8F5E9', color: C.verde }}>&#8635;</span>
+                    <span>{alreadySynced.toLocaleString('pt-BR')} arquivo(s) já importado(s) — não serão reenviados</span>
                   </li>
                 )}
               </ul>
@@ -385,30 +527,57 @@ export default function AutoSyncModal({ onClose, onDone }) {
                 </p>
               )}
 
-              {/* Botão diagnóstico — sempre acessível */}
+              {/* Diagnóstico técnico */}
               <button
                 onClick={() => { setDiag(getPluginDiagnostics()); setShowDiag(!showDiag) }}
-                style={{
-                  display: 'block', margin: '8px auto 0',
-                  background: 'transparent', border: 'none',
-                  color: C.textMuted, fontSize: 11.5,
-                  textDecoration: 'underline', cursor: 'pointer',
-                }}
+                style={logsBtnStyle}
               >
                 {showDiag ? 'Ocultar' : 'Ver'} diagnóstico técnico
               </button>
 
               {showDiag && diag && (
-                <pre style={{
-                  background: '#1e1e1e', color: '#d4d4d4',
-                  padding: 10, borderRadius: 8, fontSize: 10.5,
-                  overflowX: 'auto', margin: '8px 0 0',
-                  fontFamily: 'ui-monospace, Menlo, Monaco, monospace',
-                  lineHeight: 1.4,
-                }}>
+                <pre style={logsContainer}>
 {JSON.stringify(diag, null, 2)}
                 </pre>
               )}
+
+              <LogsSection />
+            </>
+          )}
+
+          {/* RESUME — importação pendente */}
+          {phase === 'resume' && pendingSummary && (
+            <>
+              <div style={{ ...heroIconWrap, background: C.orangeLight }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke={C.orange} strokeWidth="2" width="38" height="38">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+              </div>
+
+              <h1 style={h1}>Importação pendente</h1>
+              <p style={subtitle}>
+                A importação anterior foi interrompida. Deseja retomar de onde parou?
+              </p>
+
+              <div style={statCardRow}>
+                <div style={statCard}>
+                  <p style={statNumber(C.verde)}>{pendingSummary.done.toLocaleString('pt-BR')}</p>
+                  <p style={statLabel}>já importados</p>
+                </div>
+                <div style={statCard}>
+                  <p style={statNumber(C.blue)}>{pendingSummary.remaining.toLocaleString('pt-BR')}</p>
+                  <p style={statLabel}>restantes</p>
+                </div>
+                {pendingSummary.failed > 0 && (
+                  <div style={statCard}>
+                    <p style={statNumber(C.red)}>{pendingSummary.failed}</p>
+                    <p style={statLabel}>falha(s)</p>
+                  </div>
+                )}
+              </div>
+
+              <LogsSection />
             </>
           )}
 
@@ -420,7 +589,9 @@ export default function AutoSyncModal({ onClose, onDone }) {
                 Aguardando sua permissão...
               </p>
               <p style={{ ...subtitle, fontSize: 11.5, marginTop: 0 }}>
-                Toque em "Permitir acesso a todas as fotos" na janela do iOS
+                {platform === 'ios'
+                  ? 'Toque em "Permitir acesso a todas as fotos" na janela do iOS'
+                  : 'Permita o acesso à galeria na janela que apareceu'}
               </p>
             </div>
           )}
@@ -430,14 +601,15 @@ export default function AutoSyncModal({ onClose, onDone }) {
             <div style={{ textAlign: 'center', paddingTop: 6 }}>
               <div style={{ marginBottom: 14 }}>{SpinnerSVG}</div>
 
-              <h1 style={{ ...h1, fontSize: 17 }}>Sincronizando suas memórias</h1>
+              <h1 style={{ ...h1, fontSize: 17 }}>Importando galeria automaticamente</h1>
               <p style={{ ...subtitle, marginBottom: 14 }}>
-                {progress.current ? `Enviando: ${truncateName(progress.current)}` : 'Preparando...'}
+                {progress.current ? `Importando: ${truncateName(progress.current)}` : 'Preparando...'}
               </p>
 
+              {/* Barra de progresso */}
               <div style={{
                 background: C.bege, borderRadius: 99,
-                height: 8, overflow: 'hidden', marginBottom: 10,
+                height: 10, overflow: 'hidden', marginBottom: 10,
               }}>
                 <div style={{
                   width: pct + '%', height: '100%',
@@ -446,15 +618,67 @@ export default function AutoSyncModal({ onClose, onDone }) {
                 }} />
               </div>
 
-              <p style={{ fontSize: 14, fontWeight: 700, color: C.text, margin: '0 0 4px' }}>
-                {progress.done} de {progress.total} ({pct}%)
+              {/* Progresso principal */}
+              <p style={{ fontSize: 16, fontWeight: 800, color: C.text, margin: '0 0 6px' }}>
+                {progress.done.toLocaleString('pt-BR')} de {progress.total.toLocaleString('pt-BR')} ({pct}%)
               </p>
-              <p style={{ fontSize: 11.5, color: C.textMuted, margin: '0 0 10px' }}>
-                {remaining > 0 ? `${remaining} restante(s)` : 'Quase lá...'}
-                {progress.failed > 0 && (
-                  <span style={{ color: C.red }}>  •  {progress.failed} falha(s)</span>
+
+              {/* Métricas detalhadas */}
+              <div style={{
+                background: C.white, border: `1px solid ${C.bege}`,
+                borderRadius: 12, padding: '10px 14px', margin: '10px 0',
+                textAlign: 'left',
+              }}>
+                <div style={metricRow}>
+                  <span>Importados</span>
+                  <span style={{ fontWeight: 700, color: C.verde }}>{progress.done.toLocaleString('pt-BR')}</span>
+                </div>
+                <div style={metricRow}>
+                  <span>Restantes</span>
+                  <span style={{ fontWeight: 700, color: C.blue }}>{remaining.toLocaleString('pt-BR')}</span>
+                </div>
+                {(progress.skipped || 0) > 0 && (
+                  <div style={metricRow}>
+                    <span>Já existiam</span>
+                    <span style={{ fontWeight: 700, color: C.textMuted }}>{progress.skipped.toLocaleString('pt-BR')}</span>
+                  </div>
                 )}
-              </p>
+                {progress.failed > 0 && (
+                  <div style={metricRow}>
+                    <span>Falhas</span>
+                    <span style={{ fontWeight: 700, color: C.red }}>{progress.failed}</span>
+                  </div>
+                )}
+                <div style={metricRow}>
+                  <span>Tempo decorrido</span>
+                  <span style={{ fontWeight: 700 }}>{formatTime(elapsed)}</span>
+                </div>
+                {etaSeconds > 0 && (
+                  <div style={{ ...metricRow, borderBottom: 'none' }}>
+                    <span>Tempo estimado restante</span>
+                    <span style={{ fontWeight: 700 }}>{formatEta(etaSeconds)}</span>
+                  </div>
+                )}
+                {speed > 0 && (
+                  <div style={{ ...metricRow, borderBottom: 'none' }}>
+                    <span>Velocidade</span>
+                    <span style={{ fontWeight: 700 }}>{speed.toFixed(1)} arquivos/s</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Status da conexão */}
+              {progress.status === 'offline' && (
+                <div style={{
+                  background: C.orangeLight, color: C.orange,
+                  padding: '8px 14px', borderRadius: 10,
+                  fontSize: 13, fontWeight: 600, margin: '8px 0',
+                }}>
+                  Sem conexão — aguardando rede para continuar...
+                </div>
+              )}
+
+              <LogsSection />
             </div>
           )}
 
@@ -470,13 +694,24 @@ export default function AutoSyncModal({ onClose, onDone }) {
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
               </div>
-              <h1 style={h1}>Tudo certo!</h1>
+              <h1 style={h1}>Importação concluída!</h1>
               <p style={subtitle}>
-                {result?.done || 0} memória(s) sincronizada(s) na nuvem.
-                {result?.failed > 0 && (
-                  <> <br/><span style={{ color: C.red }}>{result.failed} falha(s) — tente novamente depois.</span></>
+                {result?.done || 0} memória(s) importada(s) da galeria.
+                {(result?.skipped || 0) > 0 && (
+                  <><br/><span style={{ color: C.textMuted }}>{result.skipped} já existiam e foram pulados.</span></>
+                )}
+                {(result?.failed || 0) > 0 && (
+                  <><br/><span style={{ color: C.red }}>{result.failed} falha(s) — tente novamente depois.</span></>
                 )}
               </p>
+
+              {elapsed > 0 && (
+                <p style={{ fontSize: 12, color: C.textMuted, margin: '4px 0 12px' }}>
+                  Tempo total: {formatTime(elapsed)}
+                </p>
+              )}
+
+              <LogsSection />
             </div>
           )}
 
@@ -495,8 +730,10 @@ export default function AutoSyncModal({ onClose, onDone }) {
               </div>
               <h1 style={h1}>Acesso negado</h1>
               <p style={subtitle}>
-                Para sincronizar suas memórias, libere o acesso às fotos em:<br/>
-                <strong>Ajustes &gt; Recordar &gt; Fotos &gt; Todas as Fotos</strong>
+                Para importar automaticamente suas fotos e vídeos, libere o acesso à galeria em:<br/>
+                {platform === 'ios'
+                  ? <strong>Ajustes &gt; Recordar &gt; Fotos &gt; Todas as Fotos</strong>
+                  : <strong>Configurações &gt; Apps &gt; Recordar &gt; Permissões &gt; Fotos e vídeos</strong>}
               </p>
             </div>
           )}
@@ -506,7 +743,7 @@ export default function AutoSyncModal({ onClose, onDone }) {
             <div style={{ paddingTop: 8 }}>
               <div style={{
                 width: 72, height: 72, margin: '0 auto 14px',
-                background: '#FEF3C7', borderRadius: 20,
+                background: C.orangeLight, borderRadius: 20,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" width="38" height="38">
@@ -517,37 +754,16 @@ export default function AutoSyncModal({ onClose, onDone }) {
               </div>
               <h1 style={h1}>Plugin não detectado</h1>
               <p style={subtitle}>
-                O plugin nativo de galeria não foi registrado pelo Capacitor.
-                Provavelmente o linker está descartando os símbolos Obj-C.
-                Veja o diagnóstico abaixo e me mande o JSON:
+                O plugin de acesso à galeria não foi registrado pelo Capacitor.
+                Isso pode indicar um problema de build.
+                Veja o diagnóstico abaixo:
               </p>
               {diag && (
-                <pre style={{
-                  background: '#1e1e1e', color: '#d4d4d4',
-                  padding: 12, borderRadius: 8, fontSize: 10.5,
-                  overflowX: 'auto',
-                  fontFamily: 'ui-monospace, Menlo, Monaco, monospace',
-                  lineHeight: 1.4,
-                }}>
+                <pre style={logsContainer}>
 {JSON.stringify(diag, null, 2)}
                 </pre>
               )}
-              {logs.length > 0 && (
-                <details style={{ marginTop: 12 }}>
-                  <summary style={{ fontSize: 12, color: C.textMuted, cursor: 'pointer' }}>
-                    Ver logs ({logs.length})
-                  </summary>
-                  <pre style={{
-                    background: '#1e1e1e', color: '#d4d4d4',
-                    padding: 10, borderRadius: 8, fontSize: 10.5,
-                    overflowX: 'auto', marginTop: 6,
-                    fontFamily: 'ui-monospace, Menlo, Monaco, monospace',
-                    lineHeight: 1.4,
-                  }}>
-{logs.map(l => `[${l.ts}] ${l.msg}`).join('\n')}
-                  </pre>
-                </details>
-              )}
+              <LogsSection />
             </div>
           )}
 

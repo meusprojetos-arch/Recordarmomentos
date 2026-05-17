@@ -78,6 +78,20 @@ db.version(5).stores({
   fileBlobs: '++id, localBlobId, firestoreId, title, type, date, uid',
 });
 
+// Versão 6: tabela de controle da importação automática da galeria
+// Salva cada asset importado para permitir retomada exata após interrupção
+db.version(6).stores({
+  memories: '++id, type, date, createdAt, folderId, uid, *tags',
+  folders: '++id, name, isAuto, order, uid',
+  profile: '++id, username, email',
+  family: '++id, name, username',
+  settings: '&key',
+  reminders: '++id, memoryId, triggerDate, type',
+  fileBlobs: '++id, localBlobId, firestoreId, title, type, date, uid',
+  // Registro de assets já importados da galeria (dedup + retomada)
+  gallerySynced: '&assetId, uid, syncedAt',
+});
+
 // ─── Helpers de Configurações ─────────────────────────────────────────
 
 export async function getSetting(key, defaultValue = null) {
