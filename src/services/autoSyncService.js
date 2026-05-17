@@ -7,15 +7,16 @@
  *  - WEB (fallback): usa input[type=file] (usuário seleciona arquivos).
  */
 
-import { Capacitor, registerPlugin } from '@capacitor/core'
+import { Capacitor } from '@capacitor/core'
 import { addMemoryAndWait } from './memoriesService.js'
 import { isPremium } from './planService.js'
 import { auth } from '../firebase.js'
 
-// Registro OFICIAL do plugin nativo (Capacitor 6+).
-// Substitui o acesso direto via window.Capacitor.Plugins.PhotoLibraryPlugin,
-// que não funciona quando o linker descarta os símbolos Obj-C do CAP_PLUGIN macro.
-const PhotoLibraryPluginNative = registerPlugin('PhotoLibraryPlugin')
+// Nota: usamos window.Capacitor.Plugins.PhotoLibraryPlugin direto.
+// Tentamos antes com registerPlugin() do Capacitor 6+, mas ele retorna
+// um stub que sobrescreve o plugin nativo já registrado pelo CAP_PLUGIN macro.
+// Acessar via window.Capacitor.Plugins é a forma que funciona pra plugins
+// custom registrados via Objective-C runtime.
 
 const SYNC_KEY = 'recordar_autosync_enabled'
 const SYNCED_KEY = 'recordar_synced_hashes'
@@ -43,19 +44,21 @@ export function subscribeToAutoSyncLogs(fn) {
 }
 
 function getPlugin() {
-  return PhotoLibraryPluginNative
+  return window?.Capacitor?.Plugins?.PhotoLibraryPlugin || null
 }
 
 /**
- * No Capacitor 6+ com registerPlugin(), o plugin está disponível imediatamente.
- * Mantemos a função pra compatibilidade mas ela sempre resolve true em iOS.
+ * Aguarda o plugin nativo aparecer em window.Capacitor.Plugins (até timeoutMs).
+ * Plugins customizados via CAP_PLUGIN macro são registrados após o bootstrap
+ * do WebView, então uma espera curta pode ser necessária.
  */
-export async function waitForNativePlugin(_timeoutMs = 3000) {
-  // No iOS, basta checar isPluginAvailable do Capacitor
-  if (Capacitor?.getPlatform?.() === 'ios') {
-    return Capacitor?.isPluginAvailable?.('PhotoLibraryPlugin') ?? true
+export async function waitForNativePlugin(timeoutMs = 3000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    if (getPlugin()) return true
+    await new Promise(r => setTimeout(r, 100))
   }
-  return false
+  return !!getPlugin()
 }
 
 export function getPlatform() {
@@ -63,17 +66,12 @@ export function getPlatform() {
 }
 
 export function isNativePhotoLibrary() {
-  const platform = getPlatform()
-  if (platform !== 'ios') return false
-  // isPluginAvailable é a API oficial pra verificar plugin nativo
-  if (Capacitor?.isPluginAvailable?.('PhotoLibraryPlugin')) return true
-  // Fallback: ainda checa window.Capacitor.Plugins por garantia
-  return !!window?.Capacitor?.Plugins?.PhotoLibraryPlugin
+  if (getPlatform() !== 'ios') return false
+  return !!getPlugin()
 }
 
 /**
  * Diagnóstico — mostra como o Capacitor está enxergando os plugins.
- * Inclui tanto a forma nova (isPluginAvailable) quanto a antiga (window.Plugins).
  */
 export function getPluginDiagnostics() {
   const cap = window?.Capacitor
@@ -83,12 +81,8 @@ export function getPluginDiagnostics() {
     capacitorAvailable: !!cap,
     pluginsObject: !!cap?.Plugins,
     pluginsAvailable: cap?.Plugins ? Object.keys(cap.Plugins).sort() : [],
-    // Forma OFICIAL (Capacitor 6+)
-    photoLibraryAvailable: cap?.isPluginAvailable?.('PhotoLibraryPlugin') || false,
-    iapAvailable: cap?.isPluginAvailable?.('IAPPlugin') || false,
-    // Forma antiga (debug)
-    photoLibraryInPlugins: !!cap?.Plugins?.PhotoLibraryPlugin,
-    iapInPlugins: !!cap?.Plugins?.IAPPlugin,
+    photoLibraryReady: !!cap?.Plugins?.PhotoLibraryPlugin,
+    iapReady: !!cap?.Plugins?.IAPPlugin,
   }
 }
 
