@@ -7,16 +7,15 @@
  *  - WEB (fallback): usa input[type=file] (usuário seleciona arquivos).
  */
 
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { addMemoryAndWait } from './memoriesService.js'
 import { isPremium } from './planService.js'
 import { auth } from '../firebase.js'
 
-// Nota: usamos window.Capacitor.Plugins.PhotoLibraryPlugin direto.
-// Tentamos antes com registerPlugin() do Capacitor 6+, mas ele retorna
-// um stub que sobrescreve o plugin nativo já registrado pelo CAP_PLUGIN macro.
-// Acessar via window.Capacitor.Plugins é a forma que funciona pra plugins
-// custom registrados via Objective-C runtime.
+// registerPlugin é necessário pra criar o bridge JS↔nativo.
+// Combinado com -ObjC nos linker flags + referência no AppDelegate.swift,
+// garante que o CAP_PLUGIN macro registra a classe e o JS consegue chamar.
+const PhotoLibrary = registerPlugin('PhotoLibraryPlugin')
 
 const SYNC_KEY = 'recordar_autosync_enabled'
 const SYNCED_KEY = 'recordar_synced_hashes'
@@ -44,30 +43,45 @@ export function subscribeToAutoSyncLogs(fn) {
 }
 
 function getPlugin() {
-  return window?.Capacitor?.Plugins?.PhotoLibraryPlugin || null
+  // Preferência: o plugin nativo do window.Capacitor.Plugins (real).
+  // Fallback: o proxy do registerPlugin() (que joga 'not implemented' se nativo falhou).
+  return window?.Capacitor?.Plugins?.PhotoLibraryPlugin || PhotoLibrary || null
 }
 
-/**
- * Aguarda o plugin nativo aparecer em window.Capacitor.Plugins (até timeoutMs).
- * Plugins customizados via CAP_PLUGIN macro são registrados após o bootstrap
- * do WebView, então uma espera curta pode ser necessária.
- */
 export async function waitForNativePlugin(timeoutMs = 3000) {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
-    if (getPlugin()) return true
+    if (window?.Capacitor?.Plugins?.PhotoLibraryPlugin) return true
     await new Promise(r => setTimeout(r, 100))
   }
-  return !!getPlugin()
+  return !!window?.Capacitor?.Plugins?.PhotoLibraryPlugin
 }
 
 export function getPlatform() {
   return Capacitor?.getPlatform?.() || 'web'
 }
 
+/**
+ * Verifica se o plugin nativo está realmente disponível (não o stub).
+ * Testa chamando um método "barato" e ver se funciona — se "not implemented"
+ * sai true=false.
+ */
+export async function isNativePhotoLibraryReady() {
+  if (getPlatform() !== 'ios') return false
+  if (!window?.Capacitor?.Plugins?.PhotoLibraryPlugin) return false
+  try {
+    // checkPhotoPermissions é leve e não dispara permissão
+    await window.Capacitor.Plugins.PhotoLibraryPlugin.checkPhotoPermissions()
+    return true
+  } catch (e) {
+    // Se a mensagem for "not implemented", o plugin está como stub
+    return !String(e?.message || e).toLowerCase().includes('not implemented')
+  }
+}
+
 export function isNativePhotoLibrary() {
   if (getPlatform() !== 'ios') return false
-  return !!getPlugin()
+  return !!window?.Capacitor?.Plugins?.PhotoLibraryPlugin
 }
 
 /**

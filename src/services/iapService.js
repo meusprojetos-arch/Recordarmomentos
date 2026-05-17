@@ -6,7 +6,10 @@
  * (registrado pelo CAP_PLUGIN macro no IAPPlugin.m).
  */
 
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
+
+// registerPlugin cria o bridge JS↔nativo. Combinado com -ObjC + AppDelegate.
+const IAPBridge = registerPlugin('IAPPlugin')
 
 // Mapeamento: productId → planId interno
 export const PRODUCT_TO_PLAN = {
@@ -49,7 +52,9 @@ export const PLAN_TO_PRODUCT = {
 export const ALL_PRODUCT_IDS = Object.keys(PRODUCT_TO_PLAN)
 
 function getPlugin() {
-  return window?.Capacitor?.Plugins?.IAPPlugin || null
+  // Preferência: plugin real do window.Capacitor.Plugins
+  // Fallback: o proxy do registerPlugin()
+  return window?.Capacitor?.Plugins?.IAPPlugin || IAPBridge || null
 }
 
 export function isNativeIAP() {

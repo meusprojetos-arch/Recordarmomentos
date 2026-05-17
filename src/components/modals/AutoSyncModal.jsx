@@ -165,24 +165,26 @@ export default function AutoSyncModal({ onClose, onDone }) {
 
   const overlay = {
     position: 'fixed', inset: 0, zIndex: 9999,
-    background: 'rgba(0,0,0,0.55)',
-    display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    background: 'rgba(0,0,0,0.6)',
+    display: 'flex',
+    alignItems: 'center',     // ← centro vertical
+    justifyContent: 'center', // ← centro horizontal
+    padding: '20px',
   }
   const modal = {
     background: C.bg,
-    width: '100%', maxWidth: 520,
-    height: 'auto', maxHeight: '92vh',
-    borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    width: '100%', maxWidth: 460,
+    height: 'auto',
+    maxHeight: 'calc(100vh - 40px)', // sempre cabe na tela
+    borderRadius: 20,         // ← arredondado em todos os cantos
     overflow: 'hidden',
     display: 'flex', flexDirection: 'column',
     fontFamily: 'var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif)',
     position: 'relative',
+    boxShadow: '0 20px 60px rgba(0,0,0,0.35)',
   }
-  const handle = {
-    width: 38, height: 4, background: '#d4d0c5',
-    borderRadius: 99, margin: '10px auto 0',
-    flexShrink: 0,
-  }
+  // Handle não é mais necessário (modal centralizado), mas mantido invisível pra não quebrar o resto
+  const handle = { display: 'none' }
   const closeBtn = {
     position: 'absolute', top: 14, right: 16, zIndex: 2,
     background: 'transparent', border: 'none', color: C.textMuted,
@@ -197,7 +199,7 @@ export default function AutoSyncModal({ onClose, onDone }) {
   }
   const footer = {
     flex: '0 0 auto',
-    padding: '12px 22px calc(16px + env(safe-area-inset-bottom, 0px))',
+    padding: '14px 22px 18px',
     background: C.bg,
     borderTop: `1px solid ${C.bege}`,
   }
@@ -515,9 +517,9 @@ export default function AutoSyncModal({ onClose, onDone }) {
               </div>
               <h1 style={h1}>Plugin não detectado</h1>
               <p style={subtitle}>
-                O plugin nativo de galeria não foi encontrado neste build do app.
-                Isso significa que o arquivo Swift não foi compilado corretamente.
-                Veja o diagnóstico abaixo:
+                O plugin nativo de galeria não foi registrado pelo Capacitor.
+                Provavelmente o linker está descartando os símbolos Obj-C.
+                Veja o diagnóstico abaixo e me mande o JSON:
               </p>
               {diag && (
                 <pre style={{

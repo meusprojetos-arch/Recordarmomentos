@@ -7,7 +7,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // CRÍTICO: força o linker a manter as classes Obj-C dos plugins customizados.
+        // Sem isso, o Xcode 26 descarta os símbolos como "dead code" e o CAP_PLUGIN
+        // macro nunca registra os plugins. Referência por nome (NSClassFromString)
+        // garante que o linker veja as classes como usadas.
+        let _ = [
+            NSClassFromString("IAPPlugin"),
+            NSClassFromString("PhotoLibraryPlugin"),
+        ]
         return true
     }
 
