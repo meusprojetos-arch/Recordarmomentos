@@ -14,9 +14,19 @@ import Capacitor
  *  - getAssetData({ id }): { data: base64, mimeType, size }
  */
 @objc(PhotoLibraryPlugin)
-public class PhotoLibraryPlugin: CAPPlugin {
+public class PhotoLibraryPlugin: CAPPlugin, CAPBridgedPlugin {
 
-    // Renomeados pra evitar colisão com checkPermissions/requestPermissions do CAPPlugin
+    // Capacitor 6+: protocolo CAPBridgedPlugin substitui o macro CAP_PLUGIN do .m
+    public let identifier = "PhotoLibraryPlugin"
+    public let jsName = "PhotoLibraryPlugin"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "checkPhotoPermissions",   returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "requestPhotoPermissions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getMediaCount",           returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getMediaPage",            returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getAssetData",            returnType: CAPPluginReturnPromise),
+    ]
+
     @objc func checkPhotoPermissions(_ call: CAPPluginCall) {
         let status: PHAuthorizationStatus
         if #available(iOS 14, *) {

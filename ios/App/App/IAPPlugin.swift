@@ -3,7 +3,17 @@ import StoreKit
 import Capacitor
 
 @objc(IAPPlugin)
-public class IAPPlugin: CAPPlugin, SKProductsRequestDelegate, SKPaymentTransactionObserver {
+public class IAPPlugin: CAPPlugin, CAPBridgedPlugin, SKProductsRequestDelegate, SKPaymentTransactionObserver {
+
+    // Capacitor 6+: protocolo CAPBridgedPlugin substitui o macro CAP_PLUGIN do .m
+    public let identifier = "IAPPlugin"
+    public let jsName = "IAPPlugin"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "getProducts",      returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "purchase",         returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "restorePurchases", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "canMakePayments",  returnType: CAPPluginReturnPromise),
+    ]
 
     private var productsRequest: SKProductsRequest?
     private var pendingCall: CAPPluginCall?

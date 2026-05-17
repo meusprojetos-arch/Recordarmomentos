@@ -16,7 +16,6 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
   const { signup } = useAuth()
   const [name, setName] = useState('')
   const [username, setUsername] = useState('')
-  const [birthDate, setBirthDate] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -42,7 +41,7 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!name || !username || !email || !password || !birthDate) {
+    if (!name || !username || !email || !password) {
       toast.error('Preencha todos os campos')
       return
     }
@@ -64,7 +63,7 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
     }
     setLoading(true)
     try {
-      await signup(email, password, name, username, birthDate)
+      await signup(email, password, name, username, '')
       toast.success('Conta criada com sucesso!')
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {
@@ -110,16 +109,6 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
               autoComplete="username"
             />
             <span className={styles.hint}>Letras minúsculas, números e . permitidos</span>
-          </div>
-          <div className={styles.field}>
-            <label className={styles.label}>Data de nascimento</label>
-            <input
-              type="date"
-              className={styles.input}
-              value={birthDate}
-              onChange={e => setBirthDate(e.target.value)}
-            />
-            <span className={styles.hint}>Usamos para lembrar aniversários e datas especiais</span>
           </div>
           <div className={styles.field}>
             <label className={styles.label}>Email</label>
