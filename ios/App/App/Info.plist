@@ -1,60 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
-	<key>CFBundleDisplayName</key>
-        <string>Recordar</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
+<!--
+  INSTRUÇÕES:
+  Abra o arquivo ios/App/App/Info.plist no Xcode (ou em qualquer editor de texto)
+  e adicione as linhas abaixo DENTRO da tag <dict> principal, antes do </dict> final.
+  
+  Essas chaves são obrigatórias para que o @capacitor/camera funcione no iOS.
+  Sem elas o app trava silenciosamente ao tentar acessar fotos/câmera.
+-->
 
-	<!-- Permissões de câmera, microfone e galeria — obrigatórias para App Store -->
-	<key>NSCameraUsageDescription</key>
-	<string>O Recordar precisa da câmera para você fotografar e filmar seus momentos especiais.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>O Recordar precisa do microfone para gravar áudios e vídeos das suas memórias.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>O Recordar precisa acessar sua galeria para importar fotos e vídeos das suas memórias.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>O Recordar precisa salvar fotos na sua galeria.</string>
+<!-- Câmera -->
+<key>NSCameraUsageDescription</key>
+<string>Para fotografar e gravar memórias diretamente no app</string>
 
-</dict>
-</plist>
+<!-- Leitura da galeria (iOS 14 e anterior) -->
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Para importar suas fotos e vídeos e fazer backup automático</string>
+
+<!-- Salvar na galeria (caso queira exportar de volta) -->
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>Para salvar memórias exportadas na sua galeria</string>
+
+<!--
+  IMPORTANTE — iOS 14+:
+  O PHPickerViewController (usado pelo Camera.pickImages) NÃO exige
+  NSPhotoLibraryUsageDescription para funcionar. Mas mantê-la garante
+  compatibilidade com iOS 13 e evita rejeição na revisão da App Store.
+-->
