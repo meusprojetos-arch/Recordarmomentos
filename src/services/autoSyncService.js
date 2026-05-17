@@ -70,14 +70,14 @@ export function countSynced() {
 export async function checkPhotoPermission() {
   const plugin = getPlugin()
   if (!plugin) return 'web'
-  const r = await plugin.checkPermissions()
+  const r = await plugin.checkPhotoPermissions()
   return r.status
 }
 
 export async function requestPhotoPermission() {
   const plugin = getPlugin()
   if (!plugin) return 'web'
-  const r = await plugin.requestPermissions()
+  const r = await plugin.requestPhotoPermissions()
   return r.status
 }
 
@@ -122,9 +122,9 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
   if (!plugin) throw new Error('Plugin nativo não disponível')
 
   // 1) Permissão
-  const perm = await plugin.checkPermissions()
+  const perm = await plugin.checkPhotoPermissions()
   if (perm.status !== 'authorized' && perm.status !== 'limited') {
-    const r = await plugin.requestPermissions()
+    const r = await plugin.requestPhotoPermissions()
     if (r.status !== 'authorized' && r.status !== 'limited') {
       onProgress?.({ status: 'denied', done: 0, total: 0, current: null, failed: 0 })
       return { done: 0, total: 0, failed: 0, cancelled: false, denied: true }

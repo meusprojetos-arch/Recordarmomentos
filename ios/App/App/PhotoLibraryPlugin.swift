@@ -16,7 +16,8 @@ import Capacitor
 @objc(PhotoLibraryPlugin)
 public class PhotoLibraryPlugin: CAPPlugin {
 
-    @objc func checkPermissions(_ call: CAPPluginCall) {
+    // Renomeados pra evitar colisão com checkPermissions/requestPermissions do CAPPlugin
+    @objc func checkPhotoPermissions(_ call: CAPPluginCall) {
         let status: PHAuthorizationStatus
         if #available(iOS 14, *) {
             status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -26,7 +27,7 @@ public class PhotoLibraryPlugin: CAPPlugin {
         call.resolve(["status": statusString(status)])
     }
 
-    @objc func requestPermissions(_ call: CAPPluginCall) {
+    @objc func requestPhotoPermissions(_ call: CAPPluginCall) {
         if #available(iOS 14, *) {
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
                 call.resolve(["status": self.statusString(status)])
