@@ -11,6 +11,7 @@ import { getMemories, searchMemories, deleteMemory, updateMemory, getTrashItems,
 import { db as localDb } from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import FolderGrid from '../ui/FolderGrid.jsx'
+import LazyImage from '../ui/LazyImage.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import styles from './TempoScreen.module.css'
@@ -107,26 +108,14 @@ export default function TempoScreen({ pendingMemories }) {
 
   const loadMemories = useCallback(async () => {
     try {
-      const mems = await getMemories()
-      // Encontrar a pasta "Trancadas" para excluir da galeria principal
-      let lockedFolderId = null
-      try {
-        const uid = user?.uid || ''
-        const lockedFolder = await localDb.folders
-          .where('uid').equals(uid)
-          .and(f => f.name === 'Trancadas')
-          .first()
-        if (lockedFolder) lockedFolderId = lockedFolder.id
-      } catch { /* ignore */ }
-      // Filtrar memórias trancadas (privadas + na pasta Trancadas)
-      const visible = mems.filter(m => {
-        if (lockedFolderId && m.folderId === lockedFolderId && m.privacyLevel === 'private') return false
-        return true
-      })
+      // getMemories já filtra isLocked=true automaticamente (cloud-synced)
+      const visible = await getMemories()
       setMemories(visible)
-      // Calcular contagem por pasta
+
+      // Pra contagem por pasta, busca incluindo trancadas
+      const allWithLocked = await getMemories({ includeLocked: true })
       const countMap = {}
-      for (const m of mems) {
+      for (const m of allWithLocked) {
         if (m.folderId) countMap[m.folderId] = (countMap[m.folderId] || 0) + 1
       }
       setMemoryCounts(countMap)
@@ -159,8 +148,16 @@ export default function TempoScreen({ pendingMemories }) {
     setOpenFolder(folder)
     setFolderLoading(true)
     try {
-      const mems = await getMemories()
-      const folderMems = mems.filter(m => m.folderId === folder.id)
+      // Se for pasta Trancadas, busca SÓ as trancadas (cloud-synced).
+      // Senão, busca normal (sem trancadas) e filtra pelo folderId.
+      const isLockedFolder = folder.name === 'Trancadas'
+      const mems = await getMemories({
+        includeLocked: isLockedFolder,
+        onlyLocked: isLockedFolder,
+      })
+      const folderMems = isLockedFolder
+        ? mems // já vieram só as trancadas
+        : mems.filter(m => m.folderId === folder.id)
       setFolderMemories(folderMems)
       // Gerar URLs de blob para fotos da pasta
       const urls = {}
@@ -213,37 +210,27 @@ export default function TempoScreen({ pendingMemories }) {
     }
   }, [loadMemories])
 
-  // ── Geração de URLs de blob ────────────────────────────────────────────────
-
+  // ── Geração de URLs de blob (SOB DEMANDA via LazyImage) ───────────────────
+  //
+  // Antes: criávamos URL.createObjectURL pra TODAS as memórias de uma vez
+  // (consumia memória proporcional ao total de fotos do usuário).
+  //
+  // Agora: o componente LazyImage cria a URL SÓ quando a foto entra/se aproxima
+  // do viewport, e libera quando sai. Memória usada é proporcional só ao que
+  // está visível na tela (~constante, não cresce com a galeria).
+  //
+  // Mantemos thumbUrls como CACHE: depois que LazyImage resolve uma URL do
+  // Firebase (filePath → getDownloadURL), guardamos pra não chamar de novo.
   useEffect(() => {
+    // Apenas pré-popula com fileUrl já existente (gratuito, sem objectURL)
     const urls = {}
     for (const m of memories) {
-      try {
-        if (m._objectUrl) {
-          urls[m.id] = m._objectUrl
-        } else if (m.fileUrl) {
-          urls[m.id] = m.fileUrl
-        } else if (m.thumbnail && m.thumbnail instanceof Blob) {
-          urls[m.id] = URL.createObjectURL(m.thumbnail)
-        } else if (m.fileBlob && m.fileBlob instanceof Blob) {
-          // Usar o blob diretamente — preserva o MIME type original (importante para áudio)
-          urls[m.id] = URL.createObjectURL(m.fileBlob)
-        } else if (m.fileBlob && !(m.fileBlob instanceof Blob)) {
-          const mimeType = m.type === 'audio' ? 'audio/webm;codecs=opus' : m.type === 'video' ? 'video/mp4' : 'image/jpeg'
-          const blob = new Blob([m.fileBlob], { type: mimeType })
-          urls[m.id] = URL.createObjectURL(blob)
-        }
-      } catch (e) { /* skip invalid blobs */ }
+      if (m._objectUrl) urls[m.id] = m._objectUrl
+      else if (m.fileUrl) urls[m.id] = m.fileUrl
     }
     setThumbUrls(urls)
     return () => {
-      Object.entries(urls).forEach(([id, u]) => {
-        // Não revogar _objectUrl pois é gerenciado externamente
-        const mem = memories.find(m => m.id === id)
-        if (!mem?._objectUrl || u !== mem._objectUrl) {
-          URL.revokeObjectURL(u)
-        }
-      })
+      // Nada a revogar — LazyImage gerencia seus próprios objectURLs.
     }
   }, [memories])
 
@@ -591,7 +578,7 @@ export default function TempoScreen({ pendingMemories }) {
     if (lockSelectedIds.size === 0) return
     const uid = user?.uid || ''
     try {
-      // Criar/encontrar pasta "Trancadas" do usuário atual
+      // Pasta local "Trancadas" só pra organização visual (FolderGrid). Opcional.
       let lockedFolder = await localDb.folders
         .where('uid').equals(uid)
         .and(f => f.name === 'Trancadas')
@@ -609,12 +596,15 @@ export default function TempoScreen({ pendingMemories }) {
         lockedFolder = { id: folderId }
       }
 
-      // Mover para pasta + marcar como privado
+      // CRÍTICO: isLocked=true vai pro Firestore — sincroniza entre dispositivos
       for (const id of lockSelectedIds) {
-        await updateMemory(id, { privacyLevel: 'private', folderId: lockedFolder.id })
+        await updateMemory(id, {
+          privacyLevel: 'private',
+          folderId: lockedFolder.id,
+          isLocked: true,
+        })
       }
 
-      // Remover da galeria visível
       setMemories(prev => prev.filter(m => !lockSelectedIds.has(m.id)))
       toast.success(`${lockSelectedIds.size} item(s) trancado(s)`)
     } catch {
@@ -630,8 +620,31 @@ export default function TempoScreen({ pendingMemories }) {
     return thumbUrls[m.id] || m.fileUrl || null
   }
 
+  // Resolve URL da foto SOB DEMANDA (chamado pelo LazyImage só quando entra no viewport)
+  function makeResolver(memory) {
+    return async () => {
+      // 1) Já tem URL pronta (cache do state ou Firebase URL)
+      const cached = thumbUrls[memory.id] || memory.fileUrl
+      if (cached) return cached
+      // 2) Tenta resolver do Firebase Storage pela filePath
+      if (memory.filePath) {
+        try {
+          const { getDownloadURL, ref: sRef } = await import('firebase/storage')
+          const { storage: st } = await import('../../firebase.js')
+          const fresh = await getDownloadURL(sRef(st, memory.filePath))
+          setThumbUrls(prev => ({ ...prev, [memory.id]: fresh }))
+          return fresh
+        } catch { /* segue pro blob local */ }
+      }
+      // 3) Blob local
+      if (memory._objectUrl) return memory._objectUrl
+      if (memory.thumbnail instanceof Blob) return URL.createObjectURL(memory.thumbnail)
+      if (memory.fileBlob instanceof Blob) return URL.createObjectURL(memory.fileBlob)
+      return null
+    }
+  }
+
   function GridItem({ memory }) {
-    const src = getThumbSrc(memory)
     const isSelected = selectedIds.has(memory.id)
     const isLockSelected = lockSelectedIds.has(memory.id)
 
@@ -647,36 +660,19 @@ export default function TempoScreen({ pendingMemories }) {
         role="button"
         aria-label={memory.title || 'Memória'}
       >
-        {/* Imagem / Vídeo / Áudio */}
-        {src && memory.type === 'photo' && (
-          <img
-            src={src}
+        {/* Imagem (lazy load — só carrega quando entra/se aproxima do viewport) */}
+        {memory.type === 'photo' && (
+          <LazyImage
+            src={makeResolver(memory)}
             alt={memory.title || ''}
             className={styles.thumbImg}
-            loading="lazy"
-            onError={async e => {
-              if (memory.filePath && !e.target.dataset.retried) {
-                e.target.dataset.retried = '1'
-                try {
-                  const { getDownloadURL, ref: sRef } = await import('firebase/storage')
-                  const { storage: st } = await import('../../firebase.js')
-                  const freshUrl = await getDownloadURL(sRef(st, memory.filePath))
-                  e.target.src = freshUrl
-                  setThumbUrls(prev => ({ ...prev, [memory.id]: freshUrl }))
-                } catch {
-                  e.target.style.display = 'none'
-                }
-              } else {
-                e.target.style.display = 'none'
-              }
-            }}
+            rootMargin="400px"
+            placeholder={
+              <div className={styles.thumbPlaceholder}>
+                <img src={FILTER_ICONS.photo} alt="" width={32} height={32} aria-hidden="true" />
+              </div>
+            }
           />
-        )}
-        {src && memory.type === 'photo' && (
-          <div className={styles.thumbPlaceholder} style={{ display: 'none' }}>
-            <img src={FILTER_ICONS.photo} alt="" width={32} height={32} aria-hidden="true" />
-            <span className={styles.thumbTitle}>{memory.title}</span>
-          </div>
         )}
         {memory.type === 'video' && (
           <>
@@ -697,12 +693,6 @@ export default function TempoScreen({ pendingMemories }) {
           <div className={styles.thumbPlaceholder}>
             <img src={FILTER_ICONS.audio} alt="" width={32} height={32} aria-hidden="true" />
             <span className={styles.thumbTitle}>{memory.title || 'Audio'}</span>
-          </div>
-        )}
-        {!src && memory.type !== 'audio' && (
-          <div className={styles.thumbPlaceholder}>
-            <img src={FILTER_ICONS[memory.type] || FILTER_ICONS.photo} alt="" width={32} height={32} aria-hidden="true" />
-            <span className={styles.thumbTitle}>{memory.title}</span>
           </div>
         )}
 
@@ -1100,7 +1090,11 @@ export default function TempoScreen({ pendingMemories }) {
                     lockedFolder = { id: folderId }
                   }
                   for (const id of idsToLock) {
-                    await updateMemory(id, { privacyLevel: 'private', folderId: lockedFolder.id })
+                    await updateMemory(id, {
+                      privacyLevel: 'private',
+                      folderId: lockedFolder.id,
+                      isLocked: true, // ← sincroniza entre dispositivos via Firestore
+                    })
                   }
                   setMemories(prev => prev.filter(m => !idsToLock.has(m.id)))
                   toast.success(`${idsToLock.size} item(s) trancado(s)`)

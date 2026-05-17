@@ -1,53 +1,78 @@
 /**
  * MemoryCard — Card de memória no feed
- * Exibe thumbnail, título, data, descrição e tag de pasta
+ * Usa LazyImage pra carregar thumbs só quando entram no viewport (estilo Google Photos).
  */
 
 import React, { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import db from '../../db/database.js'
+import LazyImage from './LazyImage.jsx'
 import styles from './MemoryCard.module.css'
 
-// Ícones por tipo de memória — substitua pela sua imagem (40x40px)
 const TYPE_ICONS = {
-  photo: '/icons/tipo-foto.svg',   // 40x40 — câmera
-  video: '/icons/tipo-video.svg',  // 40x40 — filmadora
-  audio: '/icons/tipo-audio.svg',  // 40x40 — microfone
-  text:  '/icons/tipo-texto.svg',  // 40x40 — lápis / folha
+  photo: '/icons/tipo-foto.svg',
+  video: '/icons/tipo-video.svg',
+  audio: '/icons/tipo-audio.svg',
+  text:  '/icons/tipo-texto.svg',
 }
 
 export default function MemoryCard({ memory }) {
   const [folder, setFolder] = useState(null)
-  const [thumbUrl, setThumbUrl] = useState(null)
 
   useEffect(() => {
     if (memory.folderId) {
-      db.folders.get(memory.folderId).then(setFolder)
+      db.folders.get(memory.folderId).then(setFolder).catch(() => {})
     }
-    if (memory.thumbnail) {
-      setThumbUrl(URL.createObjectURL(memory.thumbnail))
-    } else if (memory.fileBlob && memory.type === 'photo') {
-      setThumbUrl(URL.createObjectURL(memory.fileBlob))
-    }
-    return () => { if (thumbUrl) URL.revokeObjectURL(thumbUrl) }
-  }, [memory.id])
+  }, [memory.folderId])
+
+  // Resolve a URL da imagem somente quando a LazyImage decidir carregar
+  const resolveSrc = async () => {
+    // 1) Já tem URL do Firebase (sincronizada na nuvem) — usa direto, mais leve
+    if (memory.fileUrl) return memory.fileUrl
+    // 2) Já veio um objectUrl externo
+    if (memory._objectUrl) return memory._objectUrl
+    // 3) Tem blob local (offline ou ainda não subiu) — cria objectURL só agora
+    if (memory.thumbnail instanceof Blob) return URL.createObjectURL(memory.thumbnail)
+    if (memory.fileBlob instanceof Blob) return URL.createObjectURL(memory.fileBlob)
+    return null
+  }
 
   const dateLabel = memory.date
     ? format(new Date(memory.date + 'T12:00:00'), "d 'de' MMMM 'de' yyyy", { locale: ptBR })
     : ''
 
+  const isMedia = memory.type === 'photo' || memory.type === 'video'
+
   return (
     <div className={styles.item}>
-      {/* Thumbnail */}
       <div className={styles.thumb}>
-        {thumbUrl
-          ? <img src={thumbUrl} alt="Memória" />
-          : <img src={TYPE_ICONS[memory.type] || TYPE_ICONS.photo} alt="" aria-hidden="true" width={40} height={40} />
-        }
+        {isMedia ? (
+          <LazyImage
+            src={resolveSrc}
+            alt={memory.title || 'Memória'}
+            placeholder={
+              <img
+                src={TYPE_ICONS[memory.type] || TYPE_ICONS.photo}
+                alt=""
+                aria-hidden="true"
+                width={40}
+                height={40}
+                style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }}
+              />
+            }
+          />
+        ) : (
+          <img
+            src={TYPE_ICONS[memory.type] || TYPE_ICONS.photo}
+            alt=""
+            aria-hidden="true"
+            width={40}
+            height={40}
+          />
+        )}
       </div>
 
-      {/* Conteúdo */}
       <div className={styles.info}>
         <p className={styles.date}>{dateLabel}</p>
         {memory.description && (

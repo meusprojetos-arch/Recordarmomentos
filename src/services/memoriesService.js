@@ -4,7 +4,7 @@
 import { firestore, storage, auth } from '../firebase.js'
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, getDocs, getDoc, limit,
+  query, where, orderBy, getDocs, getDoc, limit, startAfter,
   serverTimestamp, Timestamp
 } from 'firebase/firestore'
 import {
@@ -210,7 +210,12 @@ export async function addMemoryAndWait(memoryData, file = null) {
 }
 
 /**
- * Busca todas as memorias do usuario
+ * Busca memorias do usuario
+ * @param {Object} options
+ *   - type: 'photo'|'video'|'audio'|'text' (filtro)
+ *   - limit: número máximo
+ *   - includeLocked: incluir memórias trancadas (default: false)
+ *   - onlyLocked: retornar SOMENTE as trancadas (default: false)
  */
 export async function getMemories(options = {}) {
   const uid = auth.currentUser?.uid
@@ -226,7 +231,14 @@ export async function getMemories(options = {}) {
   }
 
   const snap = await getDocs(q)
-  const memories = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  let memories = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+
+  // Filtro de trancadas (sincronizado via Firestore — funciona entre dispositivos)
+  if (options.onlyLocked) {
+    memories = memories.filter(m => m.isLocked === true)
+  } else if (!options.includeLocked) {
+    memories = memories.filter(m => m.isLocked !== true)
+  }
 
   // Enriquecer com blobs locais do IndexedDB
   try {
@@ -266,6 +278,67 @@ export async function getMemories(options = {}) {
  */
 export async function getRecentMemories(count = 10) {
   return getMemories({ limit: count })
+}
+
+/**
+ * Versão PAGINADA - busca um pedaço por vez (estilo Google Photos).
+ * Retorna { memories, lastDoc, hasMore }. Use lastDoc na próxima chamada como cursor.
+ *
+ * NÃO baixa blobs locais nem cria objectURLs — isso é responsabilidade do componente.
+ *
+ * @param {Object} options
+ *   - pageSize: 30 (default)
+ *   - cursor: lastDoc da chamada anterior (null = primeira página)
+ *   - type: 'photo'|'video'|'audio'|'text'
+ *   - includeLocked: false
+ *   - onlyLocked: false
+ */
+export async function getMemoriesPaginated(options = {}) {
+  const uid = auth.currentUser?.uid
+  if (!uid) return { memories: [], lastDoc: null, hasMore: false }
+
+  const pageSize = options.pageSize || 30
+  const constraints = []
+  if (options.type) constraints.push(where('type', '==', options.type))
+  constraints.push(orderBy('createdAt', 'desc'))
+  if (options.cursor) constraints.push(startAfter(options.cursor))
+  constraints.push(limit(pageSize + 1)) // pega 1 a mais pra saber se tem próxima página
+
+  const q = query(memoriesCol(uid), ...constraints)
+  const snap = await getDocs(q)
+
+  let docs = snap.docs
+  const hasMore = docs.length > pageSize
+  if (hasMore) docs = docs.slice(0, pageSize)
+
+  let memories = docs.map(d => ({ id: d.id, ...d.data(), _doc: d }))
+
+  // Filtro de trancadas (mesma lógica do getMemories)
+  if (options.onlyLocked) {
+    memories = memories.filter(m => m.isLocked === true)
+  } else if (!options.includeLocked) {
+    memories = memories.filter(m => m.isLocked !== true)
+  }
+
+  return {
+    memories,
+    lastDoc: docs.length > 0 ? docs[docs.length - 1] : null,
+    hasMore,
+  }
+}
+
+/**
+ * Marca uma memória como trancada/destrancada.
+ * Sincroniza entre dispositivos (campo isLocked direto no Firestore).
+ */
+export async function setMemoryLocked(memoryId, locked = true) {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('Nao autenticado')
+  await updateDoc(doc(firestore, 'users', uid, 'memories', memoryId), {
+    isLocked: !!locked,
+    privacyLevel: locked ? 'private' : 'private',
+    updatedAt: serverTimestamp(),
+  })
 }
 
 /**
