@@ -17,14 +17,69 @@ const SYNCED_KEY = 'recordar_synced_hashes'
 const CONCURRENCY = 4
 const PAGE_SIZE = 50
 
-// ─── Detecção de plugin nativo ──────────────────────────────────────────────
+// ─── Detecção de plugin nativo + logs visíveis ──────────────────────────────
+
+const _autoSyncLogs = []
+const _autoSyncLogListeners = new Set()
+
+function _log(msg, level = 'info') {
+  const entry = { ts: new Date().toISOString().substring(11, 23), level, msg: String(msg) }
+  _autoSyncLogs.push(entry)
+  if (_autoSyncLogs.length > 200) _autoSyncLogs.shift()
+  if (level === 'warn') console.warn('[autosync]', msg)
+  else console.log('[autosync]', msg)
+  _autoSyncLogListeners.forEach(fn => { try { fn(entry) } catch {} })
+}
+
+export function getAutoSyncLogs() { return [..._autoSyncLogs] }
+export function subscribeToAutoSyncLogs(fn) {
+  _autoSyncLogListeners.add(fn)
+  return () => _autoSyncLogListeners.delete(fn)
+}
 
 function getPlugin() {
   return window?.Capacitor?.Plugins?.PhotoLibraryPlugin || null
 }
 
+/**
+ * Aguarda o plugin nativo aparecer (até `timeoutMs`).
+ * Útil porque às vezes o Capacitor demora 1-2s pra registrar plugins
+ * após o WebView carregar.
+ */
+export async function waitForNativePlugin(timeoutMs = 3000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    if (getPlugin()) return true
+    await new Promise(r => setTimeout(r, 100))
+  }
+  return false
+}
+
+export function getPlatform() {
+  return Capacitor?.getPlatform?.() || 'web'
+}
+
 export function isNativePhotoLibrary() {
-  return !!getPlugin() && Capacitor?.getPlatform?.() === 'ios'
+  const platform = getPlatform()
+  const hasPlugin = !!getPlugin()
+  return hasPlugin && platform === 'ios'
+}
+
+/**
+ * Versão diagnóstica — retorna um objeto com tudo que importa pra debug.
+ * Use isso pra entender por que isNativePhotoLibrary() retornou false.
+ */
+export function getPluginDiagnostics() {
+  const cap = window?.Capacitor
+  return {
+    platform: cap?.getPlatform?.() || 'unknown',
+    isNativePlatform: cap?.isNativePlatform?.() || false,
+    capacitorAvailable: !!cap,
+    pluginsObject: !!cap?.Plugins,
+    pluginsAvailable: cap?.Plugins ? Object.keys(cap.Plugins).sort() : [],
+    photoLibraryPlugin: !!cap?.Plugins?.PhotoLibraryPlugin,
+    iapPlugin: !!cap?.Plugins?.IAPPlugin,
+  }
 }
 
 // ─── Estado e flags ─────────────────────────────────────────────────────────
@@ -118,14 +173,23 @@ async function waitForOnline(maxMs, signal) {
 // ─── Sync principal (NATIVO) — enumera TODA a galeria automaticamente ───────
 
 export async function runAutoSyncNative(onProgress, signal = { cancelled: false }) {
+  _log('runAutoSyncNative iniciado')
   const plugin = getPlugin()
-  if (!plugin) throw new Error('Plugin nativo não disponível')
+  if (!plugin) {
+    _log('Plugin não disponível ao iniciar', 'warn')
+    throw new Error('Plugin nativo não disponível')
+  }
 
   // 1) Permissão
+  _log('Verificando permissão atual...')
   const perm = await plugin.checkPhotoPermissions()
+  _log(`Status atual: ${perm.status}`)
   if (perm.status !== 'authorized' && perm.status !== 'limited') {
+    _log('Solicitando permissão ao usuário...')
     const r = await plugin.requestPhotoPermissions()
+    _log(`Resposta do usuário: ${r.status}`)
     if (r.status !== 'authorized' && r.status !== 'limited') {
+      _log('Permissão negada', 'warn')
       onProgress?.({ status: 'denied', done: 0, total: 0, current: null, failed: 0 })
       return { done: 0, total: 0, failed: 0, cancelled: false, denied: true }
     }
@@ -135,8 +199,10 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
   await isPremium().catch(() => false)
 
   // 3) Contagem total
+  _log('Contando arquivos na galeria...')
   const count = await plugin.getMediaCount()
   const total = count.total || 0
+  _log(`Encontrados: ${count.photos} fotos + ${count.videos} vídeos = ${total} total`)
   if (total === 0) {
     onProgress?.({ status: 'done', done: 0, total: 0, current: null, failed: 0 })
     return { done: 0, total: 0, failed: 0, cancelled: false }
