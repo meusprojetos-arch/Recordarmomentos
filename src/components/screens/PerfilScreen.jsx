@@ -13,9 +13,9 @@ import { auth, firestore } from '../../firebase.js'
 import { doc, updateDoc, setDoc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db as localDb } from '../../db/database.js'
 import PrivacyRow from '../ui/PrivacyRow.jsx'
+import GalleryImportCard from '../ui/GalleryImportCard.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import BackupLogsModal from '../modals/BackupLogsModal.jsx'
-import AutoSyncModal from '../modals/AutoSyncModal.jsx'
 import styles from './PerfilScreen.module.css'
 
 const PERFIL_ICONS = {
@@ -40,7 +40,6 @@ export default function PerfilScreen() {
   const [showEdit, setShowEdit] = useState(false)
   const [showPinModal, setShowPinModal] = useState(false)
   const [showBackupLogs, setShowBackupLogs] = useState(false)
-  const [showAutoSync, setShowAutoSync] = useState(false)
 
   // ── Backup na nuvem ──
   const [backupProgress, setBackupProgress] = useState(getBackupState())
@@ -270,25 +269,7 @@ export default function PerfilScreen() {
           <span style={{ verticalAlign: 'middle', marginRight: 6, fontSize: 18 }}>&#128247;</span>
           Importação da Galeria
         </h2>
-        <button className={styles.exportBtn} onClick={() => setShowAutoSync(true)}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: '#DBEAFE',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginRight: 12, flexShrink: 0,
-          }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="#3B82F6" strokeWidth="2" width="20" height="20">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
-            </svg>
-          </div>
-          <div className={styles.exportText}>
-            <p className={styles.exportLabel}>Importar da galeria automaticamente</p>
-            <p className={styles.exportSub}>Importa todas as fotos e vídeos do seu celular</p>
-          </div>
-          <span className={styles.exportArrow}>&#8250;</span>
-        </button>
+        <GalleryImportCard />
 
         <div style={{ height: 16 }} />
 
@@ -385,14 +366,6 @@ export default function PerfilScreen() {
       {/* Modal de logs do backup (debug) */}
       {showBackupLogs && (
         <BackupLogsModal onClose={() => setShowBackupLogs(false)} />
-      )}
-
-      {/* Modal de Upload Automático */}
-      {showAutoSync && (
-        <AutoSyncModal
-          onClose={() => setShowAutoSync(false)}
-          onDone={() => { /* mantém aberto pra mostrar tela final */ }}
-        />
       )}
     </div>
   )
