@@ -285,7 +285,7 @@ export default function PerfilScreen() {
           </div>
           <div className={styles.exportText}>
             <p className={styles.exportLabel}>Importar da galeria</p>
-            <p className={styles.exportSub}>Sincronize fotos e vídeos do seu iPhone</p>
+            <p className={styles.exportSub}>Sincronize fotos e vídeos do seu celular</p>
           </div>
           <span className={styles.exportArrow}>›</span>
         </button>
