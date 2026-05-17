@@ -1,7 +1,14 @@
 /**
  * iapService.js — Apple In-App Purchase via Capacitor StoreKit plugin
  * IDs configurados no App Store Connect
+ *
+ * Usa registerPlugin() oficial do Capacitor 6+ (necessário porque o linker
+ * descarta CAP_PLUGIN macros se não houver referência explícita do JS).
  */
+
+import { Capacitor, registerPlugin } from '@capacitor/core'
+
+const IAPPluginNative = registerPlugin('IAPPlugin')
 
 // Mapeamento: productId → planId interno
 export const PRODUCT_TO_PLAN = {
@@ -44,11 +51,15 @@ export const PLAN_TO_PRODUCT = {
 export const ALL_PRODUCT_IDS = Object.keys(PRODUCT_TO_PLAN)
 
 function getPlugin() {
-  return window?.Capacitor?.Plugins?.IAPPlugin || null
+  return IAPPluginNative
 }
 
 export function isNativeIAP() {
-  return !!getPlugin() && window?.Capacitor?.getPlatform?.() === 'ios'
+  if (Capacitor?.getPlatform?.() !== 'ios') return false
+  // Forma OFICIAL (Capacitor 6+) de verificar disponibilidade do plugin nativo
+  if (Capacitor?.isPluginAvailable?.('IAPPlugin')) return true
+  // Fallback: ainda checa window.Capacitor.Plugins por garantia
+  return !!window?.Capacitor?.Plugins?.IAPPlugin
 }
 
 export async function canMakePayments() {
