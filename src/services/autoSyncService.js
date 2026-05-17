@@ -86,6 +86,7 @@ export function isNativePhotoLibrary() {
 
 /**
  * Diagnóstico — mostra como o Capacitor está enxergando os plugins.
+ * Diferencia plugin NATIVO real (isPluginAvailable=true) de STUB (só na lista).
  */
 export function getPluginDiagnostics() {
   const cap = window?.Capacitor
@@ -93,10 +94,13 @@ export function getPluginDiagnostics() {
     platform: cap?.getPlatform?.() || 'unknown',
     isNativePlatform: cap?.isNativePlatform?.() || false,
     capacitorAvailable: !!cap,
-    pluginsObject: !!cap?.Plugins,
     pluginsAvailable: cap?.Plugins ? Object.keys(cap.Plugins).sort() : [],
-    photoLibraryReady: !!cap?.Plugins?.PhotoLibraryPlugin,
-    iapReady: !!cap?.Plugins?.IAPPlugin,
+    // Forma OFICIAL: true SÓ se o plugin nativo está REALMENTE registrado
+    photoLibraryNativeReal: cap?.isPluginAvailable?.('PhotoLibraryPlugin') || false,
+    iapNativeReal: cap?.isPluginAvailable?.('IAPPlugin') || false,
+    // Apenas presença no objeto (stub do registerPlugin conta como true)
+    photoLibraryInPlugins: !!cap?.Plugins?.PhotoLibraryPlugin,
+    iapInPlugins: !!cap?.Plugins?.IAPPlugin,
   }
 }
 
