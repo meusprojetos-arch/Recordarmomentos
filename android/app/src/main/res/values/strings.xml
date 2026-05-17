@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Recordar</string>
+    <string name="title_activity_main">Recordar</string>
+    <string name="package_name">com.recordar.app</string>
+    <string name="custom_url_scheme">com.recordar.app</string>
+</resources>

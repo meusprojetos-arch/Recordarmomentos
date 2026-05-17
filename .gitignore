@@ -9,9 +9,30 @@ dist/
 .env.local
 .env.production
 
-# Capacitor builds
-android/
-ios/
+# ─── iOS e Android: subimos o código fonte, ignoramos só os builds ───
+# (antes ignorávamos as pastas inteiras — isso quebrava o build remoto
+# porque os plugins nativos Swift/Java não chegavam ao CI)
+
+# iOS — ignorar só builds/cache
+ios/App/build/
+ios/App/Pods/
+ios/App/output/
+ios/App/App/public/
+ios/DerivedData/
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+ios/capacitor-cordova-ios-plugins/
+
+# Android — ignorar só builds/cache
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+android/.cxx/
 
 # Sistema
 .DS_Store
