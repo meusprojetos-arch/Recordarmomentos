@@ -7,4 +7,5 @@ CAP_PLUGIN(PhotoLibraryPlugin, "PhotoLibraryPlugin",
     CAP_PLUGIN_METHOD(getMediaCount, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(getMediaPage, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(getAssetData, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(cleanupTempFile, CAPPluginReturnPromise);
 )

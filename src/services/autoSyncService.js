@@ -438,11 +438,14 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
           })
 
           let success = false
+          let tempPathToCleanup = null
+
           for (let attempt = 0; attempt <= RETRY_MAX && !success && !signal.cancelled; attempt++) {
-            // CRÍTICO: declarar refs fora do try pra poder liberar no finally
-            let data = null
+            // Refs declaradas fora do try pra liberar no finally
+            let assetInfo = null
             let blob = null
             let file = null
+            let fetchResponse = null
 
             try {
               if (attempt > 0) {
@@ -452,8 +455,9 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
 
               if (signal.cancelled) break
 
-              // Buscar dados binários do asset COM TIMEOUT
-              data = await withTimeout(
+              // 1) Pede pro plugin escrever a foto em arquivo temp e devolve URI.
+              //    Nada de base64 string — economiza ~3x memória JS.
+              assetInfo = await withTimeout(
                 plugin.getAssetData({ id: asset.id }),
                 ASSET_DATA_TIMEOUT_MS,
                 `getAssetData ${asset.filename}`
@@ -461,13 +465,20 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
 
               if (signal.cancelled) break
 
-              blob = base64ToBlob(data.data, data.mimeType)
-              file = new File([blob], asset.filename || 'media', { type: data.mimeType })
+              tempPathToCleanup = assetInfo.path || null
+              const fileUri = assetInfo.uri  // file:///private/var/.../xxx.jpg
+              if (!fileUri) throw new Error('plugin não retornou URI')
 
-              // ECONOMIA DE MEMÓRIA: o base64 da string já não é mais necessário
-              // (o blob tem os bytes). Liberar referência antes do upload.
-              data.data = null
-              data = null
+              // 2) Lê o arquivo direto como Blob (binário, sem string intermediária)
+              fetchResponse = await fetch(fileUri)
+              blob = await fetchResponse.blob()
+              fetchResponse = null
+
+              file = new File([blob], asset.filename || 'media', { type: assetInfo.mimeType })
+
+              const mimeType = assetInfo.mimeType
+              const fileSize = assetInfo.size || blob.size
+              assetInfo = null // libera ref do objeto
 
               const date = asset.createdAt
                 ? new Date(asset.createdAt).toISOString().substring(0, 10)
@@ -475,8 +486,17 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
 
               if (signal.cancelled) break
 
-              const isVideo = (file.type || '').startsWith('video/') || asset.type === 'video'
+              const isVideo = (mimeType || '').startsWith('video/') || asset.type === 'video'
               const uploadTimeout = isVideo ? UPLOAD_VIDEO_TIMEOUT_MS : UPLOAD_PHOTO_TIMEOUT_MS
+
+              // Pular arquivos > 200MB (estoura memória mesmo com tudo)
+              if (fileSize > 200 * 1024 * 1024) {
+                _log(`PULAR ${asset.filename}: muito grande (${(fileSize/1024/1024).toFixed(1)}MB)`, 'warn')
+                await markAssetSynced(asset.id, uid)
+                skipped++
+                success = true
+                break
+              }
 
               await withTimeout(
                 addMemoryAndWait({
@@ -504,15 +524,23 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
                 failed++
               }
             } finally {
-              // CRÍTICO: libera referências pra GC recuperar memória
-              // (sem isso o iOS WKWebView estoura RAM em poucos uploads)
-              data = null
+              // Libera refs JS
+              assetInfo = null
               blob = null
               file = null
+              fetchResponse = null
             }
           }
 
-          // Pequena pausa entre uploads pra dar tempo do GC rodar
+          // Apaga o arquivo temp no nativo (sucesso ou falha definitiva)
+          if (tempPathToCleanup) {
+            try {
+              await plugin.cleanupTempFile({ path: tempPathToCleanup })
+            } catch { /* não-crítico */ }
+            tempPathToCleanup = null
+          }
+
+          // Pausa entre uploads pra GC respirar
           await new Promise(r => setTimeout(r, 50))
 
           // Atualizar progresso e estado persistente

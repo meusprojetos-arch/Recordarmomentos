@@ -25,6 +25,7 @@ public class PhotoLibraryPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getMediaCount",           returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getMediaPage",            returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getAssetData",            returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cleanupTempFile",         returnType: CAPPluginReturnPromise),
     ]
 
     @objc func checkPhotoPermissions(_ call: CAPPluginCall) {
@@ -141,17 +142,28 @@ public class PhotoLibraryPlugin: CAPPlugin, CAPBridgedPlugin {
                     call.reject("failed to get video URL")
                     return
                 }
+                // Pra vídeos: COPIA pro temp dir (não passa nada pela memória JS)
+                let ext = urlAsset.url.pathExtension.lowercased()
+                let mimeType = self.videoMime(forExt: ext)
+                let tempURL = self.makeTempFileURL(ext: ext.isEmpty ? "mp4" : ext)
                 do {
-                    let data = try Data(contentsOf: urlAsset.url)
-                    let ext = urlAsset.url.pathExtension.lowercased()
-                    let mimeType = self.videoMime(forExt: ext)
+                    // Tenta hard-link primeiro (zero cópia em RAM), fallback pra copy
+                    try? FileManager.default.removeItem(at: tempURL)
+                    do {
+                        try FileManager.default.linkItem(at: urlAsset.url, to: tempURL)
+                    } catch {
+                        try FileManager.default.copyItem(at: urlAsset.url, to: tempURL)
+                    }
+                    let attrs = try FileManager.default.attributesOfItem(atPath: tempURL.path)
+                    let size = (attrs[.size] as? NSNumber)?.intValue ?? 0
                     call.resolve([
-                        "data": data.base64EncodedString(),
+                        "uri": tempURL.absoluteString,    // file:///...
+                        "path": tempURL.path,
                         "mimeType": mimeType,
-                        "size": data.count
+                        "size": size
                     ])
                 } catch {
-                    call.reject("failed to read video: \(error.localizedDescription)")
+                    call.reject("failed to prepare video temp: \(error.localizedDescription)")
                 }
             }
         } else {
@@ -160,17 +172,61 @@ public class PhotoLibraryPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func handleImageData(call: CAPPluginCall, data: Data?, uti: String?, info: [AnyHashable: Any]?) {
-        if let data = data {
-            let mimeType = mimeTypeFromUTI(uti) ?? "image/jpeg"
+        guard let data = data else {
+            let err = (info?[PHImageErrorKey] as? NSError)?.localizedDescription ?? "no data"
+            call.reject("failed to load image: \(err)")
+            return
+        }
+        let mimeType = mimeTypeFromUTI(uti) ?? "image/jpeg"
+        let ext = extFromMime(mimeType)
+
+        // Escreve em arquivo temporário em vez de retornar base64.
+        // Economiza ~3x memória JS (string base64 ocupa 2x do binário).
+        let tempURL = makeTempFileURL(ext: ext)
+        do {
+            try data.write(to: tempURL, options: .atomic)
             call.resolve([
-                "data": data.base64EncodedString(),
+                "uri": tempURL.absoluteString,    // file:///private/var/...
+                "path": tempURL.path,
                 "mimeType": mimeType,
                 "size": data.count
             ])
-        } else {
-            let err = (info?[PHImageErrorKey] as? NSError)?.localizedDescription ?? "no data"
-            call.reject("failed to load image: \(err)")
+        } catch {
+            call.reject("failed to write temp file: \(error.localizedDescription)")
         }
+    }
+
+    /// Cria URL pra arquivo temporário único (UUID) no /tmp do app.
+    private func makeTempFileURL(ext: String) -> URL {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recordar_import", isDirectory: true)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        return tempDir.appendingPathComponent("\(UUID().uuidString).\(ext)")
+    }
+
+    /// Apaga arquivo temporário (chamado pelo JS após upload bem-sucedido).
+    @objc func cleanupTempFile(_ call: CAPPluginCall) {
+        guard let path = call.getString("path") else {
+            call.resolve()
+            return
+        }
+        // Só apaga se for de fato do nosso diretório temp (segurança)
+        let safeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("recordar_import").path
+        if path.hasPrefix(safeRoot) {
+            try? FileManager.default.removeItem(atPath: path)
+        }
+        call.resolve()
+    }
+
+    private func extFromMime(_ mime: String) -> String {
+        let m = mime.lowercased()
+        if m.contains("png")  { return "png" }
+        if m.contains("heic") { return "heic" }
+        if m.contains("heif") { return "heif" }
+        if m.contains("gif")  { return "gif" }
+        if m.contains("webp") { return "webp" }
+        return "jpg"
     }
 
     private func statusString(_ status: PHAuthorizationStatus) -> String {
