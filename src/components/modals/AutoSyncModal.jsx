@@ -204,12 +204,15 @@ export default function AutoSyncModal({ onClose, onDone }) {
 
   const handleCancel = () => {
     signalRef.current.cancelled = true
+    // Drena fila imediatamente pra não pegar próximos itens
+    signalRef.current._drainQueue?.()
+    setPhase('pausing') // UI mostra "Pausando..." enquanto workers terminam
   }
 
   // Métricas
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
   const remaining = Math.max(0, progress.total - progress.done - progress.failed)
-  const isInteractionLocked = phase === 'syncing' || phase === 'asking' || phase === 'init'
+  const isInteractionLocked = phase === 'syncing' || phase === 'asking' || phase === 'init' || phase === 'pausing'
 
   // Estimativa de tempo restante
   const imported = progress.done - (progress.skipped || 0)
@@ -397,6 +400,18 @@ export default function AutoSyncModal({ onClose, onDone }) {
           </button>
           <p style={{ fontSize: 11, color: C.textMuted, textAlign: 'center', margin: '6px 0 0' }}>
             A importação pode ser retomada a qualquer momento
+          </p>
+        </div>
+      )
+    }
+    if (phase === 'pausing') {
+      return (
+        <div style={footer}>
+          <button style={{ ...dangerBtn, opacity: 0.5, cursor: 'wait' }} disabled>
+            Pausando...
+          </button>
+          <p style={{ fontSize: 11, color: C.textMuted, textAlign: 'center', margin: '6px 0 0' }}>
+            Finalizando uploads em andamento...
           </p>
         </div>
       )

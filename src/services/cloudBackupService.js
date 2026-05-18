@@ -62,6 +62,7 @@ const warn = (...args) => { console.warn('[backup]', ...args); _pushLog('warn', 
 const _state = {
   running: false,
   cancelled: false,
+  pausing: false, // feedback intermediário enquanto workers ainda terminam
   total: 0,
   synced: 0,
   failed: 0,
@@ -83,6 +84,8 @@ function withTimeout(promise, ms, label) {
 function notify() {
   const s = {
     running: _state.running,
+    pausing: _state.pausing,
+    cancelled: _state.cancelled,
     total: _state.total,
     synced: _state.synced,
     failed: _state.failed,
@@ -92,12 +95,18 @@ function notify() {
 
 export function onBackupProgress(fn) {
   _state.listeners.add(fn)
-  fn({ running: _state.running, total: _state.total, synced: _state.synced, failed: _state.failed })
+  fn({
+    running: _state.running, pausing: _state.pausing, cancelled: _state.cancelled,
+    total: _state.total, synced: _state.synced, failed: _state.failed,
+  })
   return () => _state.listeners.delete(fn)
 }
 
 export function getBackupState() {
-  return { running: _state.running, total: _state.total, synced: _state.synced, failed: _state.failed }
+  return {
+    running: _state.running, pausing: _state.pausing, cancelled: _state.cancelled,
+    total: _state.total, synced: _state.synced, failed: _state.failed,
+  }
 }
 
 export function isBackupEnabled(uid) {
@@ -111,6 +120,7 @@ export function setBackupEnabled(uid, val) {
 export function cancelBackup() {
   log('cancelBackup() chamado')
   _state.cancelled = true
+  _state.pausing = true   // UI mostra "Pausando..." imediatamente
   notify()
 }
 
@@ -321,10 +331,17 @@ async function _runBackupOnce() {
   const uid = auth.currentUser?.uid
   if (!uid) { warn('sem uid, abortando'); return }
 
-  _state.running = true
+  // 1) Limpar flags de cancel/pause antes de tudo
   _state.cancelled = false
+  _state.pausing = false
   _state.failed = 0
+
+  // 2) Buscar contadores REAIS do Firestore ANTES de marcar running.
+  //    Assim, ao retomar, o UI já mostra o progresso correto (não 0%).
   await refreshCountersFromFirestore(uid)
+
+  // 3) Só agora ativa "running" — com synced/total já corretos
+  _state.running = true
   notify()
 
   try { localStorage.removeItem(PROGRESS_KEY_OLD(uid)) } catch {}
@@ -377,6 +394,7 @@ async function _runBackupOnce() {
   } finally {
     await refreshCountersFromFirestore(uid).catch(() => {})
     _state.running = false
+    _state.pausing = false // não está mais pausando; está pausado (cancelled mantém true)
     notify()
     log(`finally: running=false, synced=${_state.synced}/${_state.total}, failed=${_state.failed}`)
   }

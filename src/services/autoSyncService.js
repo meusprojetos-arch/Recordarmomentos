@@ -312,16 +312,28 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
 
   // 4) Preparar contadores
   const uid = auth.currentUser?.uid || '_'
-  let done = 0
   let failed = 0
   let skipped = 0
   let totalToProcess = 0
+
+  // RETOMADA: começamos `done` com a quantidade REAL de assets já importados
+  // (lendo do IndexedDB). Assim o UI mostra o progresso correto imediatamente,
+  // sem aparentar começar do 0%.
+  let done = 0
+  try {
+    await ensureDb()
+    const syncedCount = await localDb.gallerySynced.count()
+    done = Math.min(syncedCount, totalGallery)
+    if (done > 0) _log(`Retomando: ${done}/${totalGallery} já estavam no banco local`)
+  } catch (e) {
+    _log(`Falha ao contar IndexedDB: ${e.message}`, 'warn')
+  }
 
   // Salvar estado inicial
   saveImportState({
     status: 'running',
     totalGallery,
-    done: 0,
+    done,
     failed: 0,
     skipped: 0,
     startedAt: Date.now(),
@@ -329,7 +341,7 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
 
   onProgress?.({
     status: 'starting',
-    done: 0, total: totalGallery, current: null, failed: 0, skipped: 0,
+    done, total: totalGallery, current: null, failed: 0, skipped: 0,
     photos: count.photos, videos: count.videos,
   })
 
@@ -367,12 +379,13 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
     _log(`Batch #${batchNum}: ${assets.length} assets carregados`)
 
     // Filtrar assets já importados (verificação no IndexedDB)
+    // OBS: NÃO incrementamos `done` aqui porque `done` já começa com a contagem
+    // real do IndexedDB (countSyncedAssets). Só somamos `skipped` pra estatística.
     const todo = []
     for (const asset of assets) {
       const alreadySynced = await isAssetSynced(asset.id)
       if (alreadySynced) {
         skipped++
-        done++
       } else {
         todo.push(asset)
       }
@@ -748,10 +761,15 @@ export async function startGallerySync() {
   _notify()
 }
 
-/** Pausa a importação. */
+/** Pausa a importação. Mostra "Pausando..." imediatamente no UI. */
 export function pauseGallerySync() {
   _mgr._signal.cancelled = true
   _mgr._signal._drainQueue?.()
+  // Feedback instantâneo enquanto os 6 uploads em andamento terminam
+  if (_mgr.phase === 'syncing') {
+    _mgr.phase = 'pausing'
+    _notify()
+  }
 }
 
 /** Reseta para idle (após done/error/denied). */

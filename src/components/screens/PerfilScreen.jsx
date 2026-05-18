@@ -222,9 +222,17 @@ export default function PerfilScreen() {
           <div className={styles.exportText}>
             <p className={styles.exportLabel}>Backup na nuvem</p>
             {cloudBackup ? (
-              backupProgress.running ? (
+              backupProgress.pausing ? (
+                <p className={styles.exportSub} style={{ color: '#888' }}>
+                  ⏸️ Pausando... ({backupProgress.synced}/{backupProgress.total})
+                </p>
+              ) : backupProgress.running ? (
                 <p className={styles.exportSub} style={{ color: '#D37E65' }}>
                   ⏳ {backupProgress.synced}/{backupProgress.total} sincronizando...
+                </p>
+              ) : backupProgress.cancelled && backupProgress.total > 0 && backupProgress.synced < backupProgress.total ? (
+                <p className={styles.exportSub} style={{ color: '#888' }}>
+                  ⏸️ Pausado em {backupProgress.synced}/{backupProgress.total}
                 </p>
               ) : backupProgress.failed > 0 && backupProgress.synced === backupProgress.total ? (
                 <p className={styles.exportSub} style={{ color: '#e53935' }}>
@@ -247,20 +255,6 @@ export default function PerfilScreen() {
           </div>
           <div className={`${styles.toggle} ${cloudBackup ? '' : styles.toggleOff}`} />
         </div>
-
-        {/* Botão de logs (debug) — pequeno e discreto */}
-        <button
-          onClick={() => setShowBackupLogs(true)}
-          style={{
-            background: 'none', border: 'none',
-            color: '#888', fontSize: 12,
-            textDecoration: 'underline',
-            cursor: 'pointer', padding: '8px 0 0',
-            display: 'block', marginLeft: 4,
-          }}
-        >
-          🔍 Ver logs técnicos do backup
-        </button>
 
         <div style={{ height: 16 }} />
 

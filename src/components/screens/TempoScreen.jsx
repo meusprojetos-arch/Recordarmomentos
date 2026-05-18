@@ -391,7 +391,18 @@ export default function TempoScreen({ pendingMemories }) {
 
   // ── Seleção múltipla ───────────────────────────────────────────────────────
 
-  function startLongPress(memory) {
+  // Posição inicial do toque pra detectar se virou scroll (não seleção)
+  const longPressStart = useRef({ x: 0, y: 0 })
+  const LONG_PRESS_MOVE_THRESHOLD = 10 // px — qualquer movimento maior cancela
+
+  function startLongPress(memory, event) {
+    // Captura posição inicial pra detectar scroll
+    const touch = event?.touches?.[0]
+    if (touch) {
+      longPressStart.current = { x: touch.clientX, y: touch.clientY }
+    } else {
+      longPressStart.current = { x: 0, y: 0 }
+    }
     longPressTimer.current = setTimeout(() => {
       setLockMode(false)
       setLockSelectedIds(new Set())
@@ -402,6 +413,17 @@ export default function TempoScreen({ pendingMemories }) {
 
   function cancelLongPress() {
     clearTimeout(longPressTimer.current)
+  }
+
+  // Cancela long-press se o dedo se moveu mais que o threshold (= usuário tá rolando)
+  function cancelLongPressOnMove(event) {
+    const touch = event?.touches?.[0]
+    if (!touch) return
+    const dx = Math.abs(touch.clientX - longPressStart.current.x)
+    const dy = Math.abs(touch.clientY - longPressStart.current.y)
+    if (dx > LONG_PRESS_MOVE_THRESHOLD || dy > LONG_PRESS_MOVE_THRESHOLD) {
+      clearTimeout(longPressTimer.current)
+    }
   }
 
   function toggleSelect(id) {
@@ -652,8 +674,10 @@ export default function TempoScreen({ pendingMemories }) {
       <div
         className={`${styles.memThumb} ${isSelected ? styles.memThumbSelected : ''} ${isLockSelected ? styles.memThumbLocked : ''}`}
         onClick={() => handleThumbClick(memory)}
-        onTouchStart={() => !selectMode && startLongPress(memory)}
+        onTouchStart={(e) => !selectMode && startLongPress(memory, e)}
+        onTouchMove={(e) => cancelLongPressOnMove(e)}
         onTouchEnd={cancelLongPress}
+        onTouchCancel={cancelLongPress}
         onMouseDown={() => !selectMode && startLongPress(memory)}
         onMouseUp={cancelLongPress}
         onMouseLeave={cancelLongPress}
