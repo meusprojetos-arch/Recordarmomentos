@@ -12,6 +12,7 @@ import { db as localDb } from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import FolderGrid from '../ui/FolderGrid.jsx'
 import LazyImage from '../ui/LazyImage.jsx'
+import MemoryGridItem from '../ui/MemoryGridItem.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import styles from './TempoScreen.module.css'
@@ -408,6 +409,11 @@ export default function TempoScreen({ pendingMemories }) {
       setLockSelectedIds(new Set())
       setSelectMode(true)
       setSelectedIds(new Set([memory.id]))
+      // ATIVA drag-to-select contínuo: o dedo já tá pressionado, próximos
+      // movimentos selecionam outras fotos sem precisar levantar o dedo
+      dragSelect.current.active = true
+      dragSelect.current.mode = 'add'
+      dragSelect.current.visited = new Set([memory.id])
     }, 500)
   }
 
@@ -712,91 +718,44 @@ export default function TempoScreen({ pendingMemories }) {
     }
   }
 
+  // Cache de resolvers: garante que cada memory.id tem SEMPRE a mesma função
+  // (sem isso, o React.memo do MemoryGridItem detecta "src novo" e re-renderiza)
+  const resolverCacheRef = useRef(new Map())
+  function getStableResolver(memory) {
+    if (!resolverCacheRef.current.has(memory.id)) {
+      resolverCacheRef.current.set(memory.id, makeResolver(memory))
+    }
+    return resolverCacheRef.current.get(memory.id)
+  }
+
+  // Wrapper que delega pro componente memoizado externo.
+  // Só passa props simples; o React.memo cuida de evitar re-renders desnecessários.
   function GridItem({ memory }) {
     const isSelected = selectedIds.has(memory.id)
     const isLockSelected = lockSelectedIds.has(memory.id)
-
     return (
-      <div
-        data-memory-id={memory.id}
-        className={`${styles.memThumb} ${isSelected ? styles.memThumbSelected : ''} ${isLockSelected ? styles.memThumbLocked : ''}`}
-        // No selectMode: pointerDown responde NA HORA (sem espera de double-tap)
-        // Fora do selectMode: mantém click pra abrir viewer
+      <MemoryGridItem
+        memory={memory}
+        isSelected={isSelected}
+        isLockSelected={isLockSelected}
+        selectMode={selectMode}
+        lockMode={lockMode}
+        resolver={getStableResolver(memory)}
+        styles={styles}
+        filterIcons={FILTER_ICONS}
         onPointerDown={(e) => {
           if (selectMode || lockMode) {
-            // Já marca a foto e inicia drag-to-select
             handleThumbClick(memory)
             onGridPointerDown(e, memory)
           }
         }}
         onClick={() => {
-          // Só dispara fora do selectMode (selectMode é tratado no pointerDown)
           if (!selectMode && !lockMode) handleThumbClick(memory)
         }}
         onTouchStart={(e) => !selectMode && !lockMode && startLongPress(memory, e)}
         onTouchMove={(e) => cancelLongPressOnMove(e)}
         onTouchEnd={cancelLongPress}
-        onTouchCancel={cancelLongPress}
-        onMouseDown={() => !selectMode && !lockMode && startLongPress(memory)}
-        onMouseUp={cancelLongPress}
-        onMouseLeave={cancelLongPress}
-        role="button"
-        aria-label={memory.title || 'Memória'}
-      >
-        {/* Imagem (lazy load — só carrega quando entra/se aproxima do viewport) */}
-        {memory.type === 'photo' && (
-          <LazyImage
-            src={makeResolver(memory)}
-            alt={memory.title || ''}
-            className={styles.thumbImg}
-            rootMargin="400px"
-            placeholder={
-              <div className={styles.thumbPlaceholder}>
-                <img src={FILTER_ICONS.photo} alt="" width={32} height={32} aria-hidden="true" />
-              </div>
-            }
-          />
-        )}
-        {memory.type === 'video' && (
-          <>
-            <div className={styles.thumbPlaceholder} style={{ background: '#1a1a2e' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="#D37E65" strokeWidth="1.5" width="36" height="36">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                <path d="m16 10-6-4v8l6-4z" fill="#D37E65" stroke="none"/>
-              </svg>
-            </div>
-            <div className={styles.playOverlay} aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="white" width="28" height="28">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </div>
-          </>
-        )}
-        {memory.type === 'audio' && (
-          <div className={styles.thumbPlaceholder}>
-            <img src={FILTER_ICONS.audio} alt="" width={32} height={32} aria-hidden="true" />
-            <span className={styles.thumbTitle}>{memory.title || 'Audio'}</span>
-          </div>
-        )}
-
-        {/* Badge de destaque */}
-        {memory.isHighlight && (
-          <div className={styles.highlightBadge} aria-hidden="true">
-            <img src={FILTER_ICONS.highlight} alt="" width={14} height={14} />
-          </div>
-        )}
-
-        {/* Checkbox de seleção */}
-        {selectMode && (
-          <div className={`${styles.selectCircle} ${isSelected ? styles.selectCircleActive : ''}`} aria-hidden="true">
-            {isSelected && (
-              <svg viewBox="0 0 24 24" fill="white" width="14" height="14">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-              </svg>
-            )}
-          </div>
-        )}
-      </div>
+      />
     )
   }
 
@@ -1215,14 +1174,14 @@ export default function TempoScreen({ pendingMemories }) {
                   <span className={styles.yearCount}> ({items.length})</span>
                 </h3>
                 {/* onPointerMove no container captura o arrasto enquanto o dedo
-                    passa de uma foto pra outra (drag-to-select estilo iOS Photos) */}
+                    passa de uma foto pra outra (drag-to-select estilo iOS Photos).
+                    NÃO usamos touch-action: none pra deixar scroll funcionar normal. */}
                 <div
                   className={styles.yearGrid}
                   onPointerMove={onGridPointerMove}
                   onPointerUp={onGridPointerUp}
                   onPointerCancel={onGridPointerUp}
                   onPointerLeave={onGridPointerUp}
-                  style={{ touchAction: selectMode || lockMode ? 'none' : 'auto' }}
                 >
                   {items.map(m => <GridItem key={m.id} memory={m} />)}
                 </div>
