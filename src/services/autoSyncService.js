@@ -623,3 +623,155 @@ export function getPendingImportSummary() {
     startedAt: state.startedAt,
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GALLERY SYNC MANAGER — Singleton que roda independente de componentes React.
+// O sync continua mesmo quando o usuário navega para outra aba.
+// Componentes se inscrevem para receber atualizações de estado.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _mgr = {
+  // Estado público
+  phase: 'idle',       // idle | checking | syncing | paused | done | denied | error
+  done: 0,
+  total: 0,
+  failed: 0,
+  nativeReady: false,
+  errorMsg: null,
+
+  // Internals
+  _signal: { cancelled: false },
+  _listeners: new Set(),
+  _running: false,
+}
+
+function _notify() {
+  const snap = { phase: _mgr.phase, done: _mgr.done, total: _mgr.total, failed: _mgr.failed, nativeReady: _mgr.nativeReady, errorMsg: _mgr.errorMsg }
+  _mgr._listeners.forEach(fn => { try { fn(snap) } catch {} })
+}
+
+/** Inscreve um listener. Retorna unsubscribe. Dispara imediatamente com estado atual. */
+export function subscribeGallerySync(fn) {
+  _mgr._listeners.add(fn)
+  fn({ phase: _mgr.phase, done: _mgr.done, total: _mgr.total, failed: _mgr.failed, nativeReady: _mgr.nativeReady, errorMsg: _mgr.errorMsg })
+  return () => _mgr._listeners.delete(fn)
+}
+
+/** Retorna snapshot do estado atual */
+export function getGallerySyncState() {
+  return { phase: _mgr.phase, done: _mgr.done, total: _mgr.total, failed: _mgr.failed, nativeReady: _mgr.nativeReady, errorMsg: _mgr.errorMsg }
+}
+
+/** Inicia ou retoma a importação da galeria. */
+export async function startGallerySync() {
+  if (_mgr._running) return // já está rodando
+
+  _mgr._signal = { cancelled: false }
+  _mgr._running = true
+  _mgr.errorMsg = null
+
+  // Se ainda não verificou o plugin, verifica agora
+  if (!_mgr.nativeReady) {
+    _mgr.phase = 'checking'
+    _notify()
+
+    try {
+      const plat = getPlatform()
+      if ((plat === 'ios' || plat === 'android') && !isNativePhotoLibrary()) {
+        await waitForNativePlugin(3000)
+      }
+      let native = isNativePhotoLibrary()
+      if (native) native = await isNativePhotoLibraryReady()
+      _mgr.nativeReady = native
+
+      if ((plat === 'ios' || plat === 'android') && !native) {
+        _mgr.phase = 'error'
+        _mgr.errorMsg = 'Plugin indisponível'
+        _mgr._running = false
+        _notify()
+        return
+      }
+
+      if (native) {
+        const st = await checkPhotoPermission()
+        if (st === 'denied' || st === 'restricted') {
+          _mgr.phase = 'denied'
+          _mgr._running = false
+          _notify()
+          return
+        }
+      }
+    } catch (e) {
+      _mgr.phase = 'error'
+      _mgr.errorMsg = e.message
+      _mgr._running = false
+      _notify()
+      return
+    }
+  }
+
+  // Inicia o sync
+  _mgr.phase = 'syncing'
+  _notify()
+
+  try {
+    const res = await runAutoSyncNative((p) => {
+      if (p.status === 'denied') {
+        _mgr.phase = 'denied'
+        _notify()
+        return
+      }
+      _mgr.done = p.done || 0
+      _mgr.total = p.total || 0
+      _mgr.failed = p.failed || 0
+      _mgr.phase = 'syncing'
+      _notify()
+    }, _mgr._signal)
+
+    _mgr.done = res.done || 0
+    _mgr.total = res.total || 0
+    _mgr.failed = res.failed || 0
+
+    if (res.denied) {
+      _mgr.phase = 'denied'
+    } else if (res.cancelled) {
+      _mgr.phase = 'paused'
+    } else {
+      _mgr.phase = 'done'
+    }
+  } catch (e) {
+    _mgr.phase = 'error'
+    _mgr.errorMsg = e.message
+  }
+
+  _mgr._running = false
+  _notify()
+}
+
+/** Pausa a importação. */
+export function pauseGallerySync() {
+  _mgr._signal.cancelled = true
+  _mgr._signal._drainQueue?.()
+}
+
+/** Reseta para idle (após done/error/denied). */
+export function resetGallerySync() {
+  if (_mgr._running) return
+  _mgr.phase = 'idle'
+  _mgr.done = 0
+  _mgr.total = 0
+  _mgr.failed = 0
+  _mgr.errorMsg = null
+  _notify()
+}
+
+// Ao carregar o módulo, verifica se há importação pendente
+;(function _initManager() {
+  if (hasPendingImport()) {
+    const s = getPendingImportSummary()
+    _mgr.phase = 'paused'
+    _mgr.done = s?.done || 0
+    _mgr.total = s?.totalGallery || 0
+    _mgr.failed = s?.failed || 0
+  }
+})()
