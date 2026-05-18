@@ -434,6 +434,52 @@ export default function TempoScreen({ pendingMemories }) {
     })
   }
 
+  // ── Drag-to-select: arrasta o dedo pra selecionar várias fotos (estilo iOS Photos) ──
+  const dragSelect = useRef({
+    active: false,
+    mode: 'add',           // 'add' ou 'remove' (decidido pelo 1º toque)
+    visited: new Set(),    // ids já tocados nessa sessão de drag
+  })
+
+  function getMemoryIdFromPoint(x, y) {
+    const el = document.elementFromPoint(x, y)
+    if (!el) return null
+    const node = el.closest('[data-memory-id]')
+    return node ? node.getAttribute('data-memory-id') : null
+  }
+
+  function onGridPointerDown(e, memory) {
+    // Só ativa drag-to-select se já estiver em selectMode
+    if (!selectMode) return
+    dragSelect.current.active = true
+    dragSelect.current.visited = new Set([memory.id])
+    dragSelect.current.mode = selectedIds.has(memory.id) ? 'remove' : 'add'
+    applyDragSelect(memory.id)
+  }
+
+  function onGridPointerMove(e) {
+    if (!dragSelect.current.active) return
+    const point = e.touches?.[0] || e
+    const id = getMemoryIdFromPoint(point.clientX, point.clientY)
+    if (!id || dragSelect.current.visited.has(id)) return
+    dragSelect.current.visited.add(id)
+    applyDragSelect(id)
+  }
+
+  function onGridPointerUp() {
+    dragSelect.current.active = false
+    dragSelect.current.visited = new Set()
+  }
+
+  function applyDragSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (dragSelect.current.mode === 'add') next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
   function exitSelectMode() {
     setSelectMode(false)
     setSelectedIds(new Set())
@@ -672,13 +718,26 @@ export default function TempoScreen({ pendingMemories }) {
 
     return (
       <div
+        data-memory-id={memory.id}
         className={`${styles.memThumb} ${isSelected ? styles.memThumbSelected : ''} ${isLockSelected ? styles.memThumbLocked : ''}`}
-        onClick={() => handleThumbClick(memory)}
-        onTouchStart={(e) => !selectMode && startLongPress(memory, e)}
+        // No selectMode: pointerDown responde NA HORA (sem espera de double-tap)
+        // Fora do selectMode: mantém click pra abrir viewer
+        onPointerDown={(e) => {
+          if (selectMode || lockMode) {
+            // Já marca a foto e inicia drag-to-select
+            handleThumbClick(memory)
+            onGridPointerDown(e, memory)
+          }
+        }}
+        onClick={() => {
+          // Só dispara fora do selectMode (selectMode é tratado no pointerDown)
+          if (!selectMode && !lockMode) handleThumbClick(memory)
+        }}
+        onTouchStart={(e) => !selectMode && !lockMode && startLongPress(memory, e)}
         onTouchMove={(e) => cancelLongPressOnMove(e)}
         onTouchEnd={cancelLongPress}
         onTouchCancel={cancelLongPress}
-        onMouseDown={() => !selectMode && startLongPress(memory)}
+        onMouseDown={() => !selectMode && !lockMode && startLongPress(memory)}
         onMouseUp={cancelLongPress}
         onMouseLeave={cancelLongPress}
         role="button"
@@ -1155,7 +1214,16 @@ export default function TempoScreen({ pendingMemories }) {
                   {label}
                   <span className={styles.yearCount}> ({items.length})</span>
                 </h3>
-                <div className={styles.yearGrid}>
+                {/* onPointerMove no container captura o arrasto enquanto o dedo
+                    passa de uma foto pra outra (drag-to-select estilo iOS Photos) */}
+                <div
+                  className={styles.yearGrid}
+                  onPointerMove={onGridPointerMove}
+                  onPointerUp={onGridPointerUp}
+                  onPointerCancel={onGridPointerUp}
+                  onPointerLeave={onGridPointerUp}
+                  style={{ touchAction: selectMode || lockMode ? 'none' : 'auto' }}
+                >
                   {items.map(m => <GridItem key={m.id} memory={m} />)}
                 </div>
               </div>

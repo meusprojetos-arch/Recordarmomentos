@@ -1,21 +1,10 @@
 /**
  * LazyImage — carrega imagem só quando entra (ou se aproxima) do viewport.
- * Estilo Google Photos / iOS Photos.
+ * Resistente a re-renders do pai (não pisca quando o componente envolvente
+ * re-renderiza por mudança de classe/seleção, etc).
  *
- * Vantagens:
- *  - Não cria URL.createObjectURL pra TODAS as imagens da galeria (economia de RAM)
- *  - Não baixa do Firebase Storage pra imagens fora da tela (economia de banda + custo)
- *  - Libera memória quando a imagem sai há muito tempo do viewport
- *
- * Props:
- *  - src: string URL OU async function() => string (lazy, só executa quando precisa)
- *  - placeholder: ReactNode mostrado antes de carregar (default: caixa cinza)
- *  - alt: string
- *  - className: string
- *  - style: object
- *  - onClick: function
- *  - rootMargin: pixels antes de carregar (default: '500px' = carrega 500px antes de aparecer)
- *  - eager: se true, ignora lazy e carrega imediatamente (pra imagens above-the-fold)
+ * Truque: a função `src` (resolver) só é executada UMA vez. Mudanças posteriores
+ * de identidade da função (a função muda mas resolve o mesmo URL) são ignoradas.
  */
 import React, { useEffect, useRef, useState } from 'react'
 
@@ -34,26 +23,34 @@ export default function LazyImage({
   const [resolvedSrc, setResolvedSrc] = useState(null)
   const [loaded, setLoaded] = useState(false)
   const [errored, setErrored] = useState(false)
-  const generatedUrlRef = useRef(null) // pra revogar objectURL ao desmontar
+  const generatedUrlRef = useRef(null)
+  const hasLoadedRef = useRef(false) // ← garante que o resolver roda só 1 vez
+
+  // Mantém o src atual numa ref (sem disparar re-effect)
+  const srcRef = useRef(src)
+  srcRef.current = src
 
   useEffect(() => {
     if (!ref.current) return
+    // Se já carregou antes, NÃO recarrega (evita flicker em re-render do pai)
+    if (hasLoadedRef.current) return
 
     let cancelled = false
 
     const load = async () => {
-      if (cancelled) return
+      if (cancelled || hasLoadedRef.current) return
+      hasLoadedRef.current = true
       try {
+        const currentSrc = srcRef.current
         let url
-        if (typeof src === 'function') {
-          url = await src()
+        if (typeof currentSrc === 'function') {
+          url = await currentSrc()
         } else {
-          url = src
+          url = currentSrc
         }
         if (cancelled) return
         if (!url) { setErrored(true); return }
 
-        // Detecta se é blob URL gerado por nós (pra cleanup depois)
         if (typeof url === 'string' && url.startsWith('blob:')) {
           generatedUrlRef.current = url
         }
@@ -82,13 +79,19 @@ export default function LazyImage({
     return () => {
       cancelled = true
       observer.disconnect()
-      // Revoga objectURL se foi criado por nós (não revoga URLs externas/Firebase)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // ← roda só na MONTAGEM, nunca em re-render
+
+  // Cleanup do objectURL apenas no UNMOUNT real do componente
+  useEffect(() => {
+    return () => {
       if (generatedUrlRef.current) {
         try { URL.revokeObjectURL(generatedUrlRef.current) } catch {}
         generatedUrlRef.current = null
       }
     }
-  }, [src, eager, rootMargin])
+  }, [])
 
   const baseStyle = {
     background: '#e8e3d8',
