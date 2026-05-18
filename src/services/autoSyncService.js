@@ -140,13 +140,18 @@ async function ensureDb() {
 }
 
 /**
- * Verifica se um asset já foi importado (IndexedDB — sobrevive ao fechamento do app)
+ * Verifica se um asset já foi importado PARA O USUÁRIO ATUAL.
+ * Filtra por uid pra não pular fotos quando outro login já sincronizou no mesmo
+ * dispositivo (IndexedDB é compartilhado entre contas).
  */
 async function isAssetSynced(assetId) {
   try {
     await ensureDb()
     const record = await localDb.gallerySynced.get(assetId)
-    return !!record
+    if (!record) return false
+    const currentUid = auth.currentUser?.uid || '_'
+    // Só conta como sincronizado se for do MESMO uid
+    return record.uid === currentUid
   } catch {
     return false
   }
@@ -334,15 +339,15 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
   let skipped = 0
   let totalToProcess = 0
 
-  // RETOMADA: começamos `done` com a quantidade REAL de assets já importados
-  // (lendo do IndexedDB). Assim o UI mostra o progresso correto imediatamente,
-  // sem aparentar começar do 0%.
+  // RETOMADA: começamos `done` com a quantidade REAL de assets JÁ IMPORTADOS
+  // POR ESTE USUÁRIO. Filtra por uid pra não herdar contagem de outro login
+  // que usou o mesmo dispositivo (IndexedDB é compartilhado entre contas).
   let done = 0
   try {
     await ensureDb()
-    const syncedCount = await localDb.gallerySynced.count()
+    const syncedCount = await localDb.gallerySynced.where('uid').equals(uid).count()
     done = Math.min(syncedCount, totalGallery)
-    if (done > 0) _log(`Retomando: ${done}/${totalGallery} já estavam no banco local`)
+    if (done > 0) _log(`Retomando: ${done}/${totalGallery} já estavam no banco local (uid=${uid})`)
   } catch (e) {
     _log(`Falha ao contar IndexedDB: ${e.message}`, 'warn')
   }
