@@ -390,10 +390,14 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
     // Processar com workers paralelos
     if (todo.length > 0) {
       const queue = [...todo]
+
+      // Permite esvaziar a fila de fora (pausa imediata)
+      signal._drainQueue = () => { queue.length = 0 }
+
       const worker = async () => {
         while (queue.length > 0 && !signal.cancelled) {
           const asset = queue.shift()
-          if (!asset) return
+          if (!asset || signal.cancelled) return
 
           onProgress?.({
             status: 'uploading',
@@ -410,14 +414,24 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
                 await new Promise(r => setTimeout(r, 1000 * attempt))
               }
 
+              // Check antes de operação pesada
+              if (signal.cancelled) break
+
               // Buscar dados binários do asset
               const data = await plugin.getAssetData({ id: asset.id })
+
+              // Check após operação pesada
+              if (signal.cancelled) break
+
               const blob = base64ToBlob(data.data, data.mimeType)
               const file = new File([blob], asset.filename || 'media', { type: data.mimeType })
 
               const date = asset.createdAt
                 ? new Date(asset.createdAt).toISOString().substring(0, 10)
                 : new Date().toISOString().substring(0, 10)
+
+              // Check antes de upload
+              if (signal.cancelled) break
 
               // Criar memória (upload + Firestore + IndexedDB local)
               await addMemoryAndWait({
@@ -437,6 +451,7 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
               success = true
 
             } catch (err) {
+              if (signal.cancelled) break
               if (attempt >= RETRY_MAX) {
                 _log(`FALHA: ${asset.filename} — ${err.message}`, 'error')
                 failed++
