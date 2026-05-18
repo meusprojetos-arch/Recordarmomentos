@@ -25,8 +25,12 @@ import { db as localDb } from '../db/database.js'
 // Bridge JS↔nativo (iOS e Android)
 const PhotoLibrary = registerPlugin('PhotoLibraryPlugin')
 
-const CONCURRENCY = 4
-const PAGE_SIZE = 50
+// CONCURRENCY=1 no iOS porque getAssetData retorna base64 (RAM proporcional ao
+// tamanho do arquivo). Com 4 workers + compressão + upload paralelo, o WKWebView
+// estourava o limite de memória e o iOS matava o app (OOM).
+// Sequencial é mais lento mas ESTÁVEL — usuário pode deixar rodando em background.
+const CONCURRENCY = 1
+const PAGE_SIZE = 20    // batches menores pra ler menos metadados de uma vez
 const RETRY_MAX = 2
 const OFFLINE_WAIT_MS = 60_000
 
@@ -435,39 +439,45 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
 
           let success = false
           for (let attempt = 0; attempt <= RETRY_MAX && !success && !signal.cancelled; attempt++) {
+            // CRÍTICO: declarar refs fora do try pra poder liberar no finally
+            let data = null
+            let blob = null
+            let file = null
+
             try {
               if (attempt > 0) {
                 _log(`Retry ${attempt}/${RETRY_MAX} para: ${asset.filename}`)
                 await new Promise(r => setTimeout(r, 1000 * attempt))
               }
 
-              // Check antes de operação pesada
               if (signal.cancelled) break
 
-              // Buscar dados binários do asset COM TIMEOUT (evita congelar)
-              const data = await withTimeout(
+              // Buscar dados binários do asset COM TIMEOUT
+              data = await withTimeout(
                 plugin.getAssetData({ id: asset.id }),
                 ASSET_DATA_TIMEOUT_MS,
                 `getAssetData ${asset.filename}`
               )
 
-              // Check após operação pesada
               if (signal.cancelled) break
 
-              const blob = base64ToBlob(data.data, data.mimeType)
-              const file = new File([blob], asset.filename || 'media', { type: data.mimeType })
+              blob = base64ToBlob(data.data, data.mimeType)
+              file = new File([blob], asset.filename || 'media', { type: data.mimeType })
+
+              // ECONOMIA DE MEMÓRIA: o base64 da string já não é mais necessário
+              // (o blob tem os bytes). Liberar referência antes do upload.
+              data.data = null
+              data = null
 
               const date = asset.createdAt
                 ? new Date(asset.createdAt).toISOString().substring(0, 10)
                 : new Date().toISOString().substring(0, 10)
 
-              // Check antes de upload
               if (signal.cancelled) break
 
-              const isVideo = (asset.type === 'video') || data.mimeType?.startsWith('video/')
+              const isVideo = (file.type || '').startsWith('video/') || asset.type === 'video'
               const uploadTimeout = isVideo ? UPLOAD_VIDEO_TIMEOUT_MS : UPLOAD_PHOTO_TIMEOUT_MS
 
-              // Criar memória COM TIMEOUT (evita worker pendurado se Firebase travar)
               await withTimeout(
                 addMemoryAndWait({
                   type: isVideo ? 'video' : 'photo',
@@ -483,7 +493,6 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
                 `upload ${asset.filename}`
               )
 
-              // Marcar como importado no IndexedDB (persistente)
               await markAssetSynced(asset.id, uid)
               done++
               success = true
@@ -494,8 +503,17 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
                 _log(`FALHA: ${asset.filename} — ${err.message}`, 'error')
                 failed++
               }
+            } finally {
+              // CRÍTICO: libera referências pra GC recuperar memória
+              // (sem isso o iOS WKWebView estoura RAM em poucos uploads)
+              data = null
+              blob = null
+              file = null
             }
           }
+
+          // Pequena pausa entre uploads pra dar tempo do GC rodar
+          await new Promise(r => setTimeout(r, 50))
 
           // Atualizar progresso e estado persistente
           onProgress?.({
@@ -819,22 +837,41 @@ export function resetGallerySync() {
   _notify()
 }
 
+// Rastreia o uid da última hidratação pra detectar troca de login
+let _lastHydratedUid = null
+
 /**
- * Re-hidrata o _mgr do localStorage.
- * Chamado: 1) no boot do módulo  2) toda vez que o auth resolver (porque a chave
- * do localStorage depende do uid e o auth pode demorar 1-2s pra restaurar).
+ * Reseta o _mgr e re-hidrata baseado no uid atual.
+ * Chamado: 1) boot  2) toda vez que onAuthStateChanged disparar
+ *
+ * CRÍTICO pra ISOLAMENTO entre logins: ao trocar de conta, o estado em memória
+ * do user anterior é zerado e o novo é carregado do localStorage (chave por uid).
  */
 function hydrateMgrFromStorage() {
   try {
     if (_mgr._running) return // não atrapalha execução em andamento
+
+    const currentUid = auth.currentUser?.uid || null
+
+    // Se o uid mudou (logout/troca de conta), RESETA o estado em memória
+    if (currentUid !== _lastHydratedUid) {
+      _mgr.phase = 'idle'
+      _mgr.done = 0
+      _mgr.total = 0
+      _mgr.failed = 0
+      _mgr.errorMsg = null
+      _lastHydratedUid = currentUid
+    }
+
+    // Carrega estado salvo PRO UID ATUAL (chave de localStorage isolada por uid)
     if (hasPendingImport()) {
       const s = getPendingImportSummary()
       _mgr.phase = 'paused'
       _mgr.done = s?.done || 0
       _mgr.total = s?.totalGallery || 0
       _mgr.failed = s?.failed || 0
-      _notify() // avisa quem estiver inscrito (modal, etc)
     }
+    _notify() // avisa quem estiver inscrito (modal, perfil, etc)
   } catch {}
 }
 
