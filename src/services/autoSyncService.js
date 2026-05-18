@@ -253,6 +253,20 @@ function formatDuration(ms) {
   return `${m}m ${s % 60}s`
 }
 
+// Timeout wrapper — evita worker pendurado se plugin/Firebase travar
+const ASSET_DATA_TIMEOUT_MS = 30_000      // 30s pra ler bytes da galeria
+const UPLOAD_PHOTO_TIMEOUT_MS = 90_000    // 90s por foto (com compressão + upload)
+const UPLOAD_VIDEO_TIMEOUT_MS = 5 * 60_000 // 5min por vídeo
+
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout (${ms}ms)`)), ms)
+    ),
+  ])
+}
+
 // ─── Importação NATIVA (iOS + Android) ──────────────────────────────────────
 
 /**
@@ -430,8 +444,12 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
               // Check antes de operação pesada
               if (signal.cancelled) break
 
-              // Buscar dados binários do asset
-              const data = await plugin.getAssetData({ id: asset.id })
+              // Buscar dados binários do asset COM TIMEOUT (evita congelar)
+              const data = await withTimeout(
+                plugin.getAssetData({ id: asset.id }),
+                ASSET_DATA_TIMEOUT_MS,
+                `getAssetData ${asset.filename}`
+              )
 
               // Check após operação pesada
               if (signal.cancelled) break
@@ -446,17 +464,24 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
               // Check antes de upload
               if (signal.cancelled) break
 
-              // Criar memória (upload + Firestore + IndexedDB local)
-              await addMemoryAndWait({
-                type: asset.type || (data.mimeType?.startsWith('video/') ? 'video' : 'photo'),
-                title: cleanTitle(asset.filename),
-                description: '',
-                date,
-                tags: [],
-                privacyLevel: 'private',
-                fromAutoSync: true,
-                galleryAssetId: asset.id,
-              }, file)
+              const isVideo = (asset.type === 'video') || data.mimeType?.startsWith('video/')
+              const uploadTimeout = isVideo ? UPLOAD_VIDEO_TIMEOUT_MS : UPLOAD_PHOTO_TIMEOUT_MS
+
+              // Criar memória COM TIMEOUT (evita worker pendurado se Firebase travar)
+              await withTimeout(
+                addMemoryAndWait({
+                  type: isVideo ? 'video' : 'photo',
+                  title: cleanTitle(asset.filename),
+                  description: '',
+                  date,
+                  tags: [],
+                  privacyLevel: 'private',
+                  fromAutoSync: true,
+                  galleryAssetId: asset.id,
+                }, file),
+                uploadTimeout,
+                `upload ${asset.filename}`
+              )
 
               // Marcar como importado no IndexedDB (persistente)
               await markAssetSynced(asset.id, uid)
@@ -683,21 +708,26 @@ export async function startGallerySync() {
   _mgr._running = true
   _mgr.errorMsg = null
 
-  // Se ainda não verificou o plugin, verifica agora
-  if (!_mgr.nativeReady) {
-    _mgr.phase = 'checking'
-    _notify()
+  // SEMPRE re-checa o plugin (até quando nativeReady já era true).
+  // Necessário porque ao reabrir o app o plugin pode ainda não ter inicializado.
+  _mgr.phase = 'checking'
+  _notify()
 
-    try {
-      const plat = getPlatform()
-      if ((plat === 'ios' || plat === 'android') && !isNativePhotoLibrary()) {
-        await waitForNativePlugin(3000)
+  try {
+    const plat = getPlatform()
+    if (plat === 'ios' || plat === 'android') {
+      // Espera o plugin aparecer (mais generoso: 5s)
+      if (!isNativePhotoLibrary()) {
+        await waitForNativePlugin(5000)
       }
       let native = isNativePhotoLibrary()
-      if (native) native = await isNativePhotoLibraryReady()
+      if (native) {
+        try { native = await isNativePhotoLibraryReady() }
+        catch { native = false }
+      }
       _mgr.nativeReady = native
 
-      if ((plat === 'ios' || plat === 'android') && !native) {
+      if (!native) {
         _mgr.phase = 'error'
         _mgr.errorMsg = 'Plugin indisponível'
         _mgr._running = false
@@ -705,22 +735,20 @@ export async function startGallerySync() {
         return
       }
 
-      if (native) {
-        const st = await checkPhotoPermission()
-        if (st === 'denied' || st === 'restricted') {
-          _mgr.phase = 'denied'
-          _mgr._running = false
-          _notify()
-          return
-        }
+      const st = await checkPhotoPermission()
+      if (st === 'denied' || st === 'restricted') {
+        _mgr.phase = 'denied'
+        _mgr._running = false
+        _notify()
+        return
       }
-    } catch (e) {
-      _mgr.phase = 'error'
-      _mgr.errorMsg = e.message
-      _mgr._running = false
-      _notify()
-      return
     }
+  } catch (e) {
+    _mgr.phase = 'error'
+    _mgr.errorMsg = e.message
+    _mgr._running = false
+    _notify()
+    return
   }
 
   // Inicia o sync
@@ -737,7 +765,8 @@ export async function startGallerySync() {
       _mgr.done = p.done || 0
       _mgr.total = p.total || 0
       _mgr.failed = p.failed || 0
-      _mgr.phase = 'syncing'
+      // Não sobrescreve 'pausing' enquanto o usuário tá esperando pausar
+      if (_mgr.phase !== 'pausing') _mgr.phase = 'syncing'
       _notify()
     }, _mgr._signal)
 
@@ -753,8 +782,15 @@ export async function startGallerySync() {
       _mgr.phase = 'done'
     }
   } catch (e) {
-    _mgr.phase = 'error'
-    _mgr.errorMsg = e.message
+    // CRÍTICO: se o usuário pediu pausa, mostrar como 'paused' (não 'error').
+    // Erros durante o cancelamento são esperados (uploads abortados).
+    if (_mgr._signal.cancelled) {
+      _mgr.phase = 'paused'
+      _log('Erro durante pausa (esperado): ' + (e?.message || e), 'warn')
+    } else {
+      _mgr.phase = 'error'
+      _mgr.errorMsg = e.message
+    }
   }
 
   _mgr._running = false
@@ -783,13 +819,46 @@ export function resetGallerySync() {
   _notify()
 }
 
-// Ao carregar o módulo, verifica se há importação pendente
+/**
+ * Re-hidrata o _mgr do localStorage.
+ * Chamado: 1) no boot do módulo  2) toda vez que o auth resolver (porque a chave
+ * do localStorage depende do uid e o auth pode demorar 1-2s pra restaurar).
+ */
+function hydrateMgrFromStorage() {
+  try {
+    if (_mgr._running) return // não atrapalha execução em andamento
+    if (hasPendingImport()) {
+      const s = getPendingImportSummary()
+      _mgr.phase = 'paused'
+      _mgr.done = s?.done || 0
+      _mgr.total = s?.totalGallery || 0
+      _mgr.failed = s?.failed || 0
+      _notify() // avisa quem estiver inscrito (modal, etc)
+    }
+  } catch {}
+}
+
+// 1) Boot — tenta logo
 ;(function _initManager() {
-  if (hasPendingImport()) {
-    const s = getPendingImportSummary()
-    _mgr.phase = 'paused'
-    _mgr.done = s?.done || 0
-    _mgr.total = s?.totalGallery || 0
-    _mgr.failed = s?.failed || 0
-  }
+  hydrateMgrFromStorage()
+  // Em background, espera plugin pra evitar "Plugin indisponível" ao retomar
+  setTimeout(async () => {
+    try {
+      await waitForNativePlugin(8000)
+      let native = isNativePhotoLibrary()
+      if (native) {
+        try { native = await isNativePhotoLibraryReady() } catch { native = false }
+      }
+      _mgr.nativeReady = native
+    } catch {}
+  }, 100)
 })()
+
+// 2) Auth restaurar — re-hidrata (cobre o caso onde uid só fica disponível depois)
+if (typeof window !== 'undefined') {
+  try {
+    import('firebase/auth').then(({ onAuthStateChanged }) => {
+      onAuthStateChanged(auth, () => hydrateMgrFromStorage())
+    }).catch(() => {})
+  } catch {}
+}

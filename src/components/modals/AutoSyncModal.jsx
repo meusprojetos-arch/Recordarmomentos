@@ -34,6 +34,8 @@ import {
   clearAutoSyncLogs,
   hasPendingImport,
   getPendingImportSummary,
+  subscribeGallerySync,
+  getGallerySyncState,
 } from '../../services/autoSyncService.js'
 
 const C = {
@@ -137,9 +139,20 @@ export default function AutoSyncModal({ onClose, onDone }) {
           }
         }
 
-        // Verificar importação pendente
-        if (hasPendingImport()) {
-          const summary = getPendingImportSummary()
+        // Verificar importação pendente — checa LOCALSTORAGE + estado do _mgr.
+        // O _mgr pode estar em 'paused' mesmo se o storage ainda estiver fora
+        // de sincronia (caso de auth restaurando).
+        const mgrState = getGallerySyncState()
+        const hasPending = hasPendingImport() || mgrState.phase === 'paused'
+        if (hasPending) {
+          const summary = getPendingImportSummary() || {
+            totalGallery: mgrState.total,
+            done: mgrState.done,
+            failed: mgrState.failed,
+            skipped: 0,
+            remaining: Math.max(0, (mgrState.total || 0) - (mgrState.done || 0)),
+            status: 'paused',
+          }
           if (!cancelled) {
             setPendingSummary(summary)
             setPhase('resume')
@@ -158,6 +171,22 @@ export default function AutoSyncModal({ onClose, onDone }) {
     init()
     return () => { cancelled = true }
   }, [platform])
+
+  // Escuta o manager singleton — se o estado virar 'paused' a qualquer momento
+  // (incluindo depois do auth restaurar), força a tela de retomar.
+  useEffect(() => {
+    const unsub = subscribeGallerySync((snap) => {
+      if (snap.phase === 'paused' && phase !== 'syncing' && phase !== 'asking' && phase !== 'pausing') {
+        const summary = getPendingImportSummary()
+        if (summary) {
+          setPendingSummary(summary)
+          setPhase('resume')
+        }
+      }
+    })
+    return () => unsub()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleStart = async () => {
     setError(null)

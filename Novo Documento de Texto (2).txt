@@ -3,3 +3,13 @@ Buscar por nome nao so buscar pela opçao familia
 Opçao de apagar memorias
 Memórias Recentes pode ficar so ate as 10 ultimas
 linha 373 tambem
+
+
+Acessa https://appstoreconnect.apple.com/login e entra com essa conta:
+E-mail: rodajaapp@gmail.com
+Senha: Rod@ja2811
+
+cd "C:\Users\Admi\Desktop\Recordar"
+git add -A
+git commit -m "fix: IAP carrega produtos StoreKit antes de comprar + página de suporte"
+git push
