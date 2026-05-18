@@ -1,115 +1,109 @@
 /**
- * LazyImage — carrega imagem só quando entra (ou se aproxima) do viewport.
- * Resistente a re-renders do pai (não pisca quando o componente envolvente
- * re-renderiza por mudança de classe/seleção, etc).
+ * LazyImage — versão definitiva, sem flicker e rápida.
  *
- * Truque: a função `src` (resolver) só é executada UMA vez. Mudanças posteriores
- * de identidade da função (a função muda mas resolve o mesmo URL) são ignoradas.
+ * Estratégia:
+ *  1. CACHE GLOBAL (Map fora do componente) — uma URL resolvida pra cada cacheKey.
+ *     Se o componente desmontar e remontar (re-render do pai, troca de array),
+ *     a URL é pega instantaneamente do cache: zero flicker, zero re-fetch.
+ *
+ *  2. SEM IntersectionObserver. Usa `loading="lazy"` HTML nativo, que o browser
+ *     gerencia em C++ (muito mais eficiente que JS observers em centenas de items).
+ *
+ *  3. Resolver SÓ roda 1 vez por cacheKey (idempotente).
  */
 import React, { useEffect, useRef, useState } from 'react'
 
+// Cache global: cacheKey (ex: memory.id) → URL resolvida.
+// Persiste enquanto o app estiver aberto.
+const _urlCache = new Map()
+// Promessas em andamento (pra não chamar resolver 2x pro mesmo key em paralelo)
+const _pendingResolvers = new Map()
+
+export function clearLazyImageCache() {
+  _urlCache.clear()
+  _pendingResolvers.clear()
+}
+
 export default function LazyImage({
   src,
+  cacheKey,          // identificador estável (ex: memory.id) — habilita o cache global
   placeholder = null,
   alt = '',
   className = '',
   style = {},
   onClick,
-  rootMargin = '500px',
-  eager = false,
   ...rest
 }) {
-  const ref = useRef(null)
-  const [resolvedSrc, setResolvedSrc] = useState(null)
-  const [loaded, setLoaded] = useState(false)
+  // Inicializa com URL do cache se já tiver — ZERO flicker em remount
+  const [resolvedSrc, setResolvedSrc] = useState(() => {
+    if (cacheKey && _urlCache.has(cacheKey)) return _urlCache.get(cacheKey)
+    if (typeof src === 'string') return src
+    return null
+  })
+  const [loaded, setLoaded] = useState(() => !!resolvedSrc)
   const [errored, setErrored] = useState(false)
-  const generatedUrlRef = useRef(null)
-  const hasLoadedRef = useRef(false) // ← garante que o resolver roda só 1 vez
 
-  // Mantém o src atual numa ref (sem disparar re-effect)
+  // Mantém src atualizado em ref (não dispara re-effect)
   const srcRef = useRef(src)
   srcRef.current = src
 
   useEffect(() => {
-    if (!ref.current) return
-    // Se já carregou antes, NÃO recarrega (evita flicker em re-render do pai)
-    if (hasLoadedRef.current) return
+    if (resolvedSrc) return // já resolvido (cache ou string direta)
 
     let cancelled = false
 
-    const load = async () => {
-      if (cancelled || hasLoadedRef.current) return
-      hasLoadedRef.current = true
+    const resolve = async () => {
       try {
-        const currentSrc = srcRef.current
-        let url
-        if (typeof currentSrc === 'function') {
-          url = await currentSrc()
-        } else {
-          url = currentSrc
+        // Se outra instância já está resolvendo o mesmo cacheKey, espera
+        if (cacheKey && _pendingResolvers.has(cacheKey)) {
+          const url = await _pendingResolvers.get(cacheKey)
+          if (!cancelled && url) setResolvedSrc(url)
+          return
         }
+
+        const promise = (async () => {
+          const s = srcRef.current
+          if (typeof s === 'function') return await s()
+          return s
+        })()
+
+        if (cacheKey) _pendingResolvers.set(cacheKey, promise)
+
+        const url = await promise
+
+        if (cacheKey) {
+          if (url) _urlCache.set(cacheKey, url)
+          _pendingResolvers.delete(cacheKey)
+        }
+
         if (cancelled) return
         if (!url) { setErrored(true); return }
-
-        if (typeof url === 'string' && url.startsWith('blob:')) {
-          generatedUrlRef.current = url
-        }
         setResolvedSrc(url)
-      } catch (e) {
+      } catch {
+        if (cacheKey) _pendingResolvers.delete(cacheKey)
         if (!cancelled) setErrored(true)
       }
     }
 
-    if (eager) {
-      load()
-      return () => { cancelled = true }
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          load()
-          observer.disconnect()
-        }
-      },
-      { rootMargin }
-    )
-    observer.observe(ref.current)
-
-    return () => {
-      cancelled = true
-      observer.disconnect()
-    }
+    resolve()
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // ← roda só na MONTAGEM, nunca em re-render
+  }, [cacheKey])
 
-  // Cleanup do objectURL apenas no UNMOUNT real do componente
-  useEffect(() => {
-    return () => {
-      if (generatedUrlRef.current) {
-        try { URL.revokeObjectURL(generatedUrlRef.current) } catch {}
-        generatedUrlRef.current = null
-      }
-    }
-  }, [])
-
-  const baseStyle = {
-    background: '#e8e3d8',
+  const baseImgStyle = {
     width: '100%',
     height: '100%',
     objectFit: 'cover',
-    transition: 'opacity 0.25s ease',
-    opacity: loaded ? 1 : 0,
+    display: 'block',
     ...style,
   }
 
   if (errored) {
     return (
       <div
-        ref={ref}
         className={className}
         onClick={onClick}
-        style={{ ...baseStyle, opacity: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: '#aaa' }}
+        style={{ ...baseImgStyle, background: '#e8e3d8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, color: '#aaa' }}
       >
         🖼️
       </div>
@@ -118,7 +112,6 @@ export default function LazyImage({
 
   return (
     <div
-      ref={ref}
       onClick={onClick}
       className={className}
       style={{
@@ -135,11 +128,11 @@ export default function LazyImage({
         <img
           src={resolvedSrc}
           alt={alt}
-          loading="lazy"
+          loading="lazy"      // HTML nativo — browser decide quando baixar
           decoding="async"
           onLoad={() => setLoaded(true)}
           onError={() => setErrored(true)}
-          style={baseStyle}
+          style={baseImgStyle}
           {...rest}
         />
       )}

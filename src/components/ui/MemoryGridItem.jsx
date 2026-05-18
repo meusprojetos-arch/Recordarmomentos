@@ -1,9 +1,9 @@
 /**
- * MemoryGridItem — célula da galeria (foto/vídeo/áudio).
+ * MemoryGridItem — célula da galeria, memoizada PROFUNDAMENTE.
  *
- * Componente MEMOIZADO: só re-renderiza quando muda algo dele especificamente.
- * Isso elimina o flicker das fotos quando o usuário seleciona/desseleciona
- * (antes a tela inteira re-renderizava e todas as imagens piscavam).
+ * - Compara por `memory.id` (não referência) → sobrevive a recriação do array memories
+ * - Passa `cacheKey={memory.id}` pro LazyImage → URL resolvida fica em cache global
+ * - Resultado: zero flicker mesmo se o pai re-renderiza ou recria o array
  */
 import React from 'react'
 import LazyImage from './LazyImage.jsx'
@@ -14,7 +14,7 @@ function MemoryGridItem({
   isLockSelected,
   selectMode,
   lockMode,
-  resolver,    // função estável que retorna URL da imagem
+  resolver,
   styles,
   filterIcons,
   onPointerDown,
@@ -39,9 +39,9 @@ function MemoryGridItem({
       {memory.type === 'photo' && (
         <LazyImage
           src={resolver}
+          cacheKey={memory.id}
           alt={memory.title || ''}
           className={styles.thumbImg}
-          rootMargin="1500px"
           placeholder={
             <div className={styles.thumbPlaceholder}>
               <img src={filterIcons.photo} alt="" width={32} height={32} aria-hidden="true" />
@@ -92,16 +92,20 @@ function MemoryGridItem({
   )
 }
 
-// React.memo com comparação custom — só re-renderiza se algo relevante mudou
+// Comparação por ID e flags — IGNORA mudança de referência do objeto memory
+// (que muda toda vez que loadMemories() roda em background).
+// Resultado: o componente NÃO re-renderiza quando outras fotos são marcadas.
 export default React.memo(MemoryGridItem, (prev, next) => {
   return (
-    prev.memory === next.memory &&
+    prev.memory.id === next.memory.id &&
+    prev.memory.type === next.memory.type &&
+    prev.memory.isHighlight === next.memory.isHighlight &&
+    prev.memory.title === next.memory.title &&
     prev.isSelected === next.isSelected &&
     prev.isLockSelected === next.isLockSelected &&
     prev.selectMode === next.selectMode &&
-    prev.lockMode === next.lockMode &&
-    prev.resolver === next.resolver
-    // Os callbacks (onClick, etc) mudam de identidade mas isso é OK — só dispara
-    // re-render se algo VISÍVEL mudou. Os callbacks são pegos do React no momento da chamada.
+    prev.lockMode === next.lockMode
+    // resolver e callbacks: ignorados (resolver é estável via cache, callbacks
+    // são pegos no momento do click via closure do pai)
   )
 })
