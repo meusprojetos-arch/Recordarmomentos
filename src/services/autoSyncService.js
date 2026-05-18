@@ -466,11 +466,20 @@ export async function runAutoSyncNative(onProgress, signal = { cancelled: false 
               if (signal.cancelled) break
 
               tempPathToCleanup = assetInfo.path || null
-              const fileUri = assetInfo.uri  // file:///private/var/.../xxx.jpg
-              if (!fileUri) throw new Error('plugin não retornou URI')
+              const filePath = assetInfo.path
+              if (!filePath) throw new Error('plugin não retornou path')
 
-              // 2) Lê o arquivo direto como Blob (binário, sem string intermediária)
-              fetchResponse = await fetch(fileUri)
+              // 2) Converte path nativo pra URL que o WKWebView aceita.
+              //    Capacitor.convertFileSrc('/tmp/x.jpg') vira
+              //    'capacitor://localhost/_capacitor_file_/tmp/x.jpg' (acessível via fetch).
+              //    SEM isso o WKWebView bloqueia fetch de file:// por segurança.
+              const safeUrl = (Capacitor.convertFileSrc?.(filePath))
+                || assetInfo.uri // fallback (web, não-Capacitor)
+              if (!safeUrl) throw new Error('não foi possível gerar URL acessível')
+
+              // 3) Lê o arquivo como Blob — binário direto, sem string intermediária
+              fetchResponse = await fetch(safeUrl)
+              if (!fetchResponse.ok) throw new Error(`fetch falhou: ${fetchResponse.status}`)
               blob = await fetchResponse.blob()
               fetchResponse = null
 
@@ -870,28 +879,42 @@ let _lastHydratedUid = null
 
 /**
  * Reseta o _mgr e re-hidrata baseado no uid atual.
- * Chamado: 1) boot  2) toda vez que onAuthStateChanged disparar
+ * Chamado: 1) boot  2) onAuthStateChanged (logout / login / troca de conta)
  *
- * CRÍTICO pra ISOLAMENTO entre logins: ao trocar de conta, o estado em memória
- * do user anterior é zerado e o novo é carregado do localStorage (chave por uid).
+ * CRÍTICO pra ISOLAMENTO entre logins:
+ *  - Se o uid mudou e havia execução em andamento, CANCELA imediatamente
+ *  - Reseta todo o estado em memória
+ *  - Carrega o estado salvo do NOVO uid (cada uid tem chave própria)
  */
 function hydrateMgrFromStorage() {
   try {
-    if (_mgr._running) return // não atrapalha execução em andamento
-
     const currentUid = auth.currentUser?.uid || null
+    const uidChanged = currentUid !== _lastHydratedUid
 
-    // Se o uid mudou (logout/troca de conta), RESETA o estado em memória
-    if (currentUid !== _lastHydratedUid) {
+    if (uidChanged) {
+      // CANCELA qualquer execução em andamento (do user anterior)
+      if (_mgr._running) {
+        if (_mgr._signal) {
+          _mgr._signal.cancelled = true
+          _mgr._signal._drainQueue?.()
+        }
+        _mgr._running = false
+      }
+
+      // RESETA o estado em memória pra zerar tudo do user anterior
       _mgr.phase = 'idle'
       _mgr.done = 0
       _mgr.total = 0
       _mgr.failed = 0
       _mgr.errorMsg = null
       _lastHydratedUid = currentUid
+    } else if (_mgr._running) {
+      // Mesmo uid e rodando: deixa quieto pra não atrapalhar
+      return
     }
 
-    // Carrega estado salvo PRO UID ATUAL (chave de localStorage isolada por uid)
+    // Carrega estado salvo PRO UID ATUAL (chave de localStorage isolada por uid).
+    // Se for um novo user sem sessão pendente, fica em 'idle' mesmo.
     if (hasPendingImport()) {
       const s = getPendingImportSummary()
       _mgr.phase = 'paused'
