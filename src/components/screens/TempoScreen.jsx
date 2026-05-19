@@ -409,11 +409,8 @@ export default function TempoScreen({ pendingMemories }) {
       setLockSelectedIds(new Set())
       setSelectMode(true)
       setSelectedIds(new Set([memory.id]))
-      // ATIVA drag-to-select contínuo: o dedo já tá pressionado, próximos
-      // movimentos selecionam outras fotos sem precisar levantar o dedo
-      dragSelect.current.active = true
-      dragSelect.current.mode = 'add'
-      dragSelect.current.visited = new Set([memory.id])
+      // ATIVA drag-to-select com auto-scroll (dedo já pressionado)
+      beginDragSelect(memory, 'add')
     }, 500)
   }
 
@@ -440,11 +437,22 @@ export default function TempoScreen({ pendingMemories }) {
     })
   }
 
-  // ── Drag-to-select: arrasta o dedo pra selecionar várias fotos (estilo iOS Photos) ──
+  // ─── Drag-to-select estilo Google Photos ─────────────────────────────────
+  //
+  // Como funciona:
+  //  1) Long-press numa foto ativa o modo drag (com vibração de feedback)
+  //  2) Listeners globais (document) capturam touchmove ENQUANTO o dedo arrasta
+  //  3) Pra cada foto sob o dedo, marca/desmarca conforme o "modo" inicial
+  //  4) Se o dedo está perto da borda superior/inferior, AUTO-SCROLL acontece
+  //  5) preventDefault no touchmove impede scroll natural durante o drag
+  //
   const dragSelect = useRef({
     active: false,
     mode: 'add',           // 'add' ou 'remove' (decidido pelo 1º toque)
     visited: new Set(),    // ids já tocados nessa sessão de drag
+    lastX: 0,
+    lastY: 0,
+    scrollRaf: null,       // ID do requestAnimationFrame do auto-scroll
   })
 
   function getMemoryIdFromPoint(x, y) {
@@ -452,29 +460,6 @@ export default function TempoScreen({ pendingMemories }) {
     if (!el) return null
     const node = el.closest('[data-memory-id]')
     return node ? node.getAttribute('data-memory-id') : null
-  }
-
-  function onGridPointerDown(e, memory) {
-    // Só ativa drag-to-select se já estiver em selectMode
-    if (!selectMode) return
-    dragSelect.current.active = true
-    dragSelect.current.visited = new Set([memory.id])
-    dragSelect.current.mode = selectedIds.has(memory.id) ? 'remove' : 'add'
-    applyDragSelect(memory.id)
-  }
-
-  function onGridPointerMove(e) {
-    if (!dragSelect.current.active) return
-    const point = e.touches?.[0] || e
-    const id = getMemoryIdFromPoint(point.clientX, point.clientY)
-    if (!id || dragSelect.current.visited.has(id)) return
-    dragSelect.current.visited.add(id)
-    applyDragSelect(id)
-  }
-
-  function onGridPointerUp() {
-    dragSelect.current.active = false
-    dragSelect.current.visited = new Set()
   }
 
   function applyDragSelect(id) {
@@ -485,6 +470,105 @@ export default function TempoScreen({ pendingMemories }) {
       return next
     })
   }
+
+  // Aplica a foto sob o dedo (usado em touchmove + dentro do auto-scroll loop)
+  function dragCheckCurrentPoint() {
+    const id = getMemoryIdFromPoint(dragSelect.current.lastX, dragSelect.current.lastY)
+    if (id && !dragSelect.current.visited.has(id)) {
+      dragSelect.current.visited.add(id)
+      applyDragSelect(id)
+    }
+  }
+
+  // Handler global de touchmove durante o drag
+  function onGlobalDragMove(e) {
+    if (!dragSelect.current.active) return
+    const touch = e.touches?.[0]
+    if (!touch) return
+    // IMPEDE scroll natural durante drag (deixa nosso auto-scroll cuidar)
+    if (e.cancelable) e.preventDefault()
+    dragSelect.current.lastX = touch.clientX
+    dragSelect.current.lastY = touch.clientY
+    dragCheckCurrentPoint()
+  }
+
+  function onGlobalDragEnd() {
+    dragSelect.current.active = false
+    dragSelect.current.visited = new Set()
+    if (dragSelect.current.scrollRaf) {
+      cancelAnimationFrame(dragSelect.current.scrollRaf)
+      dragSelect.current.scrollRaf = null
+    }
+    document.removeEventListener('touchmove', onGlobalDragMove)
+    document.removeEventListener('touchend', onGlobalDragEnd)
+    document.removeEventListener('touchcancel', onGlobalDragEnd)
+  }
+
+  // Loop de auto-scroll: roda a 60fps enquanto o drag está ativo
+  function autoScrollLoop() {
+    if (!dragSelect.current.active) {
+      dragSelect.current.scrollRaf = null
+      return
+    }
+    const SCROLL_ZONE = 100   // px da borda
+    const MAX_SPEED  = 18     // px por frame na zona mais próxima da borda
+    const y = dragSelect.current.lastY
+    const h = window.innerHeight
+
+    let delta = 0
+    if (y < SCROLL_ZONE) {
+      delta = -MAX_SPEED * ((SCROLL_ZONE - y) / SCROLL_ZONE)
+    } else if (y > h - SCROLL_ZONE) {
+      delta = MAX_SPEED * ((y - (h - SCROLL_ZONE)) / SCROLL_ZONE)
+    }
+
+    if (delta !== 0) {
+      window.scrollBy(0, delta)
+      // Após scroll, re-checa qual foto está sob o dedo (a foto mudou de posição)
+      dragCheckCurrentPoint()
+    }
+
+    dragSelect.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
+  }
+
+  // Inicia o drag (chamado quando o long-press completa)
+  function beginDragSelect(memory, mode = 'add') {
+    dragSelect.current.active = true
+    dragSelect.current.mode = mode
+    dragSelect.current.visited = new Set([memory.id])
+    // Posição inicial = onde foi o long-press
+    dragSelect.current.lastX = longPressStart.current.x
+    dragSelect.current.lastY = longPressStart.current.y
+
+    // Feedback tátil (iOS suporta)
+    try { navigator.vibrate?.(15) } catch {}
+
+    // Listeners GLOBAIS — capturam o dedo mesmo se sair do grid
+    document.addEventListener('touchmove', onGlobalDragMove, { passive: false })
+    document.addEventListener('touchend', onGlobalDragEnd)
+    document.addEventListener('touchcancel', onGlobalDragEnd)
+
+    // Inicia loop de auto-scroll
+    if (!dragSelect.current.scrollRaf) {
+      dragSelect.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
+    }
+  }
+
+  // Cleanup quando o componente desmonta (segurança)
+  useEffect(() => {
+    return () => {
+      if (dragSelect.current.scrollRaf) cancelAnimationFrame(dragSelect.current.scrollRaf)
+      document.removeEventListener('touchmove', onGlobalDragMove)
+      document.removeEventListener('touchend', onGlobalDragEnd)
+      document.removeEventListener('touchcancel', onGlobalDragEnd)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Compat: handlers antigos que o GridItem chama. Agora os globais cuidam.
+  function onGridPointerDown(_e, _memory) { /* no-op: usamos listeners globais */ }
+  function onGridPointerMove(_e) { /* no-op */ }
+  function onGridPointerUp() { /* no-op */ }
 
   function exitSelectMode() {
     setSelectMode(false)
@@ -745,8 +829,19 @@ export default function TempoScreen({ pendingMemories }) {
         filterIcons={FILTER_ICONS}
         onPointerDown={(e) => {
           if (selectMode || lockMode) {
+            // Click rápido: toggle a foto
             handleThumbClick(memory)
-            onGridPointerDown(e, memory)
+            // Dentro de selectMode, long-press CURTO (250ms) re-ativa drag
+            // a partir dessa foto (pra arrastar e selecionar várias)
+            const wasSelected = selectedIds.has(memory.id)
+            longPressStart.current = {
+              x: e.clientX || 0,
+              y: e.clientY || 0,
+            }
+            clearTimeout(longPressTimer.current)
+            longPressTimer.current = setTimeout(() => {
+              beginDragSelect(memory, wasSelected ? 'remove' : 'add')
+            }, 250)
           }
         }}
         onClick={() => {
