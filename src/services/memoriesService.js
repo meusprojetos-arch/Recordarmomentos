@@ -5,7 +5,7 @@ import { firestore, storage, auth } from '../firebase.js'
 import {
   collection, doc, addDoc, updateDoc, deleteDoc,
   query, where, orderBy, getDocs, getDoc, limit, startAfter,
-  serverTimestamp, Timestamp
+  serverTimestamp, Timestamp, writeBatch, setDoc
 } from 'firebase/firestore'
 import {
   ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject
@@ -123,9 +123,10 @@ export function addMemory(memoryData, file = null) {
         backedUp: !!fileUrl, // marca explicitamente para query filtrada no backup
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        isFavorite: false, isHighlight: false, isShared: false,
-        privacyLevel: memoryData.privacyLevel || 'private',
-        sharedWith: [],
+        isFavorite: false, isHighlight: false,
+        // isShared: false,
+        privacyLevel: 'private',
+        // sharedWith: [],
       }
       const docRef = await addDoc(memoriesCol(uid), docData)
       if (localId) localDb.fileBlobs.update(localId, { firestoreId: docRef.id }).catch(() => {})
@@ -199,9 +200,10 @@ export async function addMemoryAndWait(memoryData, file = null) {
     backedUp: !!fileUrl,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    isFavorite: false, isHighlight: false, isShared: false,
-    privacyLevel: memoryData.privacyLevel || 'private',
-    sharedWith: [],
+    isFavorite: false, isHighlight: false,
+    // isShared: false,
+    privacyLevel: 'private',
+    // sharedWith: [],
   }
   const docRef = await addDoc(memoriesCol(uid), docData)
   if (localId) localDb.fileBlobs.update(localId, { firestoreId: docRef.id }).catch(() => {})
@@ -352,35 +354,81 @@ export async function updateMemory(memoryId, updates) {
 }
 
 /**
- * Deleta uma memoria
+ * Deleta uma memória
  * - Textos: exclui permanentemente
- * - Fotos/videos/audios: move para lixeira (90 dias)
+ * - Fotos/vídeos/áudios: move para lixeira (90 dias)
+ * @param {string} memoryId
+ * @param {Object} [knownData] — dados já conhecidos pelo caller (evita getDoc extra)
  */
-export async function deleteMemory(memoryId) {
+export async function deleteMemory(memoryId, knownData = null) {
   const uid = auth.currentUser?.uid
   if (!uid) throw new Error('Nao autenticado')
-  
+
   const docRef = doc(firestore, 'users', uid, 'memories', memoryId)
-  const snap = await getDoc(docRef)
-  if (!snap.exists()) return
 
-  const data = snap.data()
+  let data = knownData
+  if (!data) {
+    const snap = await getDoc(docRef)
+    if (!snap.exists()) return
+    data = snap.data()
+  }
 
-  // Texto: exclusão permanente
+  // Texto: exclusão permanente simples
   if (data.type === 'text') {
     await deleteDoc(docRef)
     return
   }
 
-  // Mídia: mover para lixeira
-  const trashCol = collection(firestore, 'users', uid, 'trash')
-  await addDoc(trashCol, {
-    ...data,
+  // Mídia: move para lixeira em batch atômico (1 round-trip ao invés de 3)
+  const batch = writeBatch(firestore)
+  const trashRef = doc(collection(firestore, 'users', uid, 'trash'))
+
+  // Remove campos locais não-serializáveis pelo Firestore:
+  // fileBlob / thumbnail → Blobs; _objectUrl → ObjectURL string temporária; id → doc ID local
+  // eslint-disable-next-line no-unused-vars
+  const { fileBlob, _objectUrl, thumbnail, id: _id, ...safeData } = data
+
+  // Garante que nenhum campo é undefined (Firestore rejeita undefined)
+  const cleanData = Object.fromEntries(
+    Object.entries(safeData).filter(([, v]) => v !== undefined && !(v instanceof Blob))
+  )
+
+  batch.set(trashRef, {
+    ...cleanData,
     originalId: memoryId,
     deletedAt: serverTimestamp(),
     expiresAt: Timestamp.fromDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)),
   })
-  await deleteDoc(docRef)
+  batch.delete(docRef)
+  await batch.commit()
+}
+
+/**
+ * Exclui permanentemente múltiplos itens da lixeira de uma vez.
+ * Usa Promise.all para Storage + writeBatch para Firestore.
+ * @param {Array<{id: string, filePath?: string}>} items
+ */
+export async function bulkPermanentDeleteFromTrash(items) {
+  const uid = auth.currentUser?.uid
+  if (!uid) throw new Error('Nao autenticado')
+  if (!items.length) return
+
+  // Deleta arquivos do Storage em paralelo (fire-and-forget individual errors)
+  await Promise.all(
+    items
+      .filter(item => item.filePath)
+      .map(item => deleteObject(ref(storage, item.filePath)).catch(() => {}))
+  )
+
+  // Deleta documentos do Firestore em lotes de 500 (limite do writeBatch)
+  const BATCH_SIZE = 500
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const batch = writeBatch(firestore)
+    items.slice(i, i + BATCH_SIZE).forEach(item => {
+      batch.delete(doc(firestore, 'users', uid, 'trash', item.id))
+    })
+    await batch.commit()
+  }
 }
 
 /**
@@ -393,7 +441,9 @@ export async function getTrashItems() {
   const trashCol = collection(firestore, 'users', uid, 'trash')
   const q = query(trashCol, orderBy('deletedAt', 'desc'))
   const snap = await getDocs(q)
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  // IMPORTANTE: id: d.id vem por ÚLTIMO para sobrescrever qualquer campo 'id'
+  // que possa ter ficado gravado nos dados (bug histórico de spread com knownData).
+  const items = snap.docs.map(d => ({ ...d.data(), id: d.id }))
 
   // Enriquecer com blobs locais (igual ao getMemories)
   try {
@@ -428,30 +478,46 @@ export async function restoreFromTrash(trashItemId) {
   if (!snap.exists()) throw new Error('Item nao encontrado')
 
   const data = snap.data()
-  const { originalId, deletedAt, expiresAt, ...memoryData } = data
+  // Remove campos da lixeira + campos locais não-serializáveis
+  // eslint-disable-next-line no-unused-vars
+  const { originalId, deletedAt, expiresAt, fileBlob, _objectUrl, thumbnail, id: _id, ...memoryData } = data
 
-  // Re-adiciona como memória
-  await addDoc(collection(firestore, 'users', uid, 'memories'), {
-    ...memoryData,
-    updatedAt: serverTimestamp(),
-  })
-  await deleteDoc(trashRef)
+  // Garante que nenhum campo é undefined ou Blob
+  const cleanMemory = Object.fromEntries(
+    Object.entries(memoryData).filter(([, v]) => v !== undefined && !(v instanceof Blob))
+  )
+
+  // Batch: cria nova memória + remove do trash atomicamente
+  const batch = writeBatch(firestore)
+  const newMemRef = doc(collection(firestore, 'users', uid, 'memories'))
+  batch.set(newMemRef, { ...cleanMemory, updatedAt: serverTimestamp() })
+  batch.delete(trashRef)
+  await batch.commit()
 }
 
 /**
  * Exclui permanentemente um item da lixeira
+ * @param {string} trashItemId
+ * @param {Object} [knownData] — dados já conhecidos (evita getDoc)
  */
-export async function permanentDeleteFromTrash(trashItemId) {
+export async function permanentDeleteFromTrash(trashItemId, knownData = null) {
   const uid = auth.currentUser?.uid
   if (!uid) throw new Error('Nao autenticado')
 
   const trashRef = doc(firestore, 'users', uid, 'trash', trashItemId)
-  const snap = await getDoc(trashRef)
-  if (snap.exists() && snap.data().filePath) {
-    const fileRef = ref(storage, snap.data().filePath)
-    await deleteObject(fileRef).catch(() => {})
+
+  let data = knownData
+  if (!data) {
+    const snap = await getDoc(trashRef)
+    if (!snap.exists()) return
+    data = snap.data()
   }
-  await deleteDoc(trashRef)
+
+  // Storage e Firestore em paralelo
+  await Promise.all([
+    data.filePath ? deleteObject(ref(storage, data.filePath)).catch(() => {}) : Promise.resolve(),
+    deleteDoc(trashRef),
+  ])
 }
 
 /**
@@ -465,12 +531,9 @@ export async function cleanExpiredTrash() {
   const now = Timestamp.now()
   const q = query(trashCol, where('expiresAt', '<=', now))
   const snap = await getDocs(q)
-  for (const d of snap.docs) {
-    if (d.data().filePath) {
-      const fileRef = ref(storage, d.data().filePath)
-      await deleteObject(fileRef).catch(() => {})
-    }
-    await deleteDoc(d.ref)
+  if (!snap.empty) {
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    await bulkPermanentDeleteFromTrash(items)
   }
 }
 

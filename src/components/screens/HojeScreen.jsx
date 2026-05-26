@@ -1,72 +1,223 @@
 /**
  * HojeScreen — Tela "Hoje"
- * 
+ *
  * Exibe:
- *  - Saudação personalizada com data
- *  - Banner de lembrete anual (se houver)
+ *  - Card de Armazenamento
+ *  - Carrossel horizontal de Memórias Recentes (10 últimas)
  *  - Atalhos rápidos para adicionar memória
- *  - Feed de memórias recentes
+ *  - Botão importar da galeria
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 import { getRecentMemories } from '../../services/memoriesService.js'
 import { openGalleryImport } from '../../services/importService.js'
+import { getUserPlan, getStorageUsage } from '../../services/planService.js'
+import { db } from '../../db/database.js'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useApp } from '../../App.jsx'
 import Topbar from '../layout/Topbar.jsx'
-import MemoryCard from '../ui/MemoryCard.jsx'
 import QuickAction from '../ui/QuickAction.jsx'
-import BackupBanner from '../ui/BackupBanner.jsx'
+import LazyImage from '../ui/LazyImage.jsx'
 import SearchUsersModal from '../modals/SearchUsersModal.jsx'
 import styles from './HojeScreen.module.css'
 
-// ÍCONES — substitua cada URL pela sua imagem personalizada
-// Tamanho: 32x32px para ações rápidas, 24x24px para topbar
+// ÍCONES
 const ICONS = {
-  notificacao:  '/icons/notificacao.svg',   // 24x24 — sino / notificação
-  lembrete:     '/icons/lembrete.svg',      // 40x40 — relógio / lembrete
-  fotovideo:    '/icons/fotovideo.svg',     // 32x32 — câmera
-  escrever:     '/icons/escrever.svg',      // 32x32 — lápis / caneta
-  audio:        '/icons/audio.svg',         // 32x32 — microfone
-  local:        '/icons/local.svg',         // 32x32 — pin de localização
+  notificacao: '/icons/notificacao.svg',
+  fotovideo:   '/icons/fotovideo.svg',
+  escrever:    '/icons/escrever.svg',
+  audio:       '/icons/audio.svg',
 }
 
-// Frases inspiradoras em português
-const FRASES = [
-  '"A memória é o diário que todos carregamos conosco." — Oscar Wilde',
-  '"Lembrar é viver duas vezes."',
-  '"Os melhores momentos merecem ser guardados para sempre."',
-  '"Cada foto conta uma história que vale a pena reviver."',
-  '"A vida é feita de momentos — guarde os seus favoritos."',
-]
+// ── Card de Armazenamento ──────────────────────────────────────────────────
+function StorageCard({ onUpgrade }) {
+  const [localUsedMB, setLocalUsedMB] = useState(0)
+  const [localTotalMB, setLocalTotalMB] = useState(1000)
+  const [isPremiumUser, setIsPremiumUser] = useState(false)
 
+  useEffect(() => {
+    // Cálculo real: lê os blobs diretamente do IndexedDB (igual ao ConfigScreen)
+    const calcLocal = async () => {
+      try {
+        let totalBytes = 0
+        const blobs = await db.fileBlobs.toArray()
+        for (const b of blobs) {
+          if (b.blob) totalBytes += b.blob.size || 0
+        }
+        const memories = await db.memories.toArray()
+        for (const m of memories) {
+          if (m.fileBlob) totalBytes += m.fileBlob.size || 0
+          if (m.thumbnail) totalBytes += m.thumbnail.size || 0
+        }
+        const plan = await getUserPlan()
+        const limitBytes = plan.localStorageBytes || plan.storageBytes || (1 * 1024 * 1024 * 1024)
+        setLocalUsedMB(Math.round(totalBytes / (1024 * 1024)))
+        setLocalTotalMB(Math.round(limitBytes / (1024 * 1024)))
+      } catch {
+        setLocalUsedMB(0)
+        setLocalTotalMB(1000)
+      }
+    }
+
+    const calcCloud = async () => {
+      try {
+        const { plan } = await getStorageUsage()
+        if (plan && plan.cloud) setIsPremiumUser(true)
+      } catch {}
+    }
+
+    calcLocal()
+    calcCloud()
+  }, [])
+
+  const pct = localTotalMB > 0 ? Math.min(100, Math.round((localUsedMB / localTotalMB) * 100)) : 0
+
+  const formatMB = (mb) => {
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`
+    return `${mb} MB`
+  }
+
+  return (
+    <div className={styles.storageCard}>
+      <div className={styles.storageTop}>
+        <div className={styles.storageIconWrap}>
+          {/* Anel de progresso SVG */}
+          <svg width="68" height="68" viewBox="0 0 68 68" className={styles.storageRing}>
+            <circle cx="34" cy="34" r="28" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="6"/>
+            <circle
+              cx="34" cy="34" r="28"
+              fill="none"
+              stroke="#8BC34A"
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={`${2 * Math.PI * 28}`}
+              strokeDashoffset={`${2 * Math.PI * 28 * (1 - pct / 100)}`}
+              transform="rotate(-90 34 34)"
+            />
+          </svg>
+          <div className={styles.storageCloudIcon}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" width="26" height="26">
+              <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+              <polyline points="8 17 12 13 16 17" stroke="white" strokeWidth="1.8"/>
+              <line x1="12" y1="13" x2="12" y2="21" stroke="white" strokeWidth="1.8"/>
+            </svg>
+          </div>
+        </div>
+
+        <div className={styles.storageInfo}>
+          <p className={styles.storageLabel}>Armazenamento</p>
+          <p className={styles.storageUsed}>{formatMB(localUsedMB)} usados</p>
+          <p className={styles.storageLimit}>
+            de {formatMB(localTotalMB)} {isPremiumUser ? 'na nuvem' : 'gratuitos'}
+          </p>
+        </div>
+
+        {/* Folha decorativa */}
+        <div className={styles.storageLeaf} aria-hidden="true">🌿</div>
+      </div>
+
+      <div className={styles.storageBarWrap}>
+        <div className={styles.storageBarBg}>
+          <div className={styles.storageBarFill} style={{ width: `${pct}%` }} />
+        </div>
+        <span className={styles.storagePct}>{pct}%</span>
+      </div>
+
+      <div className={styles.storageSafe}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" width="14" height="14">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span>Seus momentos estão seguros</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Item individual do carrossel ──────────────────────────────────────────
+function CarouselItem({ memory }) {
+  const isMedia = memory.type === 'photo' || memory.type === 'video'
+
+  // Mesmo resolver usado pelo MemoryCard — cobre nuvem, objectURL e blob local
+  const resolveSrc = async () => {
+    if (memory.fileUrl) return memory.fileUrl
+    if (memory._objectUrl) return memory._objectUrl
+    if (memory.thumbnail instanceof Blob) return URL.createObjectURL(memory.thumbnail)
+    if (memory.fileBlob instanceof Blob) return URL.createObjectURL(memory.fileBlob)
+    return null
+  }
+
+  const typeIcon = { audio: '🎙️', text: '✏️', video: '🎬', photo: '📷' }[memory.type] ?? '📷'
+
+  // Formata data do card
+  let line1 = '', line2 = ''
+  try {
+    const d = memory.date ? new Date(memory.date + 'T00:00') : new Date(memory.createdAt)
+    const today = new Date()
+    const yesterday = new Date(); yesterday.setDate(today.getDate() - 1)
+    if (d.toDateString() === today.toDateString()) {
+      line1 = 'Hoje'; line2 = memory.time || ''
+    } else if (d.toDateString() === yesterday.toDateString()) {
+      line1 = 'Ontem'; line2 = memory.time || ''
+    } else {
+      line1 = format(d, 'dd/MM', { locale: ptBR })
+      line2 = memory.time || format(d, 'HH:mm', { locale: ptBR })
+    }
+  } catch { line1 = '' }
+
+  return (
+    <div className={styles.carouselItem}>
+      <div className={styles.carouselThumb}>
+        {isMedia ? (
+          <LazyImage
+            src={resolveSrc}
+            cacheKey={memory.id}
+            alt={memory.title || 'Memória'}
+            placeholder={
+              <div className={styles.carouselPlaceholder}>{typeIcon}</div>
+            }
+            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+          />
+        ) : (
+          <div className={styles.carouselPlaceholder}>{typeIcon}</div>
+        )}
+      </div>
+      <p className={styles.carouselDate}>{line1}</p>
+      {line2 && <p className={styles.carouselTime}>{line2}</p>}
+    </div>
+  )
+}
+
+// ── Carrossel de Memórias ─────────────────────────────────────────────────
+function MemoryCarousel({ memories, onViewAll }) {
+  if (memories.length === 0) return null
+
+  return (
+    <div className={styles.carouselSection}>
+      <div className={styles.carouselHeader}>
+        <h3 className={styles.sectionTitle}>Memórias Recentes</h3>
+        <button className={styles.verTodasBtn} onClick={onViewAll}>Ver todas</button>
+      </div>
+      <div className={styles.carousel}>
+        {memories.map((m) => (
+          <CarouselItem key={m.id} memory={m} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Tela Principal ─────────────────────────────────────────────────────────
 export default function HojeScreen() {
-  const { setShowAddModal, setShowPlans } = useApp()
+  const { setShowAddModal, setShowPlans, setActiveTab } = useApp()
   const { user } = useAuth()
-  const [userName, setUserName] = useState('voce')
-  const [frase] = useState(() => FRASES[Math.floor(Math.random() * FRASES.length)])
   const [showSearch, setShowSearch] = useState(false)
-
-  const [reminder, setReminder] = useState(null)
   const [recentMemories, setRecentMemories] = useState([])
 
-  const today = new Date()
-  const todayFormatted = format(today, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })
-
-
-  // Carrega nome do usuario
-  useEffect(() => {
-    if (user?.displayName) {
-      setUserName(user.displayName.split(' ')[0])
-    } else if (user?.name) {
-      setUserName(user.name.split(' ')[0])
-    }
-  }, [user])
-
-  // Carrega memorias recentes
+  // Carrega memórias recentes
   useEffect(() => {
     getRecentMemories(10).then(setRecentMemories).catch(() => {})
     const handler = () => getRecentMemories(10).then(setRecentMemories).catch(() => {})
@@ -74,38 +225,11 @@ export default function HojeScreen() {
     return () => window.removeEventListener('memory-added', handler)
   }, [])
 
-  // Verifica lembretes de aniversario de memorias
-  useEffect(() => {
-    const checkReminders = async () => {
-      const todayStr = format(today, 'MM-dd')
-      const all = recentMemories || []
-      const match = all.find(m => {
-        if (!m.date) return false
-        const memDate = m.date.substring(5, 10)
-        const memYear = m.date.substring(0, 4)
-        const diff = today.getFullYear() - Number(memYear)
-        return memDate === todayStr && diff > 0
-      })
-      if (match) {
-        const year = today.getFullYear() - Number(match.date.substring(0,4))
-        setReminder({ memory: match, years: year })
-      }
-    }
-    checkReminders()
-  }, [recentMemories])
-
-  const getGreeting = () => {
-    const h = today.getHours()
-    if (h < 12) return 'Bom dia'
-    if (h < 18) return 'Boa tarde'
-    return 'Boa noite'
-  }
-
   const quickActions = [
-    { iconUrl: ICONS.fotovideo, label: 'Foto',    sub: 'Da câmera ou galeria',   color: 'green', type: 'photo' },
-    { iconUrl: '/icons/filtro-video.svg', label: 'Vídeo',   sub: 'Da câmera ou galeria',   color: 'green', type: 'video' },
-    { iconUrl: ICONS.audio,     label: 'Áudio',   sub: 'Gravar voz',             color: 'blue',  type: 'audio' },
-    { iconUrl: ICONS.escrever,  label: 'Frase',   sub: 'Reflexão ou história',   color: 'gold',  type: 'text'  },
+    { iconUrl: ICONS.fotovideo,              label: 'Foto',  sub: 'Da câmera ou galeria', color: 'green', type: 'photo' },
+    { iconUrl: '/icons/filtro-video.svg',    label: 'Vídeo', sub: 'Da câmera ou galeria', color: 'green', type: 'video' },
+    { iconUrl: ICONS.audio,                  label: 'Áudio', sub: 'Gravar voz',            color: 'blue',  type: 'audio' },
+    { iconUrl: ICONS.escrever,               label: 'Frase', sub: 'Reflexão ou história',  color: 'gold',  type: 'text'  },
   ]
 
   return (
@@ -122,39 +246,14 @@ export default function HojeScreen() {
 
       <div className={styles.scroll}>
 
+        {/* ── Card de Armazenamento ── */}
+        <StorageCard onUpgrade={() => setShowPlans(true)} />
 
-        {/* ── Cartão de saudação ── */}
-        <div className={styles.greetingCard}>
-          <p className={styles.greetingDate}>{todayFormatted.toUpperCase()}</p>
-          <h2 className={styles.greetingText}>{getGreeting()}, {userName}!</h2>
-          <p className={styles.greetingPhrase}>{frase}</p>
-        </div>
-
-        {/* ── Buscar Pessoas ── */}
-        <button className={styles.searchPeopleBtn} onClick={() => setShowSearch(true)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          Buscar Pessoas
-        </button>
-
-        {/* ── Aviso de backup ── */}
-        <BackupBanner onUpgrade={() => setShowPlans(true)} />
-
-        {/* ── Banner de lembrete anual ── */}
-        {reminder && (
-          <div className={styles.reminderBanner}>
-            <img src={ICONS.lembrete} alt="" aria-hidden="true" className={styles.reminderIcon} width={40} height={40} />
-            <div className={styles.reminderText}>
-              <p className={styles.reminderTitle}>Memória do Passado</p>
-              <p className={styles.reminderSub}>
-                Hoje faz {reminder.years} {reminder.years === 1 ? 'ano' : 'anos'} de:{' '}
-                <strong>{reminder.memory.title || 'uma memória especial'}</strong>
-              </p>
-            </div>
-            <span className={styles.reminderArrow}>›</span>
-          </div>
-        )}
+        {/* ── Carrossel de Memórias Recentes ── */}
+        <MemoryCarousel
+          memories={recentMemories}
+          onViewAll={() => setActiveTab && setActiveTab('tempo')}
+        />
 
         {/* ── Ações rápidas ── */}
         <h3 className={styles.sectionTitle}>
@@ -179,7 +278,7 @@ export default function HojeScreen() {
           onClick={() => {
             const tid = toast.loading('Importando...')
             openGalleryImport(
-              (done, total) => {},
+              () => {},
               (done, total) => { toast.dismiss(tid); toast.success(`${done} de ${total} importados!`) }
             )
           }}
@@ -187,22 +286,6 @@ export default function HojeScreen() {
           🖼️ Importar fotos da galeria
         </button>
 
-        {/* ── Feed recente ── */}
-        <h3 className={styles.sectionTitle}>Memórias Recentes</h3>
-
-        {recentMemories?.length === 0 && (
-          <div className={styles.emptyState}>
-            <span className={styles.emptyIcon}>📸</span>
-            <p className={styles.emptyTitle}>Sua primeira memória te espera!</p>
-            <p className={styles.emptySub}>Toque no botão + para começar</p>
-          </div>
-        )}
-
-        <div className={styles.feed}>
-          {recentMemories?.map(m => (
-            <MemoryCard key={m.id} memory={m} />
-          ))}
-        </div>
       </div>
 
       {showSearch && (

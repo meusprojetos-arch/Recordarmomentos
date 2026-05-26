@@ -14,11 +14,9 @@
 import React, { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext.jsx'
-import { getUserPlan, getStorageUsage, formatBytes } from '../../services/planService.js'
 import { auth, firestore } from '../../firebase.js'
 import { doc, updateDoc } from 'firebase/firestore'
 import { exportAllAsZip } from '../../services/exportService.js'
-import db from '../../db/database.js'
 import Topbar from '../layout/Topbar.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import styles from './ConfigScreen.module.css'
@@ -236,8 +234,8 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
   const [avatarSrc, setAvatarSrc] = useState(null)
   const [savingProfile, setSavingProfile] = useState(false)
 
-  // ── Privacidade ──
-  const [isPrivate, setIsPrivate] = useState(true)
+  // ── Privacidade ── (desativada: perfil sempre privado)
+  // const [isPrivate, setIsPrivate] = useState(true)
 
   // ── Backup ──
   const [autoBackup, setAutoBackup]   = useState(false)
@@ -248,8 +246,6 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
 
   // ── Auto Sync (movido para PerfilScreen) ──
 
-  // ── Tema ──
-  const [theme, setTheme] = useState(() => localStorage.getItem('recordar_theme') || 'dark')
   const [showPinModal, setShowPinModal] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
   const [showPrivacy, setShowPrivacy] = useState(false)
@@ -260,7 +256,7 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
     setName(user?.displayName || user?.name || localStorage.getItem(`recordar_profileName_${uid}`) || '')
     setBio(user?.bio || localStorage.getItem(`recordar_profileBio_${uid}`) || '')
     setAvatarSrc(localStorage.getItem(`recordar_avatar_${uid}`) || user?.photoURL || null)
-    setIsPrivate(localStorage.getItem('recordar_privacy') !== 'public')
+    // setIsPrivate(localStorage.getItem('recordar_privacy') !== 'public') // privacidade sempre privada
     setAutoBackup(localStorage.getItem('recordar_autoBackup') === '1' || localStorage.getItem('recordar_backup_auto') === 'true')
     setBackupFreq(localStorage.getItem('recordar_backupFreq') || 'diario')
 
@@ -329,13 +325,13 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
     reader.readAsDataURL(file)
   }
 
-  // ── Toggle perfil privado ──
-  const handleTogglePrivacy = () => {
-    const next = !isPrivate
-    setIsPrivate(next)
-    localStorage.setItem('recordar_privacy', next ? 'private' : 'public')
-    toast.success(next ? 'Perfil agora é privado' : 'Perfil agora é público')
-  }
+  // ── Toggle perfil privado ── (desativado: perfil sempre privado)
+  // const handleTogglePrivacy = () => {
+  //   const next = !isPrivate
+  //   setIsPrivate(next)
+  //   localStorage.setItem('recordar_privacy', next ? 'private' : 'public')
+  //   toast.success(next ? 'Perfil agora é privado' : 'Perfil agora é público')
+  // }
 
   // ── Toggle backup ──
   const handleToggleBackup = () => {
@@ -370,75 +366,6 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
 
   // ── Abrir/fechar FAQ ──
   const toggleFaq = (idx) => setOpenFaq(prev => (prev === idx ? null : idx))
-
-  // ── Trocar tema ──
-  const handleThemeChange = (newTheme) => {
-    setTheme(newTheme)
-    localStorage.setItem('recordar_theme', newTheme)
-    if (newTheme === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light')
-    } else {
-      document.documentElement.removeAttribute('data-theme')
-    }
-    toast.success(newTheme === 'light' ? 'Modo claro ativado' : 'Modo escuro ativado')
-  }
-
-  // ── Armazenamento (dados reais) ──
-  const [localUsedMB, setLocalUsedMB] = useState(0)
-  const [localTotalMB, setLocalTotalMB] = useState(1000)
-  const [cloudUsedMB, setCloudUsedMB] = useState(0)
-  const [cloudTotalMB, setCloudTotalMB] = useState(1000)
-
-  useEffect(() => {
-    // Calcular uso local real (soma dos blobs no IndexedDB)
-    const calcLocal = async () => {
-      try {
-        let totalBytes = 0
-        // Buscar blobs da tabela fileBlobs (onde as fotos são realmente armazenadas)
-        const blobs = await db.fileBlobs.toArray()
-        for (const b of blobs) {
-          if (b.blob) totalBytes += b.blob.size || 0
-        }
-        // Também contar blobs inline na tabela memories (caso existam)
-        const memories = await db.memories.toArray()
-        for (const m of memories) {
-          if (m.fileBlob) totalBytes += m.fileBlob.size || 0
-          if (m.thumbnail) totalBytes += m.thumbnail.size || 0
-        }
-        const plan = await getUserPlan()
-        const localLimitBytes = plan.localStorageBytes || plan.storageBytes || (1 * 1024 * 1024 * 1024)
-        setLocalUsedMB(Math.round(totalBytes / (1024 * 1024)))
-        setLocalTotalMB(Math.round(localLimitBytes / (1024 * 1024)))
-      } catch {
-        setLocalUsedMB(0)
-        setLocalTotalMB(1000)
-      }
-    }
-
-    // Calcular uso na nuvem real (do Firestore)
-    const calcCloud = async () => {
-      try {
-        const { used, limit, plan } = await getStorageUsage()
-        if (plan && plan.cloud) {
-          setCloudUsedMB(Math.round(used / (1024 * 1024)))
-          setCloudTotalMB(Math.round(limit / (1024 * 1024)))
-        } else {
-          // Plano grátis: nuvem não disponível
-          setCloudUsedMB(0)
-          setCloudTotalMB(0)
-        }
-      } catch {
-        setCloudUsedMB(0)
-        setCloudTotalMB(0)
-      }
-    }
-
-    calcLocal()
-    calcCloud()
-  }, [])
-
-  const localPct  = localTotalMB > 0 ? Math.round((localUsedMB / localTotalMB) * 100) : 0
-  const cloudPct  = cloudTotalMB > 0 ? Math.round((cloudUsedMB / cloudTotalMB) * 100) : 0
 
   return (
     <div className={styles.screen}>
@@ -637,86 +564,6 @@ export default function ConfigScreen({ onClose, onShowPlans }) {
             </>
           )}
         </div>
-
-        {/* ══ 3. Armazenamento ══ */}
-        <h2 className={styles.sectionTitle}>Armazenamento</h2>
-        <div className={styles.card}>
-
-          <p className={styles.storageLabel}>
-            <img src={ICONS.salvar} alt="" width={16} height={16} aria-hidden="true" />
-            Local
-          </p>
-          <p className={styles.storageValues}>{localUsedMB} MB de {localTotalMB} MB utilizados</p>
-          <div className={styles.progressTrack}>
-            <div
-              className={styles.progressBar}
-              style={{ width: `${localPct}%` }}
-              role="progressbar"
-              aria-valuenow={localPct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            />
-          </div>
-
-          <div className={styles.storageDivider} />
-
-          <p className={styles.storageLabel}>
-            <img src={ICONS.nuvem} alt="" width={16} height={16} aria-hidden="true" />
-            Nuvem
-          </p>
-          <p className={styles.storageValues}>{cloudUsedMB} MB de {cloudTotalMB} MB utilizados</p>
-          <div className={styles.progressTrack}>
-            <div
-              className={`${styles.progressBar} ${styles.progressCloud}`}
-              style={{ width: `${cloudPct}%` }}
-              role="progressbar"
-              aria-valuenow={cloudPct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            />
-          </div>
-        </div>
-
-        {/* ══ 3. Privacidade ══ */}
-        {/* ══ 5. Aparência ══ */}
-        <h2 className={styles.sectionTitle}>Aparência</h2>
-        <div className={styles.card + ' ' + styles.cardNoPad}>
-          <div
-            className={styles.row}
-            onClick={() => handleThemeChange('dark')}
-            role="button"
-            tabIndex={0}
-          >
-            <div className={styles.rowIconWrap} style={{ background: '#1A1614' }}>
-              <span style={{ fontSize: 16 }}>🌙</span>
-            </div>
-            <div className={styles.rowText}>
-              <p className={styles.rowLabel}>Modo Escuro</p>
-              <p className={styles.rowSub}>Tema padrão</p>
-            </div>
-            <div className={`${styles.toggle} ${theme === 'dark' ? '' : styles.toggleOff}`} aria-hidden="true" />
-          </div>
-
-          <div className={styles.rowDivider} />
-
-          <div
-            className={styles.row}
-            onClick={() => handleThemeChange('light')}
-            role="button"
-            tabIndex={0}
-          >
-            <div className={styles.rowIconWrap} style={{ background: '#FFF0EB' }}>
-              <span style={{ fontSize: 16 }}>☀️</span>
-            </div>
-            <div className={styles.rowText}>
-              <p className={styles.rowLabel}>Modo Claro</p>
-              <p className={styles.rowSub}>Fundo branco com cores suaves</p>
-            </div>
-            <div className={`${styles.toggle} ${theme === 'light' ? '' : styles.toggleOff}`} aria-hidden="true" />
-          </div>
-        </div>
-
-        {/* Upload Automático moveu para o Perfil */}
 
         {/* ══ Exportar ══ */}
         <h2 className={styles.sectionTitle}>Exportar</h2>

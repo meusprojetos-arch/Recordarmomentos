@@ -1,20 +1,25 @@
 /**
- * LoadingScreen — Tela de abertura do Recordar
- * Design: fundo verde com logo e tagline
+ * LoadingScreen — Splash screen estilo Instagram/Facebook
+ * Fundo escuro + logo centralizada, tempo mínimo garantido
  */
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import styles from './LoadingScreen.module.css'
 
-export default function LoadingScreen() {
+export default function LoadingScreen({ onDone, duration = 1500 }) {
+  const [fading, setFading] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFading(true)
+      setTimeout(() => onDone?.(), 400)
+    }, duration)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
-    <div className={styles.container} role="status" aria-label="Carregando o Recordar">
-      <div className={styles.inner}>
-        <div className={styles.leaf}>✨</div>
-        <h1 className={styles.logo}>Recordar</h1>
-        <p className={styles.tagline}>Seus melhores momentos</p>
-        <div className={styles.spinner} aria-hidden="true" />
-      </div>
+    <div className={`${styles.container} ${fading ? styles.fadeOut : ''}`} aria-label="Carregando">
+      <div className={styles.logo} />
     </div>
   )
 }

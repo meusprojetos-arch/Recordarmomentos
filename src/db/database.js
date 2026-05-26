@@ -79,7 +79,6 @@ db.version(5).stores({
 });
 
 // Versão 6: tabela de controle da importação automática da galeria
-// Salva cada asset importado para permitir retomada exata após interrupção
 db.version(6).stores({
   memories: '++id, type, date, createdAt, folderId, uid, *tags',
   folders: '++id, name, isAuto, order, uid',
@@ -88,7 +87,18 @@ db.version(6).stores({
   settings: '&key',
   reminders: '++id, memoryId, triggerDate, type',
   fileBlobs: '++id, localBlobId, firestoreId, title, type, date, uid',
-  // Registro de assets já importados da galeria (dedup + retomada)
+  gallerySynced: '&assetId, uid, syncedAt',
+});
+
+// Versão 7: folderIds (array multi-pasta) + índice para auto-tags
+db.version(7).stores({
+  memories: '++id, type, date, createdAt, folderId, uid, *tags, *folderIds',
+  folders: '++id, name, isAuto, order, uid, folderType',
+  profile: '++id, username, email',
+  family: '++id, name, username',
+  settings: '&key',
+  reminders: '++id, memoryId, triggerDate, type',
+  fileBlobs: '++id, localBlobId, firestoreId, title, type, date, uid',
   gallerySynced: '&assetId, uid, syncedAt',
 });
 
@@ -177,32 +187,40 @@ export async function searchMemories(query) {
 
 // ─── Inicialização: pastas padrão ─────────────────────────────────────
 
-export async function initDefaultFolders(uid = null) {
-  const defaults = [
-    { name: 'Família',        emoji: '/icons/pasta-familia.svg',        isAuto: true,  autoRule: 'tag:família',      order: 1 },
-    { name: 'Aniversários',   emoji: '/icons/pasta-aniversarios.svg',   isAuto: true,  autoRule: 'date:birthday',    order: 2 },
-    { name: 'Natal',          emoji: '/icons/pasta-natal.svg',          isAuto: true,  autoRule: 'date:12-25',       order: 3 },
-    { name: 'Ano Novo',       emoji: '/icons/pasta-anonovo.svg',        isAuto: true,  autoRule: 'date:01-01',       order: 4 },
-    { name: 'Dia das Mães',   emoji: '/icons/pasta-maes.svg',           isAuto: true,  autoRule: 'date:05-second-sun', order: 5 },
-    { name: 'Dia dos Pais',   emoji: '/icons/pasta-pais.svg',           isAuto: true,  autoRule: 'date:08-second-sun', order: 6 },
-    { name: 'Dia dos Namorados', emoji: '/icons/pasta-namorados.svg',   isAuto: true,  autoRule: 'date:06-12',       order: 7 },
-    { name: 'Páscoa',         emoji: '/icons/pasta-pascoa.svg',         isAuto: true,  autoRule: 'date:easter',      order: 8 },
-    { name: 'Viagens',        emoji: '/icons/pasta-viagens.svg',        isAuto: true,  autoRule: 'tag:viagem',       order: 9 },
-    { name: 'Histórias',      emoji: '/icons/pasta-historias.svg',      isAuto: false, autoRule: null,               order: 10 },
-    { name: 'Destaques',      emoji: '/icons/pasta-destaques.svg',      isAuto: true,  autoRule: 'isHighlight:true', order: 11 },
-  ];
+// ─── Pastas fixas do sistema (sempre existem) ────────────────────────────
+export const SYSTEM_FOLDERS = [
+  { id: 'favoritos', name: 'Favoritos', icon: '⭐', folderType: 'system', rule: 'isHighlight' },
+  { id: 'trancados', name: 'Trancados', icon: '🔒', folderType: 'system', rule: 'isLocked'    },
+]
 
-  // Filtra pastas existentes para este usuário
+// ─── Pastas de IA (classificação automática por tags) ───────────────────
+export const AI_FOLDERS = [
+  { id: 'ai_comida',    name: 'Comida',    icon: '🍕', folderType: 'ai', tag: 'comida'    },
+  { id: 'ai_pets',      name: 'Pets',      icon: '🐾', folderType: 'ai', tag: 'pets'      },
+  { id: 'ai_festa',     name: 'Festa',     icon: '🎉', folderType: 'ai', tag: 'festa'     },
+  { id: 'ai_natureza',  name: 'Natureza',  icon: '🌿', folderType: 'ai', tag: 'natureza'  },
+  { id: 'ai_selfies',   name: 'Selfies',   icon: '🤳', folderType: 'ai', tag: 'selfie'    },
+]
+
+// ─── Pastas fixas do usuário (pré-criadas no DB) ─────────────────────────
+const USER_DEFAULT_FOLDERS = [
+  { name: 'Família',  emoji: '/icons/pasta-familia.svg',  folderType: 'user', isAuto: false, order: 1 },
+  { name: 'Viagens',  emoji: '/icons/pasta-viagens.svg',  folderType: 'user', isAuto: false, order: 2 },
+  { name: 'Amigos',   emoji: '/icons/pasta-generica.svg', folderType: 'user', isAuto: false, order: 3 },
+  { name: 'Trabalho', emoji: '/icons/pasta-generica.svg', folderType: 'user', isAuto: false, order: 4 },
+]
+
+export async function initDefaultFolders(uid = null) {
   const existing = uid
     ? await db.folders.where('uid').equals(uid).toArray()
-    : await db.folders.toArray();
-  const existingNames = existing.map(f => f.name);
-  const toAdd = defaults.filter(f => !existingNames.includes(f.name));
+    : await db.folders.toArray()
+  const existingNames = existing.map(f => f.name)
+  const toAdd = USER_DEFAULT_FOLDERS.filter(f => !existingNames.includes(f.name))
 
   if (toAdd.length > 0) {
     await db.folders.bulkAdd(
-      toAdd.map(f => ({ ...f, uid: uid || '', createdAt: new Date().toISOString() }))
-    );
+      toAdd.map(f => ({ ...f, uid: uid || '', autoRule: null, createdAt: new Date().toISOString() }))
+    )
   }
 }
 

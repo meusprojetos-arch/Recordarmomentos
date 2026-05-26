@@ -26,6 +26,15 @@ const TABS = [
 ]
 
 export default function Navbar({ active, onChange, onAdd }) {
+  const handleTabClick = (tabId) => {
+    if (active === tabId) {
+      // Já está na aba — emite evento para a tela voltar ao topo
+      window.dispatchEvent(new CustomEvent('nav-tab-reclick', { detail: { tab: tabId } }))
+    } else {
+      onChange(tabId)
+    }
+  }
+
   return (
     <nav className={styles.navbar} role="navigation" aria-label="Navegação principal">
       {/* Dois botões esquerda */}
@@ -33,7 +42,7 @@ export default function Navbar({ active, onChange, onAdd }) {
         <button
           key={tab.id}
           className={`${styles.navBtn} ${active === tab.id ? styles.active : ''}`}
-          onClick={() => onChange(tab.id)}
+          onClick={() => handleTabClick(tab.id)}
           aria-label={tab.label}
           aria-current={active === tab.id ? 'page' : undefined}
         >
@@ -60,7 +69,7 @@ export default function Navbar({ active, onChange, onAdd }) {
         <button
           key={tab.id}
           className={`${styles.navBtn} ${active === tab.id ? styles.active : ''}`}
-          onClick={() => onChange(tab.id)}
+          onClick={() => handleTabClick(tab.id)}
           aria-label={tab.label}
           aria-current={active === tab.id ? 'page' : undefined}
         >

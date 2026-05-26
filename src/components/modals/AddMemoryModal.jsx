@@ -40,7 +40,7 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
   // Detalhes
   const [description, setDesc]  = useState('')
   const [textContent, setText]  = useState('')
-  const [privacy, setPrivacy]   = useState(null) // obrigatório: 'private' ou 'public'
+  // const [privacy, setPrivacy] = useState(null) // removido — sempre privado
 
   // Audio
   const [isRecording, setIsRecording] = useState(false)
@@ -191,10 +191,10 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
       toast.error('Adicione uma descricao ou conteudo')
       return
     }
-    if (!privacy) {
-      toast.error('Escolha a privacidade da publicação')
-      return
-    }
+    // if (!privacy) {
+    //   toast.error('Escolha a privacidade da publicação')
+    //   return
+    // }
 
     const memData = {
       type:        selectedType?.id || 'text',
@@ -202,7 +202,7 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
       description: selectedType?.id === 'text' ? textContent : description,
       date:        new Date().toISOString().substring(0, 10),
       tags:        [],
-      privacyLevel: privacy,
+      privacyLevel: 'private',
     }
 
     let fileToUpload = file
@@ -387,31 +387,12 @@ export default function AddMemoryModal({ onClose, onSaved, initialType }) {
               />
             </div>
 
-            {/* Privacidade obrigatória */}
-            <div className={styles.field}>
-              <label className={styles.fieldLabel}>Quem pode ver *</label>
-              <div className={styles.privacyRow}>
-                <button
-                  type="button"
-                  className={`${styles.privacyBtn} ${privacy === 'private' ? styles.privacyBtnActive : ''}`}
-                  onClick={() => setPrivacy('private')}
-                >
-                  🔒 Somente eu
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.privacyBtn} ${privacy === 'public' ? styles.privacyBtnActive : ''}`}
-                  onClick={() => setPrivacy('public')}
-                >
-                  🌐 Público
-                </button>
-              </div>
-            </div>
+            {/* Privacidade removida — sempre privado */}
 
             <button
               className={`${styles.saveBtn} ${isSaving ? styles.savingBtn : ''}`}
               onClick={handleSave}
-              disabled={isSaving || !privacy}
+              disabled={isSaving}
             >
               {isSaving ? 'Salvando...' : 'Salvar Memoria'}
             </button>

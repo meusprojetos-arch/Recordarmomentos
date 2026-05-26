@@ -17,3 +17,16 @@
   min-height: 0;
   overflow: hidden;
 }
+
+/* Wrapper de cada tela — ocupa todo o espaço disponível */
+.tabPane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tabPane[hidden] {
+  display: none;
+}

@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext.jsx'
 import toast from 'react-hot-toast'
 import styles from './AuthScreen.module.css'
 
-export default function LoginScreen({ onGoSignup, onGoWelcome }) {
+export default function LoginScreen({ onGoSignup, onGoWelcome, onSuccess }) {
   const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,6 +22,7 @@ export default function LoginScreen({ onGoSignup, onGoWelcome }) {
     setLoading(true)
     try {
       await login(email, password)
+      onSuccess?.()
       toast.success('Bem-vindo de volta!')
     } catch (err) {
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {

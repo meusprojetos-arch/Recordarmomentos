@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../contexts/AuthContext.jsx'
-import { getMemories, addMemory, updateMemory } from '../../services/memoriesService.js'
+import { getMemories, addMemory } from '../../services/memoriesService.js'
 import { getSharedWithMe } from '../../services/usersService.js'
 import Topbar from '../layout/Topbar.jsx'
 import styles from './FeedScreen.module.css'
@@ -23,10 +23,12 @@ export default function FeedScreen() {
     } catch { return [] }
   })
   const [selectedPost, setSelectedPost] = useState(null)
-  const [loading, setLoading]         = useState(true)
+  const [loading, setLoading]         = useState(false)
+  const [initialized, setInitialized] = useState(false)
+  const [feedTab, setFeedTab]         = useState('todos') // 'todos' | 'curtidos'
 
-  // Privacidade do post
-  const [postPrivacy, setPostPrivacy] = useState(null) // null = não escolheu ainda
+  // // Privacidade do post
+  // const [postPrivacy, setPostPrivacy] = useState(null) // null = não escolheu ainda
 
   // Filtro por data
   const [dateFrom, setDateFrom]       = useState('')
@@ -37,7 +39,6 @@ export default function FeedScreen() {
 
   /* ── Data load ── */
   const loadFeed = async () => {
-    setLoading(true)
     try {
       // Busca todas e filtra client-side (evita necessidade de índice composto)
       const allMems = await getMemories()
@@ -58,8 +59,9 @@ export default function FeedScreen() {
       setPosts(all)
     } catch (err) {
       console.error(err)
+    } finally {
+      setInitialized(true)
     }
-    setLoading(false)
   }
 
   /* ── Post creation ── */
@@ -68,24 +70,24 @@ export default function FeedScreen() {
       toast.error('Escreva algo antes de postar')
       return
     }
-    if (!postPrivacy) {
-      toast.error('Escolha a privacidade da publicação')
-      return
-    }
+    // if (!postPrivacy) {
+    //   toast.error('Escolha a privacidade da publicação')
+    //   return
+    // }
     setPosting(true)
     try {
       await addMemory({
         type: 'text',
-        title: newPost.substring(0, 60),
-        description: postDesc.trim() || newPost,
+        title: newPost.trim(),           // texto completo da reflexão
+        description: postDesc.trim(),    // descrição separada (pode ser vazia)
         date: new Date().toISOString().substring(0, 10),
         tags: [],
-        privacyLevel: postPrivacy,
+        privacyLevel: 'private',
       })
       toast.success('Reflexão publicada!')
       setNewPost('')
       setPostDesc('')
-      setPostPrivacy(null)
+      // setPostPrivacy(null)
       setShowCompose(false)
       loadFeed()
     } catch {
@@ -120,18 +122,18 @@ export default function FeedScreen() {
     }
   }
 
-  /* ── Toggle privacidade de post existente ── */
-  const handleTogglePostPrivacy = async (post, e) => {
-    if (e) e.stopPropagation()
-    const newLevel = post.privacyLevel === 'public' ? 'private' : 'public'
-    try {
-      await updateMemory(post.id, { privacyLevel: newLevel })
-      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, privacyLevel: newLevel } : p))
-      toast.success(newLevel === 'public' ? 'Publicação agora é pública' : 'Publicação agora é só sua')
-    } catch {
-      toast.error('Erro ao alterar privacidade')
-    }
-  }
+  // /* ── Toggle privacidade de post existente ── */
+  // const handleTogglePostPrivacy = async (post, e) => {
+  //   if (e) e.stopPropagation()
+  //   const newLevel = post.privacyLevel === 'public' ? 'private' : 'public'
+  //   try {
+  //     await updateMemory(post.id, { privacyLevel: newLevel })
+  //     setPosts(prev => prev.map(p => p.id === post.id ? { ...p, privacyLevel: newLevel } : p))
+  //     toast.success(newLevel === 'public' ? 'Publicação agora é pública' : 'Publicação agora é só sua')
+  //   } catch {
+  //     toast.error('Erro ao alterar privacidade')
+  //   }
+  // }
 
   /* ── Date formatting ── */
   const formatDateTime = (timestamp) => {
@@ -160,9 +162,16 @@ export default function FeedScreen() {
   const authorName = (post) =>
     post.fromUser?.name || user?.displayName || 'Você'
 
-  /* ── Posts filtrados por data ── */
+  /* ── Posts filtrados por aba + data ── */
   const filteredPosts = useMemo(() => {
     let list = posts
+
+    // Filtro de aba
+    if (feedTab === 'curtidos') {
+      list = list.filter(p => likedIds.includes(p.id))
+    }
+
+    // Filtro de data
     if (dateFrom) {
       list = list.filter(p => {
         const d = p.date || (p.createdAt?.seconds ? new Date(p.createdAt.seconds * 1000).toISOString().substring(0, 10) : '')
@@ -176,7 +185,7 @@ export default function FeedScreen() {
       })
     }
     return list
-  }, [posts, dateFrom, dateTo])
+  }, [posts, dateFrom, dateTo, feedTab, likedIds])
 
   /* ── Render ── */
   return (
@@ -192,6 +201,22 @@ export default function FeedScreen() {
         >
           {showCompose ? '✕ Fechar' : '✏️ Escrever uma reflexão'}
         </button>
+
+        {/* ── Abas: Todos | Curtidos ── */}
+        <div className={styles.feedTabs}>
+          <button
+            className={`${styles.feedTab} ${feedTab === 'todos' ? styles.feedTabActive : ''}`}
+            onClick={() => setFeedTab('todos')}
+          >
+            📋 Todos
+          </button>
+          <button
+            className={`${styles.feedTab} ${feedTab === 'curtidos' ? styles.feedTabActive : ''}`}
+            onClick={() => setFeedTab('curtidos')}
+          >
+            ❤️ Curtidos{likedIds.length > 0 ? ` (${likedIds.length})` : ''}
+          </button>
+        </div>
 
         {/* ── Filtro por data ── */}
         <div className={styles.dateFilterRow}>
@@ -262,29 +287,14 @@ export default function FeedScreen() {
               maxLength={200}
             />
 
-            {/* Seletor de privacidade obrigatório */}
-            <div className={styles.privacySelector}>
-              <span className={styles.privacyLabel}>Quem pode ver:</span>
-              <button
-                className={`${styles.privacyOption} ${postPrivacy === 'private' ? styles.privacyOptionActive : ''}`}
-                onClick={() => setPostPrivacy('private')}
-              >
-                🔒 Somente eu
-              </button>
-              <button
-                className={`${styles.privacyOption} ${postPrivacy === 'public' ? styles.privacyOptionActive : ''}`}
-                onClick={() => setPostPrivacy('public')}
-              >
-                🌐 Público
-              </button>
-            </div>
+            {/* Seletor de privacidade removido — tudo privado por padrão */}
 
             <div className={styles.composeFooter}>
               <span className={styles.charCount}>{newPost.length} caracteres</span>
               <button
                 className={styles.postBtn}
                 onClick={handlePost}
-                disabled={posting || !newPost.trim() || !postPrivacy}
+                disabled={posting || !newPost.trim()}
               >
                 {posting ? 'Publicando…' : 'Publicar'}
               </button>
@@ -292,42 +302,28 @@ export default function FeedScreen() {
           </div>
         )}
 
-        {/* ── Loading skeleton ── */}
-        {loading && (
-          <div className={styles.skeletonWrap}>
-            {[1, 2, 3].map(i => (
-              <div key={i} className={styles.skeleton}>
-                <div className={styles.skeletonHeader}>
-                  <div className={styles.skeletonAvatar} />
-                  <div className={styles.skeletonMeta}>
-                    <div className={styles.skeletonLine} style={{ width: '40%' }} />
-                    <div className={styles.skeletonLine} style={{ width: '60%', marginTop: 6 }} />
-                  </div>
-                </div>
-                <div className={styles.skeletonLine} style={{ width: '100%', marginTop: 14 }} />
-                <div className={styles.skeletonLine} style={{ width: '80%', marginTop: 8 }} />
-                <div className={styles.skeletonLine} style={{ width: '55%', marginTop: 8 }} />
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* ── Empty state ── */}
-        {!loading && filteredPosts.length === 0 && (
+        {initialized && filteredPosts.length === 0 && (
           <div className={styles.empty}>
-            <span className={styles.emptyIcon}>💭</span>
-            <p className={styles.emptyTitle}>Nenhuma reflexão ainda</p>
+            <span className={styles.emptyIcon}>{feedTab === 'curtidos' ? '❤️' : '💭'}</span>
+            <p className={styles.emptyTitle}>
+              {feedTab === 'curtidos' ? 'Nenhuma reflexão curtida' : 'Nenhuma reflexão ainda'}
+            </p>
             <p className={styles.emptySub}>
-              Clique em "✏️ Escrever uma reflexão" e comece a registrar seus pensamentos e momentos.
+              {feedTab === 'curtidos'
+                ? 'Curta reflexões tocando o ❤️ nos posts do feed.'
+                : 'Clique em "✏️ Escrever uma reflexão" e comece a registrar seus pensamentos e momentos.'}
             </p>
           </div>
         )}
 
         {/* ── Feed cards ── */}
-        {!loading && filteredPosts.map(post => {
+        {filteredPosts.map(post => {
           const liked = likedIds.includes(post.id)
-          const text  = post.description || post.title || ''
-          const preview = text.length > 280 ? text.substring(0, 280) + '…' : text
+          // Compatibilidade: posts antigos podem ter o texto em description
+          const mainText = post.title || post.description || ''
+          const subText  = post.description && post.description !== post.title ? post.description : ''
+          const preview  = mainText.length > 280 ? mainText.substring(0, 280) + '…' : mainText
 
           return (
             <article
@@ -345,22 +341,15 @@ export default function FeedScreen() {
                   <p className={styles.postAuthor}>{authorName(post)}</p>
                   <p className={styles.postDate}>{formatDateTime(post.createdAt)}</p>
                 </div>
-                {/* Indicador de privacidade */}
-                {!post.fromUser && (
-                  <button
-                    className={styles.privacyBadge}
-                    onClick={e => handleTogglePostPrivacy(post, e)}
-                    title={post.privacyLevel === 'public' ? 'Público — clique para trancar' : 'Privado — clique para publicar'}
-                  >
-                    {post.privacyLevel === 'public' ? '🌐' : '🔒'}
-                  </button>
-                )}
               </div>
 
               {/* Text content */}
               <p className={styles.postText}>{preview}</p>
-              {text.length > 280 && (
+              {mainText.length > 280 && (
                 <span className={styles.readMore}>Ver mais</span>
+              )}
+              {subText && (
+                <p className={styles.postDesc}>{subText}</p>
               )}
 
               {/* Actions */}
@@ -420,8 +409,11 @@ export default function FeedScreen() {
             {/* Modal body */}
             <div className={styles.modalBody}>
               <p className={styles.modalText}>
-                {selectedPost.description || selectedPost.title}
+                {selectedPost.title || selectedPost.description}
               </p>
+              {selectedPost.description && selectedPost.description !== selectedPost.title && (
+                <p className={styles.modalDesc}>{selectedPost.description}</p>
+              )}
             </div>
 
             {/* Modal footer */}

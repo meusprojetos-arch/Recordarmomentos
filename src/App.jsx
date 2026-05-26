@@ -27,7 +27,12 @@ export const useApp = () => useContext(AppContext)
 function AppContent() {
   const { user, loading } = useAuth()
   const [authScreen, setAuthScreen] = useState('welcome')
+  const [showSplash, setShowSplash]       = useState(true)
+  const [tabSplash, setTabSplash]         = useState(false)
+  const [authSplash, setAuthSplash]       = useState(false)
   const [activeTab, setActiveTab]         = useState('hoje')
+  // Controla quais abas já foram visitadas (lazy-mount: monta só na 1ª visita)
+  const [mountedTabs, setMountedTabs]     = useState({ hoje: true, feed: false, tempo: false, perfil: false })
   const pendingMemories = React.useRef([]) // memórias salvas aguardando tela
   const [showAddModal, setShowAddModal]   = useState(false) // false ou string do tipo ('photo','text','audio','location')
   const [showPlans, setShowPlans]         = useState(false)
@@ -37,6 +42,16 @@ function AppContent() {
   const [refreshKey, setRefreshKey]       = useState(0)
 
   const triggerRefresh = () => setRefreshKey(k => k + 1)
+
+  // Marca a aba como "já visitada" para mantê-la montada
+  // Mostra splash breve ao entrar no Feed ou Memórias
+  const handleTabChange = (tab) => {
+    if (tab === activeTab) return
+    const needsSplash = !mountedTabs[tab] && (tab === 'feed' || tab === 'tempo')
+    if (needsSplash) setTabSplash(true)
+    setActiveTab(tab)
+    setMountedTabs(prev => prev[tab] ? prev : { ...prev, [tab]: true })
+  }
 
   // Verifica se tem dados na nuvem ao logar (troca de dispositivo)
   useEffect(() => {
@@ -68,12 +83,22 @@ function AppContent() {
   }
 
 
-  // Enquanto Firebase verifica auth, mostra fundo neutro sem piscar nada
-  if (loading) return <div style={{ width:'100%', height:'100dvh', background:'var(--bege)' }} />
+  // Splash inicial cobre TUDO durante 1.5s — independente do Firebase
+  if (showSplash) return <LoadingScreen onDone={() => setShowSplash(false)} />
+
+  // Splash após login bem-sucedido (cobre a transição para o app)
+  if (authSplash) return <LoadingScreen duration={800} onDone={() => setAuthSplash(false)} />
+
+  // Após o splash: se Firebase ainda estiver carregando, fundo escuro
+  if (loading) return <div style={{ width:'100%', height:'100dvh', background:'#0e0e0e' }} />
 
   if (!user) {
     if (authScreen === 'login') {
-      return <LoginScreen onGoSignup={() => setAuthScreen('signup')} onGoWelcome={() => setAuthScreen('welcome')} />
+      return <LoginScreen
+        onGoSignup={() => setAuthScreen('signup')}
+        onGoWelcome={() => setAuthScreen('welcome')}
+        onSuccess={() => setAuthSplash(true)}
+      />
     }
     if (authScreen === 'signup') {
       return <SignupScreen onGoLogin={() => setAuthScreen('login')} onGoWelcome={() => setAuthScreen('welcome')} />
@@ -94,16 +119,29 @@ function AppContent() {
   return (
     <AppContext.Provider value={ctx}>
       <div className={styles.appShell}>
+        {/* Splash ao trocar para Feed/Memórias pela primeira vez */}
+        {tabSplash && (
+          <LoadingScreen duration={800} onDone={() => setTabSplash(false)} />
+        )}
         <main className={styles.main}>
-          {activeTab === 'hoje'   && <HojeScreen  key={refreshKey} />}
-          {activeTab === 'feed'   && <FeedScreen  key={refreshKey} />}
-          {activeTab === 'tempo'  && <TempoScreen key={refreshKey} pendingMemories={pendingMemories} />}
-          {activeTab === 'perfil' && <PerfilScreen />}
+          {/* Cada tela monta na 1ª visita e fica oculta (não desmontada) nas demais */}
+          <div className={styles.tabPane} hidden={activeTab !== 'hoje'}>
+            {mountedTabs.hoje && <HojeScreen key={refreshKey} />}
+          </div>
+          <div className={styles.tabPane} hidden={activeTab !== 'feed'}>
+            {mountedTabs.feed && <FeedScreen />}
+          </div>
+          <div className={styles.tabPane} hidden={activeTab !== 'tempo'}>
+            {mountedTabs.tempo && <TempoScreen key={refreshKey} pendingMemories={pendingMemories} />}
+          </div>
+          <div className={styles.tabPane} hidden={activeTab !== 'perfil'}>
+            {mountedTabs.perfil && <PerfilScreen />}
+          </div>
         </main>
 
         <Navbar
           active={activeTab}
-          onChange={setActiveTab}
+          onChange={handleTabChange}
           onAdd={() => setShowAddModal(true)}
         />
 

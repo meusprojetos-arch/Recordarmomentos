@@ -13,11 +13,11 @@
   -webkit-overflow-scrolling: touch;
 }
 
-/* ── Saudação ── */
-.greetingCard {
-  background: linear-gradient(135deg, #728C69 0%, #5A7352 100%);
+/* ── Card de Armazenamento ── */
+.storageCard {
+  background: linear-gradient(135deg, #4A6741 0%, #3A5632 100%);
   border-radius: var(--radius-lg);
-  padding: 22px 20px;
+  padding: 20px 18px 16px;
   margin-top: 16px;
   color: white;
   position: relative;
@@ -25,74 +25,188 @@
   animation: fadeIn 0.4s ease;
 }
 
-.greetingCard::after {
-  content: '🌿';
+.storageTop {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.storageIconWrap {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  flex-shrink: 0;
+}
+
+.storageRing {
   position: absolute;
-  right: 16px;
-  top: 14px;
-  font-size: 44px;
-  opacity: 0.2;
+  top: 0;
+  left: 0;
+}
+
+.storageCloudIcon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.storageInfo {
+  flex: 1;
+}
+
+.storageLabel {
+  font-size: 12px;
+  opacity: 0.75;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.storageUsed {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+  font-family: var(--font-serif);
+}
+
+.storageLimit {
+  font-size: 14px;
+  opacity: 0.82;
+  margin-top: 2px;
+}
+
+.storageLeaf {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  font-size: 40px;
+  opacity: 0.18;
   pointer-events: none;
 }
 
-.greetingDate {
-  font-size: 11px;
-  opacity: 0.78;
-  font-weight: 700;
-  letter-spacing: 0.9px;
-}
-
-.greetingText {
-  font-family: var(--font-serif);
-  font-size: 24px;
-  font-weight: 600;
-  margin-top: 6px;
-  line-height: 1.3;
-}
-
-.greetingPhrase {
-  font-size: 13px;
-  opacity: 0.82;
-  margin-top: 8px;
-  font-style: italic;
-  line-height: 1.5;
-}
-
-/* ── Lembrete ── */
-.reminderBanner {
-  background: linear-gradient(135deg, #FFF8E1, #FFF3CD);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  margin-top: 14px;
+.storageBarWrap {
   display: flex;
-  gap: 12px;
   align-items: center;
-  border: 1px solid rgba(232,185,35,0.35);
-  cursor: pointer;
-  animation: slideDown 0.4s ease;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
-.reminderIcon { font-size: 28px; }
+.storageBarBg {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 99px;
+  overflow: hidden;
+}
 
-.reminderText { flex: 1; }
+.storageBarFill {
+  height: 100%;
+  background: #8BC34A;
+  border-radius: 99px;
+  transition: width 0.6s ease;
+  min-width: 4px;
+}
 
-.reminderTitle {
+.storagePct {
   font-size: 13px;
   font-weight: 700;
-  color: #7A5C0A;
+  opacity: 0.9;
+  min-width: 34px;
+  text-align: right;
 }
 
-.reminderSub {
+.storageSafe {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
-  color: #A07820;
-  margin-top: 3px;
-  line-height: 1.4;
+  opacity: 0.7;
 }
 
-.reminderArrow {
-  font-size: 22px;
-  color: #D9A72F;
+/* ── Carrossel de Memórias Recentes ── */
+.carouselSection {
+  margin-top: 22px;
+}
+
+.carouselHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.verTodasBtn {
+  font-size: 13px;
   font-weight: 600;
+  color: var(--terracota, #C0522A);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-sans);
+}
+
+.carousel {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.carousel::-webkit-scrollbar { display: none; }
+
+.carouselItem {
+  flex-shrink: 0;
+  width: 100px;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.carouselThumb {
+  width: 100px;
+  height: 100px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bege-claro);
+  margin-bottom: 6px;
+  position: relative;
+}
+
+/* LazyImage renderiza um div interno — garante que preencha todo o thumb */
+.carouselThumb > div {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.carouselPlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  background: rgba(79,124,82,0.08);
+}
+
+.carouselDate {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cinza);
+  line-height: 1.3;
+  text-transform: capitalize;
+}
+
+.carouselTime {
+  font-size: 11px;
+  color: var(--cinza-suave);
+  margin-top: 1px;
 }
 
 /* ── Seções ── */
@@ -119,37 +233,7 @@
   gap: 10px;
 }
 
-/* ── Feed ── */
-.feed {
-  background: var(--bege-claro);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-  padding: 0 14px;
-}
-
-/* ── Estado vazio ── */
-.emptyState {
-  text-align: center;
-  padding: 40px 20px;
-  animation: fadeIn 0.5s ease;
-}
-
-.emptyIcon { font-size: 52px; display: block; margin-bottom: 12px; }
-
-.emptyTitle {
-  font-family: var(--font-serif);
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--cinza);
-  margin-bottom: 6px;
-}
-
-.emptySub {
-  font-size: 14px;
-  color: var(--cinza-suave);
-}
-
+/* ── Importar ── */
 .importBtn {
   width: 100%;
   padding: 14px;
@@ -166,86 +250,33 @@
 }
 .importBtn:active { transform: scale(0.98); }
 
-.searchPeopleBtn {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1.5px solid rgba(79,124,82,0.3);
+/* ── Lembrete (mantido caso seja reativado) ── */
+.reminderBanner {
+  background: linear-gradient(135deg, #FFF8E1, #FFF3CD);
   border-radius: var(--radius-md);
-  background: var(--bege-claro);
-  color: var(--verde);
-  font-size: 14px;
-  font-weight: 600;
-  font-family: var(--font-sans);
-  cursor: pointer;
-  margin: 12px 0 8px;
-  transition: var(--transition-fast);
+  padding: 14px 16px;
+  margin-top: 14px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.searchPeopleBtn:active { transform: scale(0.98); }
-
-/* ── Permission Banner ── */
-.permissionBanner {
-  background: var(--bege-claro);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  margin-bottom: 12px;
-  border: 1.5px solid rgba(255, 107, 53, 0.2);
-}
-
-.permissionContent {
-  display: flex;
-  align-items: flex-start;
   gap: 12px;
-  margin-bottom: 12px;
-}
-
-.permissionIcon {
-  font-size: 28px;
-  flex-shrink: 0;
-}
-
-.permissionTitle {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--cinza);
-  margin-bottom: 2px;
-}
-
-.permissionSub {
-  font-size: 13px;
-  color: var(--cinza-suave);
-}
-
-.permissionActions {
-  display: flex;
-  gap: 10px;
-}
-
-.permissionAllow {
-  flex: 1;
-  padding: 10px;
-  background: var(--verde);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 600;
+  align-items: center;
+  border: 1px solid rgba(232,185,35,0.35);
   cursor: pointer;
-  font-family: var(--font-sans);
+  animation: slideDown 0.4s ease;
 }
 
-.permissionDismiss {
-  flex: 1;
-  padding: 10px;
-  background: none;
-  color: var(--cinza-suave);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: var(--font-sans);
+.reminderIcon { font-size: 28px; }
+.reminderText { flex: 1; }
+.reminderTitle { font-size: 13px; font-weight: 700; color: #7A5C0A; }
+.reminderSub   { font-size: 12px; color: #A07820; margin-top: 3px; line-height: 1.4; }
+.reminderArrow { font-size: 22px; color: #D9A72F; font-weight: 600; }
+
+/* ── Animações ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

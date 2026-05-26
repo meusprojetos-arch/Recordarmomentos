@@ -7,8 +7,9 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { getMemories, searchMemories, deleteMemory, updateMemory, getTrashItems, restoreFromTrash, permanentDeleteFromTrash } from '../../services/memoriesService.js'
-import { db as localDb } from '../../db/database.js'
+import { getMemories, deleteMemory, updateMemory, getTrashItems, restoreFromTrash, permanentDeleteFromTrash, bulkPermanentDeleteFromTrash } from '../../services/memoriesService.js'
+import { db as localDb, SYSTEM_FOLDERS, AI_FOLDERS } from '../../db/database.js'
+import { auth } from '../../firebase.js'
 import Topbar from '../layout/Topbar.jsx'
 import FolderGrid from '../ui/FolderGrid.jsx'
 import LazyImage from '../ui/LazyImage.jsx'
@@ -54,10 +55,10 @@ export default function TempoScreen({ pendingMemories }) {
   const [activeTab, setActiveTab]       = useState('galeria')
 
   const [memories, setMemories]         = useState([])
+  const [allMemories, setAllMemories]   = useState([]) // inclui trancadas, para contagens
   const [thumbUrls, setThumbUrls]       = useState({})
   const [filter, setFilter]             = useState('all')
-  const [query, setQuery]               = useState('')
-  const [searchResults, setSearchResults] = useState(null)
+  const [highlightFolderId, setHighlightFolderId] = useState(null)
 
   // Lixeira
   const [trashItems, setTrashItems]     = useState([])
@@ -72,6 +73,7 @@ export default function TempoScreen({ pendingMemories }) {
   // Visualizador fullscreen
   const [viewerOpen, setViewerOpen]     = useState(false)
   const [viewerIndex, setViewerIndex]   = useState(0)
+  const [viewerDeleteConfirm, setViewerDeleteConfirm] = useState(false) // confirmação de lixeira no viewer
 
   // Seleção múltipla
   const [selectMode, setSelectMode]     = useState(false)
@@ -105,35 +107,78 @@ export default function TempoScreen({ pendingMemories }) {
   const touchStartX = useRef(null)
   const longPressTimer = useRef(null)
 
+  // Ref do container de scroll da galeria
+  const scrollRef = useRef(null)
+
   // ── Carregamento de memórias ───────────────────────────────────────────────
+
+  // Carrega o id da pasta Destaques do IndexedDB (rápido, local)
+  const loadHighlightFolderId = useCallback(async () => {
+    try {
+      const uid = auth.currentUser?.uid || ''
+      const destaqueFolder = await localDb.folders
+        .filter(f => f.autoRule === 'isHighlight:true' && (!f.uid || f.uid === '' || f.uid === uid))
+        .first()
+      if (destaqueFolder) setHighlightFolderId(destaqueFolder.id)
+    } catch {}
+  }, [user?.uid])
 
   const loadMemories = useCallback(async () => {
     try {
-      // getMemories já filtra isLocked=true automaticamente (cloud-synced)
-      const visible = await getMemories()
-      setMemories(visible)
+      // Uma única chamada incluindo trancadas — evita 2 roundtrips ao Firestore
+      const all = await getMemories({ includeLocked: true })
+      setAllMemories(all)
+      setMemories(all.filter(m => m.isLocked !== true))
 
-      // Pra contagem por pasta, busca incluindo trancadas
-      const allWithLocked = await getMemories({ includeLocked: true })
+      // Contagem por pasta
       const countMap = {}
-      for (const m of allWithLocked) {
+
+      // Pastas de usuário: folderId (legado) + folderIds (novo, multi-pasta)
+      for (const m of all) {
         if (m.folderId) countMap[m.folderId] = (countMap[m.folderId] || 0) + 1
+        if (Array.isArray(m.folderIds)) {
+          for (const fid of m.folderIds) {
+            countMap[fid] = (countMap[fid] || 0) + 1
+          }
+        }
       }
+
+      // Pastas IA: conta por tags
+      for (const f of AI_FOLDERS) {
+        countMap[f.id] = all.filter(m =>
+          Array.isArray(m.tags) && m.tags.includes(f.tag)
+        ).length
+      }
+
+      // Pastas sistema
+      countMap['favoritos'] = all.filter(m => m.isHighlight === true).length
+      // 'trancados' não conta aqui (itens trancados já foram filtrados)
+
       setMemoryCounts(countMap)
     } catch (e) {
       console.error(e)
     }
   }, [user?.uid])
 
+  // Contagem de Destaques derivada reativamente: atualiza sempre que allMemories muda,
+  // sem precisar de nova chamada ao Firestore
   useEffect(() => {
-    // Sempre carrega do IndexedDB/Firestore ao montar
+    if (!highlightFolderId) return
+    const count = allMemories.filter(m => m.isHighlight === true).length
+    setMemoryCounts(prev => ({ ...prev, [highlightFolderId]: count }))
+  }, [allMemories, highlightFolderId])
+
+  useEffect(() => {
+    // highlightFolderId carrega do IndexedDB local — rápido
+    loadHighlightFolderId()
+    // memórias carregam do Firestore — mais lento, mas só 1 roundtrip agora
     loadMemories()
-  }, [loadMemories])
+  }, [loadMemories, loadHighlightFolderId])
 
   // Abrir pasta e carregar suas memórias
   const handleOpenFolder = async (folder) => {
-    // Se for pasta Trancadas e tem PIN configurado, pedir PIN
-    if (folder.name === 'Trancadas') {
+    // Se for pasta Trancados e tem PIN configurado, pedir PIN
+    if (folder.rule === 'isLocked' || folder.id === 'trancados') {
       const uid = user?.uid || ''
       const pinHash = localStorage.getItem(`recordar_pin_hash_${uid}`)
       if (pinHash) {
@@ -149,16 +194,29 @@ export default function TempoScreen({ pendingMemories }) {
     setOpenFolder(folder)
     setFolderLoading(true)
     try {
-      // Se for pasta Trancadas, busca SÓ as trancadas (cloud-synced).
-      // Senão, busca normal (sem trancadas) e filtra pelo folderId.
-      const isLockedFolder = folder.name === 'Trancadas'
+      const type = folder.folderType || 'user'
+      const isLockedFolder = type === 'system' && folder.rule === 'isLocked'
+
       const mems = await getMemories({
         includeLocked: isLockedFolder,
         onlyLocked: isLockedFolder,
       })
-      const folderMems = isLockedFolder
-        ? mems // já vieram só as trancadas
-        : mems.filter(m => m.folderId === folder.id)
+
+      let folderMems
+      if (isLockedFolder) {
+        folderMems = mems // já filtrou só trancadas
+      } else if (type === 'system' && folder.rule === 'isHighlight') {
+        folderMems = mems.filter(m => m.isHighlight === true)
+      } else if (type === 'ai') {
+        // Pasta IA — filtra por tag
+        folderMems = mems.filter(m => Array.isArray(m.tags) && m.tags.includes(folder.tag))
+      } else {
+        // Pasta do usuário — suporta folderId legado + folderIds novo
+        folderMems = mems.filter(m =>
+          m.folderId === folder.id ||
+          (Array.isArray(m.folderIds) && m.folderIds.includes(folder.id))
+        )
+      }
       setFolderMemories(folderMems)
       // Gerar URLs de blob para fotos da pasta
       const urls = {}
@@ -199,15 +257,28 @@ export default function TempoScreen({ pendingMemories }) {
         if (prev.find(m => m.id === newMem.id)) return prev
         return [newMem, ...prev]
       })
+      // Mantém allMemories em sincronia para contagem correta de Destaques
+      setAllMemories(prev => {
+        if (prev.find(m => m.id === newMem.id)) return prev
+        return [newMem, ...prev]
+      })
+    }
+
+    const handleNavReclick = (e) => {
+      if (e.detail?.tab === 'tempo' && scrollRef.current) {
+        scrollRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+      }
     }
 
     window.addEventListener('focus', handleFocus)
     window.addEventListener('memories-updated', handleUpdate)
     window.addEventListener('memory-added', handleMemoryAdded)
+    window.addEventListener('nav-tab-reclick', handleNavReclick)
     return () => {
       window.removeEventListener('focus', handleFocus)
       window.removeEventListener('memories-updated', handleUpdate)
       window.removeEventListener('memory-added', handleMemoryAdded)
+      window.removeEventListener('nav-tab-reclick', handleNavReclick)
     }
   }, [loadMemories])
 
@@ -223,24 +294,41 @@ export default function TempoScreen({ pendingMemories }) {
   // Mantemos thumbUrls como CACHE: depois que LazyImage resolve uma URL do
   // Firebase (filePath → getDownloadURL), guardamos pra não chamar de novo.
   useEffect(() => {
-    // Apenas pré-popula com fileUrl já existente (gratuito, sem objectURL)
+    // Gera URLs para TODAS as memórias com blob local, igual ao que openFolderDirectly faz.
+    // Isso garante que thumbUrls[id] funcione tanto nos thumbnails como no viewer fullscreen.
     const urls = {}
+    const createdBlobUrls = [] // para revogar no cleanup e evitar leak
+
     for (const m of memories) {
-      if (m._objectUrl) urls[m.id] = m._objectUrl
-      else if (m.fileUrl) urls[m.id] = m.fileUrl
+      if (m._objectUrl) {
+        urls[m.id] = m._objectUrl
+      } else if (m.fileUrl) {
+        urls[m.id] = m.fileUrl
+      } else if (m.fileBlob) {
+        try {
+          const isMedia = m.type === 'photo' || m.type === 'video'
+          if (!isMedia) continue
+          const mimeType = m.type === 'video' ? 'video/mp4' : 'image/jpeg'
+          const blob = m.fileBlob instanceof Blob
+            ? m.fileBlob
+            : new Blob([m.fileBlob], { type: mimeType })
+          const url = URL.createObjectURL(blob)
+          urls[m.id] = url
+          createdBlobUrls.push(url)
+        } catch { /* skip */ }
+      }
     }
+
     setThumbUrls(urls)
+
+    // Limpar resolver cache para que novos resolvers usem as URLs frescas
+    resolverCacheRef.current.clear()
+
     return () => {
-      // Nada a revogar — LazyImage gerencia seus próprios objectURLs.
+      // Revogar apenas as blob URLs criadas aqui (Firebase URLs não precisam de revoke)
+      createdBlobUrls.forEach(u => URL.revokeObjectURL(u))
     }
   }, [memories])
-
-  // ── Busca ─────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!query.trim()) { setSearchResults(null); return }
-    searchMemories(query).then(setSearchResults).catch(() => {})
-  }, [query])
 
   // ── Lixeira ─────────────────────────────────────────────────────────────────
 
@@ -267,20 +355,29 @@ export default function TempoScreen({ pendingMemories }) {
 
   async function confirmTrashAction() {
     if (!trashConfirm) return
-    if (trashConfirm.type === 'delete') {
-      setTrashItems(prev => prev.filter(i => i.id !== trashConfirm.id))
-      permanentDeleteFromTrash(trashConfirm.id).catch(() => {})
+    const action = trashConfirm
+    setTrashConfirm(null) // fecha o modal imediatamente
+    if (action.type === 'delete') {
+      const itemData = trashItems.find(i => i.id === action.id) || null
+      setTrashItems(prev => prev.filter(i => i.id !== action.id))
+      permanentDeleteFromTrash(action.id, itemData).catch(err => {
+        console.error('[lixeira] erro ao excluir:', err)
+        loadTrash()
+      })
       toast.success('Item excluído permanentemente')
-    } else if (trashConfirm.type === 'restore') {
-      await handleRestore(trashConfirm.id)
+    } else if (action.type === 'restore') {
+      await handleRestore(action.id)
       toast.success('Item restaurado!')
-    } else if (trashConfirm.type === 'deleteAll') {
-      const ids = trashItems.map(i => i.id)
+    } else if (action.type === 'deleteAll') {
+      const itemsToDelete = [...trashItems]
       setTrashItems([])
-      for (const id of ids) await permanentDeleteFromTrash(id).catch(() => {})
       toast.success('Lixeira esvaziada!')
+      bulkPermanentDeleteFromTrash(itemsToDelete).catch(err => {
+        console.error('[lixeira] erro ao esvaziar:', err)
+        // Recarrega para refletir estado real se algo falhou
+        loadTrash()
+      })
     }
-    setTrashConfirm(null)
   }
 
   async function handlePermanentDelete(itemId) {
@@ -339,6 +436,9 @@ export default function TempoScreen({ pendingMemories }) {
     return Object.entries(map).sort(([a], [b]) => b.localeCompare(a))
   }, [filteredMemories])
 
+  // Mantém ref da lista filtrada atualizada para o range-select por índice
+  useEffect(() => { filteredMemoriesRef.current = filteredMemories }, [filteredMemories])
+
   // ── Viewer: lista plana navegável ──────────────────────────────────────────
 
   const viewerList = useMemo(() => filteredMemories, [filteredMemories])
@@ -348,33 +448,179 @@ export default function TempoScreen({ pendingMemories }) {
     if (idx === -1) return
     setViewerIndex(idx)
     setViewerOpen(true)
+    resetViewerZoom()
+    // Volta o scroll da galeria para o topo ao abrir o viewer
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
 
   function closeViewer() {
     setViewerOpen(false)
     setSelectMode(false)
     setSelectedIds(new Set())
+    resetViewerZoom()
   }
 
   function goNext() {
     setViewerIndex(i => Math.min(i + 1, viewerList.length - 1))
+    resetViewerZoom()
   }
 
   function goPrev() {
     setViewerIndex(i => Math.max(i - 1, 0))
+    resetViewerZoom()
   }
 
-  // Swipe handlers
-  function onTouchStart(e) {
-    touchStartX.current = e.touches[0].clientX
+  // ── Zoom / Pan do viewer ─────────────────────────────────────────────────
+  const [vZoom, setVZoom] = useState(1)
+  const [vPan,  setVPan]  = useState({ x: 0, y: 0 })
+  const vZoomRef = useRef(1)
+  const vPanRef  = useRef({ x: 0, y: 0 })
+  const zg = useRef({
+    pinching: false, startDist: 0, startScale: 1,
+    panning: false,  panStartX: 0, panStartY: 0, panBaseX: 0, panBaseY: 0,
+    lastTapTime: 0,  swipeStartX: 0,
+    mousePanning: false, mousePanStartX: 0, mousePanStartY: 0,
+  })
+
+  function resetViewerZoom() {
+    vZoomRef.current = 1
+    vPanRef.current  = { x: 0, y: 0 }
+    setVZoom(1)
+    setVPan({ x: 0, y: 0 })
   }
 
+  function clampPan(px, py, scale) {
+    const maxX = Math.max(0, (scale - 1) * window.innerWidth  * 0.5)
+    const maxY = Math.max(0, (scale - 1) * window.innerHeight * 0.4)
+    return {
+      x: Math.max(-maxX, Math.min(maxX, px)),
+      y: Math.max(-maxY, Math.min(maxY, py)),
+    }
+  }
+
+  function applyZoom(newScale) {
+    const s = Math.max(1, Math.min(5, newScale))
+    vZoomRef.current = s
+    setVZoom(s)
+    if (s <= 1) { vPanRef.current = { x:0, y:0 }; setVPan({ x:0, y:0 }) }
+  }
+
+  // Touch no viewer — substitui os antigos onTouchStart/onTouchEnd
+  function onViewerTouchStart(e) {
+    const t = e.touches
+    if (t.length === 2) {
+      zg.current.pinching = true
+      zg.current.panning  = false
+      const dx = t[0].clientX - t[1].clientX
+      const dy = t[0].clientY - t[1].clientY
+      zg.current.startDist  = Math.sqrt(dx*dx + dy*dy) || 1
+      zg.current.startScale = vZoomRef.current
+      if (e.cancelable) e.preventDefault()
+      return
+    }
+    if (t.length === 1) {
+      const now = Date.now()
+      // Double-tap: alterna zoom 1 ↔ 2.5
+      if (now - zg.current.lastTapTime < 280) {
+        zg.current.lastTapTime = 0
+        if (vZoomRef.current > 1) resetViewerZoom()
+        else applyZoom(2.5)
+        return
+      }
+      zg.current.lastTapTime = now
+
+      if (vZoomRef.current > 1) {
+        // Pan
+        zg.current.panning   = true
+        zg.current.panStartX = t[0].clientX
+        zg.current.panStartY = t[0].clientY
+        zg.current.panBaseX  = vPanRef.current.x
+        zg.current.panBaseY  = vPanRef.current.y
+        if (e.cancelable) e.preventDefault()
+      } else {
+        // Swipe para navegar
+        touchStartX.current = t[0].clientX
+      }
+    }
+  }
+
+  function onViewerTouchMove(e) {
+    const t = e.touches
+    if (zg.current.pinching && t.length === 2) {
+      const dx = t[0].clientX - t[1].clientX
+      const dy = t[0].clientY - t[1].clientY
+      const dist = Math.sqrt(dx*dx + dy*dy)
+      applyZoom(zg.current.startScale * (dist / zg.current.startDist))
+      if (e.cancelable) e.preventDefault()
+      return
+    }
+    if (zg.current.panning && t.length === 1) {
+      const dx = t[0].clientX - zg.current.panStartX
+      const dy = t[0].clientY - zg.current.panStartY
+      const p = clampPan(zg.current.panBaseX + dx, zg.current.panBaseY + dy, vZoomRef.current)
+      vPanRef.current = p
+      setVPan(p)
+      if (e.cancelable) e.preventDefault()
+    }
+  }
+
+  function onViewerTouchEnd(e) {
+    if (zg.current.pinching) {
+      zg.current.pinching = false
+      if (vZoomRef.current < 1.08) resetViewerZoom()
+      return
+    }
+    if (zg.current.panning) {
+      zg.current.panning = false
+      return
+    }
+    // Swipe (só quando zoom = 1)
+    if (vZoomRef.current <= 1 && e.changedTouches.length === 1 && touchStartX.current !== null) {
+      const dx = e.changedTouches[0].clientX - touchStartX.current
+      if (Math.abs(dx) > 50) { dx < 0 ? goNext() : goPrev() }
+      touchStartX.current = null
+    }
+  }
+
+  // Mouse wheel zoom (desktop)
+  function onViewerWheel(e) {
+    e.preventDefault()
+    applyZoom(vZoomRef.current * (e.deltaY > 0 ? 0.88 : 1.14))
+  }
+
+  // Mouse drag para pan (desktop)
+  function onViewerMouseDown(e) {
+    if (e.button !== 0 || vZoomRef.current <= 1) return
+    e.preventDefault()
+    zg.current.mousePanning   = true
+    zg.current.mousePanStartX = e.clientX
+    zg.current.mousePanStartY = e.clientY
+
+    const baseX = vPanRef.current.x
+    const baseY = vPanRef.current.y
+
+    function onMove(ev) {
+      const p = clampPan(baseX + ev.clientX - zg.current.mousePanStartX,
+                         baseY + ev.clientY - zg.current.mousePanStartY,
+                         vZoomRef.current)
+      vPanRef.current = p
+      setVPan(p)
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      zg.current.mousePanning = false
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  // Swipe handlers (legado — mantidos só para uso fora do viewer principal)
+  function onTouchStart(e) { touchStartX.current = e.touches[0].clientX }
   function onTouchEnd(e) {
     if (touchStartX.current === null) return
     const dx = e.changedTouches[0].clientX - touchStartX.current
-    if (Math.abs(dx) > 50) {
-      dx < 0 ? goNext() : goPrev()
-    }
+    if (Math.abs(dx) > 50) { dx < 0 ? goNext() : goPrev() }
     touchStartX.current = null
   }
 
@@ -389,6 +635,37 @@ export default function TempoScreen({ pendingMemories }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [viewerOpen, viewerList.length])
+
+  // ── Ref do elemento viewer + listeners não-passivos ───────────────────────
+  // React registra onTouch* como passive por padrão, o que impede e.preventDefault().
+  // Solução: registrar os listeners diretamente no DOM com { passive: false }.
+  const viewerRef = useRef(null)
+  const viewerHandlersRef = useRef({})
+  // Atualiza os handlers na ref a cada render para sempre ter a versão mais recente
+  viewerHandlersRef.current = { onViewerTouchStart, onViewerTouchMove, onViewerTouchEnd, onViewerWheel }
+
+  useEffect(() => {
+    if (!viewerOpen) return
+    const el = viewerRef.current
+    if (!el) return
+    const h = viewerHandlersRef.current
+    const start  = e => viewerHandlersRef.current.onViewerTouchStart(e)
+    const move   = e => viewerHandlersRef.current.onViewerTouchMove(e)
+    const end    = e => viewerHandlersRef.current.onViewerTouchEnd(e)
+    const wheel  = e => viewerHandlersRef.current.onViewerWheel(e)
+    el.addEventListener('touchstart',  start, { passive: false })
+    el.addEventListener('touchmove',   move,  { passive: false })
+    el.addEventListener('touchend',    end,   { passive: false })
+    el.addEventListener('touchcancel', end,   { passive: false })
+    el.addEventListener('wheel',       wheel, { passive: false })
+    return () => {
+      el.removeEventListener('touchstart',  start)
+      el.removeEventListener('touchmove',   move)
+      el.removeEventListener('touchend',    end)
+      el.removeEventListener('touchcancel', end)
+      el.removeEventListener('wheel',       wheel)
+    }
+  }, [viewerOpen])
 
   // ── Seleção múltipla ───────────────────────────────────────────────────────
 
@@ -447,19 +724,24 @@ export default function TempoScreen({ pendingMemories }) {
   useEffect(() => { selectModeRef.current = selectMode }, [selectMode])
   const selectedIdsRef = useRef(selectedIds)
   useEffect(() => { selectedIdsRef.current = selectedIds }, [selectedIds])
+  const memoriesRef = useRef(memories)
+  useEffect(() => { memoriesRef.current = memories }, [memories])
+  // Ref para filteredMemories — necessário para range-select por índice
+  const filteredMemoriesRef = useRef([])
 
   const drag = useRef({
-    touchActive: false,    // dedo está pressionado?
+    touchActive: false,
     startX: 0,
     startY: 0,
     startTime: 0,
-    startId: null,         // foto onde começou o toque
-    longPressArmed: false, // timer de long-press está armado?
+    startId: null,
+    startIndex: -1,        // índice da foto âncora na lista filtrada
+    preSelection: new Set(), // seleção antes do drag começar
+    longPressArmed: false,
     longPressTimer: null,
-    moved: false,          // o dedo já se moveu (cancela long-press)
-    dragActive: false,     // o drag-to-select está rolando?
+    moved: false,
+    dragActive: false,
     mode: 'add',
-    visited: new Set(),
     lastX: 0,
     lastY: 0,
     scrollRaf: null,
@@ -472,30 +754,47 @@ export default function TempoScreen({ pendingMemories }) {
     return node ? node.getAttribute('data-memory-id') : null
   }
 
-  function applyDragSelect(id) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (drag.current.mode === 'add') next.add(id)
-      else next.delete(id)
+  // Seleção por range — seleciona TODAS as fotos entre a âncora e a posição atual
+  function dragCheckCurrentPoint() {
+    const id = getMemoryIdFromPoint(drag.current.lastX, drag.current.lastY)
+    if (!id) return
+
+    const mems = filteredMemoriesRef.current
+    const startIdx = drag.current.startIndex
+    if (startIdx === -1) return
+
+    const currentIdx = mems.findIndex(m => m.id === id)
+    if (currentIdx === -1) return
+
+    const minIdx = Math.min(startIdx, currentIdx)
+    const maxIdx = Math.max(startIdx, currentIdx)
+
+    // Aplica o range sobre a seleção pré-drag (reversível se voltar o dedo)
+    setSelectedIds(() => {
+      const next = new Set(drag.current.preSelection)
+      for (let i = minIdx; i <= maxIdx; i++) {
+        const memId = mems[i]?.id
+        if (!memId) continue
+        if (drag.current.mode === 'add') next.add(memId)
+        else next.delete(memId)
+      }
       return next
     })
   }
 
-  function dragCheckCurrentPoint() {
-    const id = getMemoryIdFromPoint(drag.current.lastX, drag.current.lastY)
-    if (id && !drag.current.visited.has(id)) {
-      drag.current.visited.add(id)
-      applyDragSelect(id)
-    }
-  }
-
   function startDragMode(initialId) {
-    // Decide o modo: se a foto inicial já estava selecionada, modo = remover
+    const mems = filteredMemoriesRef.current
+    const startIdx = mems.findIndex(m => m.id === initialId)
     const wasSelected = selectedIdsRef.current.has(initialId)
+
     drag.current.dragActive = true
+    drag.current.startIndex = startIdx
+    drag.current.startId = initialId
     drag.current.mode = wasSelected ? 'remove' : 'add'
-    drag.current.visited = new Set([initialId])
-    // Garante que a foto inicial está marcada com o modo correto
+    // Salva o estado de seleção pré-drag para que o range seja reversível
+    drag.current.preSelection = new Set(selectedIdsRef.current)
+
+    // Aplica a foto âncora imediatamente
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (drag.current.mode === 'add') next.add(initialId)
@@ -503,7 +802,6 @@ export default function TempoScreen({ pendingMemories }) {
       return next
     })
     try { navigator.vibrate?.(15) } catch {}
-    // Inicia loop de auto-scroll
     if (!drag.current.scrollRaf) {
       drag.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
     }
@@ -514,18 +812,23 @@ export default function TempoScreen({ pendingMemories }) {
       drag.current.scrollRaf = null
       return
     }
-    const SCROLL_ZONE = 100
-    const MAX_SPEED = 18
+    const SCROLL_ZONE = 110
+    const MAX_SPEED = 16
     const y = drag.current.lastY
-    const h = window.innerHeight
+    const container = scrollRef.current
+    if (!container) {
+      drag.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
+      return
+    }
+    const rect = container.getBoundingClientRect()
     let delta = 0
-    if (y < SCROLL_ZONE) {
-      delta = -MAX_SPEED * ((SCROLL_ZONE - y) / SCROLL_ZONE)
-    } else if (y > h - SCROLL_ZONE) {
-      delta = MAX_SPEED * ((y - (h - SCROLL_ZONE)) / SCROLL_ZONE)
+    if (y < rect.top + SCROLL_ZONE) {
+      delta = -MAX_SPEED * ((SCROLL_ZONE - (y - rect.top)) / SCROLL_ZONE)
+    } else if (y > rect.bottom - SCROLL_ZONE) {
+      delta = MAX_SPEED * ((y - (rect.bottom - SCROLL_ZONE)) / SCROLL_ZONE)
     }
     if (delta !== 0) {
-      window.scrollBy(0, delta)
+      container.scrollBy(0, delta)
       dragCheckCurrentPoint()
     }
     drag.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
@@ -615,11 +918,103 @@ export default function TempoScreen({ pendingMemories }) {
 
     drag.current.touchActive = false
     drag.current.dragActive = false
-    drag.current.visited = new Set()
+    drag.current.startIndex = -1
+    drag.current.preSelection = new Set()
     if (drag.current.scrollRaf) {
       cancelAnimationFrame(drag.current.scrollRaf)
       drag.current.scrollRaf = null
     }
+  }
+
+  // ── Mouse handlers (desktop) — espelham a lógica de touch ────────────────
+  function onContainerMouseDown(e) {
+    if (e.button !== 0) return // só botão esquerdo
+    const id = getMemoryIdFromPoint(e.clientX, e.clientY)
+    if (!id) return
+
+    drag.current.touchActive = true
+    drag.current.startX = e.clientX
+    drag.current.startY = e.clientY
+    drag.current.lastX = e.clientX
+    drag.current.lastY = e.clientY
+    drag.current.startTime = Date.now()
+    drag.current.startId = id
+    drag.current.moved = false
+    drag.current.longPressArmed = true
+
+    clearTimeout(drag.current.longPressTimer)
+    const delay = selectModeRef.current ? 250 : 500
+    drag.current.longPressTimer = setTimeout(() => {
+      if (!drag.current.longPressArmed) return
+      if (!selectModeRef.current) {
+        setLockMode(false)
+        setLockSelectedIds(new Set())
+        setSelectMode(true)
+        setSelectedIds(new Set([id]))
+      }
+      startDragMode(id)
+    }, delay)
+
+    // Captura mousemove/mouseup no document para drag fora do container
+    function handleMouseMove(ev) {
+      if (!drag.current.touchActive) return
+      drag.current.lastX = ev.clientX
+      drag.current.lastY = ev.clientY
+
+      if (!drag.current.dragActive) {
+        const dx = Math.abs(ev.clientX - drag.current.startX)
+        const dy = Math.abs(ev.clientY - drag.current.startY)
+        if (dx > 8 || dy > 8) {
+          drag.current.moved = true
+          drag.current.longPressArmed = false
+          clearTimeout(drag.current.longPressTimer)
+        }
+        return
+      }
+      // Drag ativo: previne seleção de texto e marca fotos
+      ev.preventDefault()
+      dragCheckCurrentPoint()
+    }
+
+    function handleMouseUp() {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+
+      const wasShortClick = drag.current.touchActive
+                         && !drag.current.moved
+                         && !drag.current.dragActive
+                         && (Date.now() - drag.current.startTime < 300)
+
+      drag.current.longPressArmed = false
+      clearTimeout(drag.current.longPressTimer)
+
+      // Click rápido em selectMode = toggle
+      if (wasShortClick && selectModeRef.current && drag.current.startId) {
+        setSelectedIds(prev => {
+          const next = new Set(prev)
+          next.has(drag.current.startId) ? next.delete(drag.current.startId) : next.add(drag.current.startId)
+          return next
+        })
+      }
+
+      // Click rápido fora de selectMode = abre viewer
+      if (wasShortClick && !selectModeRef.current && drag.current.startId) {
+        const mem = memoriesRef.current.find(m => m.id === drag.current.startId)
+        if (mem) handleThumbClick(mem)
+      }
+
+      drag.current.touchActive = false
+      drag.current.dragActive = false
+      drag.current.startIndex = -1
+      drag.current.preSelection = new Set()
+      if (drag.current.scrollRaf) {
+        cancelAnimationFrame(drag.current.scrollRaf)
+        drag.current.scrollRaf = null
+      }
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
   }
 
   // Compat: handlers antigos no-op (lógica agora é no container)
@@ -643,8 +1038,12 @@ export default function TempoScreen({ pendingMemories }) {
     } else if (selectMode) {
       toggleSelect(memory.id)
     } else {
-      const src = thumbUrls[memory.id] || memory.fileUrl
-      if (src || memory.type === 'audio') {
+      const hasSource = thumbUrls[memory.id]
+        || memory.fileUrl
+        || memory._objectUrl
+        || !!memory.fileBlob
+        || !!memory.thumbnail
+      if (hasSource || memory.type === 'audio' || memory.type === 'text') {
         openViewer(memory)
       } else {
         toast('Arquivo indisponível. Re-adicione esta memória.')
@@ -677,61 +1076,101 @@ export default function TempoScreen({ pendingMemories }) {
     toast.success('Download iniciado')
   }
 
-  async function toggleMemoryPrivacy(memory) {
-    const newLevel = memory.privacyLevel === 'public' ? 'private' : 'public'
+  // async function toggleMemoryPrivacy(memory) {
+  //   const newLevel = memory.privacyLevel === 'public' ? 'private' : 'public'
+  //   try {
+  //     await updateMemory(memory.id, { privacyLevel: newLevel })
+  //     setMemories(prev => prev.map(m => m.id === memory.id ? { ...m, privacyLevel: newLevel } : m))
+  //     toast.success(newLevel === 'public' ? 'Agora é pública' : 'Agora é só sua')
+  //   } catch { toast.error('Erro ao alterar') }
+  // }
+
+  async function toggleHighlight(memory) {
+    const next = !memory.isHighlight
     try {
-      await updateMemory(memory.id, { privacyLevel: newLevel })
-      setMemories(prev => prev.map(m => m.id === memory.id ? { ...m, privacyLevel: newLevel } : m))
-      toast.success(newLevel === 'public' ? 'Agora é pública' : 'Agora é só sua')
-    } catch { toast.error('Erro ao alterar') }
+      await updateMemory(memory.id, { isHighlight: next })
+      setMemories(prev => prev.map(m =>
+        m.id === memory.id ? { ...m, isHighlight: next } : m
+      ))
+      toast.success(next ? '⭐ Adicionado aos Destaques!' : 'Removido dos Destaques')
+    } catch {
+      toast.error('Erro ao atualizar destaque')
+    }
   }
 
-  async function batchShare() {
-    const items = Array.from(selectedIds)
-    const files = []
-    for (const id of items) {
-      const m = memories.find(x => x.id === id)
-      if (!m) continue
-      const blob = m.fileBlob || null
-      const url = thumbUrls[m.id] || m.fileUrl
-      if (blob && blob instanceof Blob) {
-        const ext = m.type === 'video' ? 'mp4' : 'jpg'
-        files.push(new File([blob], `${m.title || 'memoria'}.${ext}`, { type: blob.type || (m.type === 'video' ? 'video/mp4' : 'image/jpeg') }))
-      } else if (url) {
-        try {
-          const resp = await fetch(url)
-          const b = await resp.blob()
-          const ext = m.type === 'video' ? 'mp4' : 'jpg'
-          files.push(new File([b], `${m.title || 'memoria'}.${ext}`, { type: b.type }))
-        } catch { /* skip */ }
+  async function handleViewerDelete(memoryId, { fromFolder = false, knownData = null } = {}) {
+    try {
+      await deleteMemory(memoryId, knownData)
+      if (fromFolder) {
+        setFolderMemories(prev => {
+          const updated = prev.filter(m => m.id !== memoryId)
+          if (updated.length === 0) {
+            setFolderViewerOpen(false)
+          } else {
+            setFolderViewerIndex(i => Math.min(i, updated.length - 1))
+          }
+          return updated
+        })
+      } else {
+        setMemories(prev => {
+          const updated = prev.filter(m => m.id !== memoryId)
+          if (updated.length === 0) {
+            setViewerOpen(false)
+          } else {
+            setViewerIndex(i => Math.min(i, updated.length - 1))
+          }
+          return updated
+        })
       }
+      setViewerDeleteConfirm(false)
+      toast.success('Memória movida para a lixeira')
+    } catch {
+      toast.error('Erro ao excluir memória')
     }
-
-    if (files.length === 0) {
-      toast.error('Nenhum arquivo disponível para compartilhar')
-      exitSelectMode()
-      return
-    }
-
-    // Tenta Web Share API com múltiplos arquivos
-    if (navigator.canShare && navigator.canShare({ files })) {
-      try {
-        await navigator.share({ files, title: 'Memórias — Recordar' })
-      } catch { /* cancelado pelo usuário */ }
-    } else {
-      // Fallback: download de todos
-      for (const file of files) {
-        const url = URL.createObjectURL(file)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = file.name
-        a.click()
-        URL.revokeObjectURL(url)
-      }
-      toast.success(`${files.length} arquivo(s) salvos`)
-    }
-    exitSelectMode()
   }
+
+  // async function batchShare() {
+  //   const items = Array.from(selectedIds)
+  //   const files = []
+  //   for (const id of items) {
+  //     const m = memories.find(x => x.id === id)
+  //     if (!m) continue
+  //     const blob = m.fileBlob || null
+  //     const url = thumbUrls[m.id] || m.fileUrl
+  //     if (blob && blob instanceof Blob) {
+  //       const ext = m.type === 'video' ? 'mp4' : 'jpg'
+  //       files.push(new File([blob], `${m.title || 'memoria'}.${ext}`, { type: blob.type || (m.type === 'video' ? 'video/mp4' : 'image/jpeg') }))
+  //     } else if (url) {
+  //       try {
+  //         const resp = await fetch(url)
+  //         const b = await resp.blob()
+  //         const ext = m.type === 'video' ? 'mp4' : 'jpg'
+  //         files.push(new File([b], `${m.title || 'memoria'}.${ext}`, { type: b.type }))
+  //       } catch { /* skip */ }
+  //     }
+  //   }
+  //   if (files.length === 0) {
+  //     toast.error('Nenhum arquivo disponível para compartilhar')
+  //     exitSelectMode()
+  //     return
+  //   }
+  //   if (navigator.canShare && navigator.canShare({ files })) {
+  //     try {
+  //       await navigator.share({ files, title: 'Memórias — Recordar' })
+  //     } catch { /* cancelado pelo usuário */ }
+  //   } else {
+  //     for (const file of files) {
+  //       const url = URL.createObjectURL(file)
+  //       const a = document.createElement('a')
+  //       a.href = url
+  //       a.download = file.name
+  //       a.click()
+  //       URL.revokeObjectURL(url)
+  //     }
+  //     toast.success(`${files.length} arquivo(s) salvos`)
+  //   }
+  //   exitSelectMode()
+  // }
 
   async function batchDownload() {
     const items = Array.from(selectedIds)
@@ -747,9 +1186,11 @@ export default function TempoScreen({ pendingMemories }) {
     const confirmed = window.confirm(`Excluir ${count} item(s) permanentemente?`)
     if (!confirmed) return
     try {
-      for (const id of selectedIds) {
-        await deleteMemory(id)
-      }
+      // Passa os dados já conhecidos para evitar getDoc por item — roda em paralelo
+      const selectedMemories = memories.filter(m => selectedIds.has(m.id))
+      await Promise.all(
+        selectedMemories.map(m => deleteMemory(m.id, m))
+      )
       setMemories(prev => prev.filter(m => !selectedIds.has(m.id)))
       toast.success(`${count} item(s) excluído(s)`)
     } catch {
@@ -764,15 +1205,19 @@ export default function TempoScreen({ pendingMemories }) {
     setShowMoveModal(true)
   }
 
-  async function batchMoveToFolder(folderId) {
+  async function batchMoveToFolder(targetFolder) {
     const count = selectedIds.size
     try {
       for (const id of selectedIds) {
-        await updateMemory(id, { folderId })
+        const mem = allMemories.find(m => m.id === id)
+        if (!mem) continue
+        // Adiciona à pasta sem remover das outras (metadados, sem duplicação)
+        const existing = Array.isArray(mem.folderIds) ? mem.folderIds : []
+        if (!existing.includes(targetFolder.id)) {
+          await updateMemory(id, { folderIds: [...existing, targetFolder.id] })
+        }
       }
-      const folder = folders.find(f => f.id === folderId)
-      toast.success(`${count} item(s) movido(s) para "${folder?.name || 'pasta'}"`)
-      // Recarregar para atualizar contagens
+      toast.success(`${count} item(s) adicionado(s) a "${targetFolder.name}"`)
       await loadMemories()
     } catch (err) {
       console.error('Erro ao mover:', err)
@@ -858,6 +1303,13 @@ export default function TempoScreen({ pendingMemories }) {
       if (memory._objectUrl) return memory._objectUrl
       if (memory.thumbnail instanceof Blob) return URL.createObjectURL(memory.thumbnail)
       if (memory.fileBlob instanceof Blob) return URL.createObjectURL(memory.fileBlob)
+      // fileBlob pode chegar como ArrayBuffer (desserialização do IndexedDB em alguns browsers)
+      if (memory.fileBlob) {
+        try {
+          const mimeType = memory.type === 'video' ? 'video/mp4' : 'image/jpeg'
+          return URL.createObjectURL(new Blob([memory.fileBlob], { type: mimeType }))
+        } catch { /* segue */ }
+      }
       return null
     }
   }
@@ -890,15 +1342,16 @@ export default function TempoScreen({ pendingMemories }) {
         onPointerDown={(e) => {
           // Em lockMode: marca/desmarca direto (sem long-press)
           if (lockMode) {
+            e.stopPropagation()
             handleThumbClick(memory)
           }
-          // Em selectMode: nada aqui, o container cuida via touchStart/Move/End
-          // Fora dos modos: idem
+          // Em selectMode e fora dele: o container cuida via touch/mouse handlers
         }}
-        onClick={() => {
-          // Click só dispara no MOUSE (não no touch que tem onTouch handlers).
-          // No mouse, dispara em tap rápido fora dos modos especiais.
-          if (!selectMode && !lockMode) handleThumbClick(memory)
+        onClick={(e) => {
+          // Em lockMode o pointerDown já cuidou — bloqueia o click para não duplicar
+          if (lockMode) { e.stopPropagation(); return }
+          // No mouse o container (onMouseDown → handleMouseUp) já cuidou de abrir o viewer.
+          // Este onClick é no-op para não duplicar a abertura.
         }}
         onTouchStart={() => {}}  // toque é gerenciado pelo container
         onTouchMove={() => {}}
@@ -920,7 +1373,7 @@ export default function TempoScreen({ pendingMemories }) {
         subtitle={`${mediaMemories.length} memória${mediaMemories.length !== 1 ? 's' : ''}`}
       />
 
-      <div className={styles.scroll}>
+      <div className={styles.scroll} ref={scrollRef}>
 
         {/* ── Tabs: Galeria | Pastas | Lixeira ── */}
         <div className={styles.tabs}>
@@ -1249,9 +1702,6 @@ export default function TempoScreen({ pendingMemories }) {
           <div className={styles.selectionBar}>
             <span className={styles.selectionCount}>{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</span>
             <div className={styles.selectionActions}>
-              <button className={styles.selectionBtn} onClick={batchShare} disabled={selectedIds.size === 0}>
-                Compartilhar
-              </button>
               <button className={styles.selectionBtn} onClick={openMoveModal} disabled={selectedIds.size === 0}>
                 Mover
               </button>
@@ -1330,6 +1780,8 @@ export default function TempoScreen({ pendingMemories }) {
                   onTouchMove={onContainerTouchMove}
                   onTouchEnd={onContainerTouchEnd}
                   onTouchCancel={onContainerTouchEnd}
+                  onMouseDown={onContainerMouseDown}
+                  style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                 >
                   {items.map(m => <GridItem key={m.id} memory={m} />)}
                 </div>
@@ -1344,20 +1796,46 @@ export default function TempoScreen({ pendingMemories }) {
       {/* ── Viewer fullscreen ── */}
       {viewerOpen && currentMemory && (
         <div
+          ref={viewerRef}
           className={styles.viewer}
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
           role="dialog"
           aria-modal="true"
           aria-label="Visualizador de memória"
+          style={{ touchAction: vZoom > 1 ? 'none' : 'pan-y' }}
         >
-          {/* Fundo escuro para fechar */}
-          <div className={styles.viewerBackdrop} onClick={closeViewer} />
+          {/* Fundo escuro para fechar — só fecha se não estiver com zoom */}
+          <div className={styles.viewerBackdrop} onClick={vZoom <= 1 ? closeViewer : undefined} />
 
           {/* Imagem / Vídeo / Áudio */}
-          <div className={styles.viewerMedia}>
+          <div
+            className={styles.viewerMedia}
+            onMouseDown={onViewerMouseDown}
+            style={{
+              transform: `scale(${vZoom}) translate(${vPan.x / vZoom}px, ${vPan.y / vZoom}px)`,
+              transformOrigin: 'center center',
+              transition: zg.current.pinching || zg.current.panning || zg.current.mousePanning ? 'none' : 'transform 0.15s ease',
+              cursor: vZoom > 1 ? 'grab' : 'default',
+              willChange: 'transform',
+            }}
+          >
             {currentMemory.type === 'photo' && (() => {
-              const imgSrc = thumbUrls[currentMemory.id] || currentMemory.fileUrl
+              // Tenta resolver URL: thumbUrls (cache) → fileUrl → _objectUrl → fileBlob local
+              let imgSrc = thumbUrls[currentMemory.id]
+                || currentMemory.fileUrl
+                || currentMemory._objectUrl
+                || null
+
+              if (!imgSrc && currentMemory.fileBlob) {
+                try {
+                  const blob = currentMemory.fileBlob instanceof Blob
+                    ? currentMemory.fileBlob
+                    : new Blob([currentMemory.fileBlob], { type: 'image/jpeg' })
+                  imgSrc = URL.createObjectURL(blob)
+                  // Cachear para não recriar em cada render
+                  setThumbUrls(prev => ({ ...prev, [currentMemory.id]: imgSrc }))
+                } catch { /* sem blob */ }
+              }
+
               return imgSrc ? (
                 <img
                   key={currentMemory.id}
@@ -1461,13 +1939,22 @@ export default function TempoScreen({ pendingMemories }) {
             </span>
 
             <div className={styles.viewerTopActions}>
+              {/* ── Destaque ── */}
               <button
                 className={styles.viewerIconBtn}
-                onClick={() => toggleMemoryPrivacy(currentMemory)}
-                aria-label={currentMemory.privacyLevel === 'public' ? 'Tornar privado' : 'Tornar público'}
-                title={currentMemory.privacyLevel === 'public' ? 'Público' : 'Privado'}
+                onClick={() => toggleHighlight(currentMemory)}
+                aria-label={currentMemory.isHighlight ? 'Remover dos Destaques' : 'Adicionar aos Destaques'}
+                title={currentMemory.isHighlight ? 'Remover dos Destaques' : 'Adicionar aos Destaques'}
               >
-                <span style={{ fontSize: 18 }}>{currentMemory.privacyLevel === 'public' ? '🌐' : '🔒'}</span>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="22" height="22"
+                  fill={currentMemory.isHighlight ? '#FFD700' : 'none'}
+                  stroke={currentMemory.isHighlight ? '#FFD700' : 'white'}
+                  strokeWidth="2"
+                >
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
               </button>
               <button
                 className={styles.viewerIconBtn}
@@ -1491,7 +1978,36 @@ export default function TempoScreen({ pendingMemories }) {
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
               </button>
+              {/* ── Lixeira ── */}
+              <button
+                className={styles.viewerIconBtn}
+                onClick={() => setViewerDeleteConfirm(true)}
+                aria-label="Mover para lixeira"
+                title="Mover para lixeira"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="22" height="22">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6M14 11v6" />
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+              </button>
             </div>
+
+            {/* Modal de confirmação de exclusão no viewer */}
+            {viewerDeleteConfirm && (
+              <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }} onClick={() => setViewerDeleteConfirm(false)}>
+                <div style={{ background: 'var(--bege-claro)', borderRadius: 16, padding: 24, width: 300, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }} onClick={e => e.stopPropagation()}>
+                  <p style={{ fontSize: 32, marginBottom: 8 }}>🗑️</p>
+                  <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>Mover para lixeira?</p>
+                  <p style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>A memória ficará na lixeira por 90 dias antes de ser apagada definitivamente.</p>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => setViewerDeleteConfirm(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 99, border: '1.5px solid #ddd', background: 'transparent', fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
+                    <button onClick={() => handleViewerDelete(currentMemory.id, { knownData: currentMemory })} style={{ flex: 1, padding: '10px 0', borderRadius: 99, border: 'none', background: '#e53935', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>Excluir</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Info inferior */}
@@ -1546,7 +2062,85 @@ export default function TempoScreen({ pendingMemories }) {
                 <svg viewBox="0 0 24 24" fill="white" width="22" height="22"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
               </button>
               <span className={styles.viewerCounter}>{folderViewerIndex + 1} / {folderMemories.length}</span>
-              <div className={styles.viewerTopActions} />
+              <div className={styles.viewerTopActions}>
+                {/* Botão de destaque visível no viewer de qualquer pasta */}
+                {(() => {
+                  const mem = folderMemories[folderViewerIndex]
+                  if (!mem) return null
+                  return (
+                    <button
+                      className={styles.viewerIconBtn}
+                      onClick={async () => {
+                        const next = !mem.isHighlight
+                        try {
+                          await updateMemory(mem.id, { isHighlight: next })
+                          // Atualiza folderMemories local
+                          setFolderMemories(prev => {
+                            const updated = prev.map(m =>
+                              m.id === mem.id ? { ...m, isHighlight: next } : m
+                            )
+                            // Se estamos na pasta Destaques e removeu o destaque, tira da lista
+                            if (!next && openFolder?.autoRule === 'isHighlight:true') {
+                              const filtered = updated.filter(m => m.isHighlight === true)
+                              if (folderViewerIndex >= filtered.length) {
+                                setFolderViewerIndex(Math.max(0, filtered.length - 1))
+                              }
+                              if (filtered.length === 0) setFolderViewerOpen(false)
+                              return filtered
+                            }
+                            return updated
+                          })
+                          // Atualiza também o estado principal
+                          setMemories(prev => prev.map(m =>
+                            m.id === mem.id ? { ...m, isHighlight: next } : m
+                          ))
+                          toast.success(next ? '⭐ Adicionado aos Destaques!' : 'Removido dos Destaques')
+                        } catch {
+                          toast.error('Erro ao atualizar destaque')
+                        }
+                      }}
+                      aria-label={mem.isHighlight ? 'Remover dos Destaques' : 'Adicionar aos Destaques'}
+                    >
+                      <svg viewBox="0 0 24 24" width="22" height="22"
+                        fill={mem.isHighlight ? '#FFD700' : 'none'}
+                        stroke={mem.isHighlight ? '#FFD700' : 'white'}
+                        strokeWidth="2"
+                      >
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                    </button>
+                  )
+                })()}
+                {/* ── Lixeira no viewer de pasta ── */}
+                <button
+                  className={styles.viewerIconBtn}
+                  onClick={() => setViewerDeleteConfirm(true)}
+                  aria-label="Mover para lixeira"
+                  title="Mover para lixeira"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="22" height="22">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal de confirmação de exclusão no viewer de pasta */}
+              {viewerDeleteConfirm && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }} onClick={() => setViewerDeleteConfirm(false)}>
+                  <div style={{ background: 'var(--bege-claro)', borderRadius: 16, padding: 24, width: 300, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }} onClick={e => e.stopPropagation()}>
+                    <p style={{ fontSize: 32, marginBottom: 8 }}>🗑️</p>
+                    <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>Mover para lixeira?</p>
+                    <p style={{ fontSize: 13, color: '#888', marginBottom: 20 }}>A memória ficará na lixeira por 90 dias antes de ser apagada definitivamente.</p>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button onClick={() => setViewerDeleteConfirm(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 99, border: '1.5px solid #ddd', background: 'transparent', fontSize: 14, cursor: 'pointer' }}>Cancelar</button>
+                      <button onClick={() => handleViewerDelete(mem.id, { fromFolder: true, knownData: mem })} style={{ flex: 1, padding: '10px 0', borderRadius: 99, border: 'none', background: '#e53935', color: '#fff', fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>Excluir</button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <div className={styles.viewerInfo}>
               {mem.title && <p className={styles.viewerTitle}>{mem.title}</p>}
@@ -1560,15 +2154,15 @@ export default function TempoScreen({ pendingMemories }) {
       {showMoveModal && (
         <div className={styles.moveModalOverlay} onClick={() => setShowMoveModal(false)}>
           <div className={styles.moveModal} onClick={e => e.stopPropagation()}>
-            <h3 className={styles.moveModalTitle}>Mover para pasta</h3>
+            <h3 className={styles.moveModalTitle}>Adicionar à pasta</h3>
             <div className={styles.moveModalList}>
               {folders.map(f => (
                 <button
                   key={f.id}
                   className={styles.moveModalItem}
-                  onClick={() => batchMoveToFolder(f.id)}
+                  onClick={() => batchMoveToFolder(f)}
                 >
-                  <img src={f.emoji} alt="" width={24} height={24} aria-hidden="true" />
+                  <img src={f.emoji || '/icons/pasta-generica.svg'} alt="" width={24} height={24} aria-hidden="true" />
                   <span>{f.name}</span>
                 </button>
               ))}

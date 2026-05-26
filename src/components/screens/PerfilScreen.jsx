@@ -8,11 +8,11 @@ import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useApp } from '../../App.jsx'
 import { getMemories, uploadFile } from '../../services/memoriesService.js'
 import { startBackup, cancelBackup, onBackupProgress, getBackupState, loadSavedProgress, isBackupEnabled, setBackupEnabled } from '../../services/cloudBackupService.js'
-import { setProfilePrivacy } from '../../services/profileService.js'
+// import { setProfilePrivacy } from '../../services/profileService.js' // desativado: privacidade sempre privada
 import { auth, firestore } from '../../firebase.js'
 import { doc, updateDoc, setDoc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db as localDb } from '../../db/database.js'
-import PrivacyRow from '../ui/PrivacyRow.jsx'
+// import PrivacyRow from '../ui/PrivacyRow.jsx' // removido — privacidade sempre privada
 import GalleryImportCard from '../ui/GalleryImportCard.jsx'
 import PinLockModal from '../modals/PinLockModal.jsx'
 import BackupLogsModal from '../modals/BackupLogsModal.jsx'
@@ -28,7 +28,7 @@ const PERFIL_ICONS = {
 export default function PerfilScreen() {
   const { user, logout } = useAuth()
   const { setShowPlans, setShowConfig } = useApp()
-  const [isPrivate, setIsPrivate] = useState(true)
+  // const [isPrivate, setIsPrivate] = useState(true) // removido — sempre privado
   const [cloudBackup, setCloudBackup] = useState(false)
   const [stats, setStats] = useState({ photos: 0, videos: 0, audios: 0, feed: 0 })
 
@@ -40,6 +40,7 @@ export default function PerfilScreen() {
   const [showEdit, setShowEdit] = useState(false)
   const [showPinModal, setShowPinModal] = useState(false)
   const [showBackupLogs, setShowBackupLogs] = useState(false)
+  const [theme, setTheme] = useState(() => localStorage.getItem('recordar_theme') || 'dark')
 
   // ── Backup na nuvem ──
   const [backupProgress, setBackupProgress] = useState(getBackupState())
@@ -54,7 +55,12 @@ export default function PerfilScreen() {
         feed: visible.filter(m => m.type === 'text').length,
       })
     }).catch(() => {})
-    if (user?.privacyLevel) setIsPrivate(user.privacyLevel === 'private')
+
+    // Carregar dados do perfil — DEVE ficar antes do return do backup
+    const uid = user?.uid || ''
+    setEditName(user?.name || user?.displayName || localStorage.getItem(`recordar_profileName_${uid}`) || '')
+    setEditBio(user?.bio || localStorage.getItem(`recordar_profileBio_${uid}`) || '')
+    setAvatarSrc(localStorage.getItem(`recordar_avatar_${uid}`) || user?.photoURL || null)
 
     // Carregar estado do backup
     if (user?.uid) {
@@ -65,11 +71,18 @@ export default function PerfilScreen() {
       const unsub = onBackupProgress(p => setBackupProgress({ ...p }))
       return () => unsub()
     }
-    const uid = user?.uid || ''
-    setEditName(user?.name || user?.displayName || localStorage.getItem(`recordar_profileName_${uid}`) || '')
-    setEditBio(user?.bio || localStorage.getItem(`recordar_profileBio_${uid}`) || '')
-    setAvatarSrc(localStorage.getItem(`recordar_avatar_${uid}`) || user?.photoURL || null)
   }, [user])
+
+  const handleThemeChange = (newTheme) => {
+    setTheme(newTheme)
+    localStorage.setItem('recordar_theme', newTheme)
+    if (newTheme === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light')
+    } else {
+      document.documentElement.removeAttribute('data-theme')
+    }
+    toast.success(newTheme === 'light' ? 'Modo claro ativado' : 'Modo escuro ativado')
+  }
 
   const handleToggleBackup = async () => {
     const uid = user?.uid
@@ -129,14 +142,14 @@ export default function PerfilScreen() {
     reader.readAsDataURL(file)
   }
 
-  const handleTogglePrivacy = async () => {
-    const newLevel = isPrivate ? 'public' : 'private'
-    setIsPrivate(!isPrivate)
-    try {
-      await setProfilePrivacy(newLevel)
-      toast.success(newLevel === 'private' ? 'Perfil agora é privado' : 'Perfil agora é público')
-    } catch { toast.error('Erro ao mudar privacidade') }
-  }
+  // const handleTogglePrivacy = async () => {
+  //   const newLevel = isPrivate ? 'public' : 'private'
+  //   setIsPrivate(!isPrivate)
+  //   try {
+  //     await setProfilePrivacy(newLevel)
+  //     toast.success(newLevel === 'private' ? 'Perfil agora é privado' : 'Perfil agora é público')
+  //   } catch { toast.error('Erro ao mudar privacidade') }
+  // }
 
   return (
     <div className={styles.screen}>
@@ -180,27 +193,10 @@ export default function PerfilScreen() {
       {/* ── Body ── */}
       <div className={styles.body}>
 
-        {/* ── Privacidade ── */}
-        <h2 className={styles.sectionTitle}>
-          <img src={PERFIL_ICONS.privado} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
-          Privacidade
-        </h2>
-        <div className={styles.privacyCard}>
-          <PrivacyRow
-            iconUrl={PERFIL_ICONS.privado} iconBg="#FFF0EB"
-            label="Perfil privado"
-            sub={isPrivate ? 'Só você pode ver suas memórias' : 'Outros usuários podem ver seu perfil'}
-            type="toggle"
-            value={isPrivate}
-            onChange={handleTogglePrivacy}
-          />
-        </div>
+        {/* ── Privacidade removida — perfil sempre privado ── */}
 
         {/* ── PIN de Bloqueio ── */}
-        <h2 className={styles.sectionTitle}>
-          <span style={{marginRight:6, verticalAlign:'middle', fontSize: 18}}>🔒</span>
-          Segurança
-        </h2>
+        <h2 className={styles.sectionTitle}>Segurança</h2>
         <button className={styles.exportBtn} onClick={() => setShowPinModal(true)}>
           <span style={{ fontSize: 24 }}>🔑</span>
           <div className={styles.exportText}>
@@ -210,13 +206,8 @@ export default function PerfilScreen() {
           <span className={styles.exportArrow}>›</span>
         </button>
 
-        <div style={{ height: 16 }} />
-
         {/* ── Backup na nuvem ── */}
-        <h2 className={styles.sectionTitle}>
-          <img src={PERFIL_ICONS.nuvem} alt="" aria-hidden="true" width={22} height={22} style={{verticalAlign:'middle', marginRight:6}} />
-          Backup
-        </h2>
+        <h2 className={styles.sectionTitle}>Backup</h2>
         <div className={styles.exportBtn} onClick={handleToggleBackup}>
           <img src={PERFIL_ICONS.nuvem} alt="" aria-hidden="true" className={styles.exportIcon} width={28} height={28} />
           <div className={styles.exportText}>
@@ -256,16 +247,9 @@ export default function PerfilScreen() {
           <div className={`${styles.toggle} ${cloudBackup ? '' : styles.toggleOff}`} />
         </div>
 
-        <div style={{ height: 16 }} />
-
         {/* ── Importação Automática da Galeria ── */}
-        <h2 className={styles.sectionTitle}>
-          <span style={{ verticalAlign: 'middle', marginRight: 6, fontSize: 18 }}>&#128247;</span>
-          Importação da Galeria
-        </h2>
+        <h2 className={styles.sectionTitle}>Importação da Galeria</h2>
         <GalleryImportCard />
-
-        <div style={{ height: 16 }} />
 
         {/* ── Planos ── */}
         <button className={styles.exportBtn} onClick={() => setShowPlans(true)}>
@@ -277,7 +261,16 @@ export default function PerfilScreen() {
           <span className={styles.exportArrow}>›</span>
         </button>
 
-        <div style={{ height: 16 }} />
+        {/* ── Aparência ── */}
+        <h2 className={styles.sectionTitle}>Aparência</h2>
+        <div className={styles.exportBtn} onClick={() => handleThemeChange(theme === 'dark' ? 'light' : 'dark')}>
+          <span style={{ fontSize: 24 }}>{theme === 'dark' ? '🌙' : '☀️'}</span>
+          <div className={styles.exportText}>
+            <p className={styles.exportLabel}>Modo Claro</p>
+            <p className={styles.exportSub}>{theme === 'light' ? 'Ativado — fundo branco' : 'Desativado — tema escuro'}</p>
+          </div>
+          <div className={`${styles.toggle} ${theme === 'light' ? '' : styles.toggleOff}`} />
+        </div>
 
         {/* ── Sair ── */}
         <button className={styles.logoutBtn} onClick={() => { logout(); toast.success('Você saiu da conta') }}>

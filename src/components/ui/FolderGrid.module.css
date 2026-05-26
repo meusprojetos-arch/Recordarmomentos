@@ -1,3 +1,31 @@
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sectionLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cinza-suave);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin: 18px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sectionBadge {
+  font-size: 10px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #7B61FF, #4FC3F7);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 99px;
+  letter-spacing: 0.5px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -8,11 +36,13 @@
 .item {
   background: var(--bege-claro);
   border-radius: var(--radius-md);
-  padding: 16px 14px;
+  padding: 14px 12px;
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: var(--transition-fast);
   border: 1.5px solid rgba(255,255,255,0.08);
+  position: relative;
+  overflow: hidden;
 }
 
 .item:active {
@@ -20,10 +50,15 @@
   border-color: var(--verde);
 }
 
-.emoji {
-  font-size: 30px;
-  display: block;
+.iconWrap {
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.emojiIcon {
+  font-size: 28px;
+  line-height: 1;
 }
 
 .name {
@@ -38,11 +73,35 @@
   margin-top: 3px;
 }
 
+.aiBadge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #7B61FF, #4FC3F7);
+  color: #fff;
+  padding: 2px 5px;
+  border-radius: 99px;
+  letter-spacing: 0.4px;
+}
+
 /* Nova pasta */
 .addItem {
   border: 2px dashed rgba(79,124,82,0.3);
   box-shadow: none;
   background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.addIcon {
+  font-size: 26px;
+  color: var(--verde);
+  line-height: 1;
+  margin-bottom: 8px;
 }
 
 .addName { color: var(--verde); }
@@ -79,7 +138,7 @@
 .newFolderInput {
   width: 100%;
   padding: 11px 14px;
-  border: 1.5px solid rgba(255, 107, 53, 0.2);
+  border: 1.5px solid rgba(255,107,53,0.2);
   border-radius: var(--radius-sm);
   background: var(--bege);
   font-family: var(--font-sans);
@@ -89,9 +148,7 @@
   margin-bottom: 16px;
 }
 
-.newFolderInput:focus {
-  border-color: var(--verde);
-}
+.newFolderInput:focus { border-color: var(--verde); }
 
 .newFolderActions {
   display: flex;
