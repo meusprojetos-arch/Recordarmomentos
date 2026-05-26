@@ -851,9 +851,9 @@ export default function TempoScreen({ pendingMemories }) {
     drag.current.moved = false
     drag.current.longPressArmed = true
 
-    // Timer de long-press
+    // Timer de long-press — delay maior evita disparo durante scroll acidental
     clearTimeout(drag.current.longPressTimer)
-    const delay = selectModeRef.current ? 250 : 500
+    const delay = selectModeRef.current ? 400 : 600
     drag.current.longPressTimer = setTimeout(() => {
       if (!drag.current.longPressArmed) return
       // Long-press completou — ativa selectMode (se não tava) e inicia drag
@@ -878,7 +878,8 @@ export default function TempoScreen({ pendingMemories }) {
     if (!drag.current.dragActive) {
       const dx = Math.abs(t.clientX - drag.current.startX)
       const dy = Math.abs(t.clientY - drag.current.startY)
-      if (dx > 12 || dy > 12) {
+      // Threshold baixo: 6px vertical já indica intenção de rolar → cancela long-press
+      if (dx > 8 || dy > 6) {
         drag.current.moved = true
         drag.current.longPressArmed = false
         clearTimeout(drag.current.longPressTimer)
@@ -886,8 +887,8 @@ export default function TempoScreen({ pendingMemories }) {
       return // sem drag ainda, deixa scroll natural
     }
 
-    // Drag ativo: IMPEDE scroll natural, marca fotos
-    if (e.cancelable) e.preventDefault()
+    // Drag ativo: IMPEDE scroll (funciona porque listener é { passive: false })
+    e.preventDefault()
     dragCheckCurrentPoint()
   }
 
@@ -912,8 +913,8 @@ export default function TempoScreen({ pendingMemories }) {
 
     // Tap rápido fora de selectMode = abre viewer
     if (wasShortTap && !selectModeRef.current && drag.current.startId) {
-      const mem = memories.find(m => m.id === drag.current.startId)
-      if (mem) handleThumbClick(mem)
+      const mem = memoriesRef.current.find(m => m.id === drag.current.startId)
+      if (mem) handleThumbClickRef.current?.(mem)
     }
 
     drag.current.touchActive = false
@@ -925,6 +926,23 @@ export default function TempoScreen({ pendingMemories }) {
       drag.current.scrollRaf = null
     }
   }
+
+  // ── Listeners nativos no scrollRef com { passive: false } ───────────────────
+  // O React registra onTouchMove como passive:true, o que impede e.preventDefault().
+  // Solução: adicionar os listeners diretamente no DOM com passive:false.
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container) return
+    container.addEventListener('touchmove',   onContainerTouchMove,   { passive: false })
+    container.addEventListener('touchend',    onContainerTouchEnd,    { passive: false })
+    container.addEventListener('touchcancel', onContainerTouchEnd,    { passive: false })
+    return () => {
+      container.removeEventListener('touchmove',   onContainerTouchMove)
+      container.removeEventListener('touchend',    onContainerTouchEnd)
+      container.removeEventListener('touchcancel', onContainerTouchEnd)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // ── Mouse handlers (desktop) — espelham a lógica de touch ────────────────
   function onContainerMouseDown(e) {
@@ -1032,6 +1050,9 @@ export default function TempoScreen({ pendingMemories }) {
     setLockSelectedIds(new Set())
   }
 
+  // Ref estável para handleThumbClick — usado nos listeners nativos
+  const handleThumbClickRef = useRef(null)
+
   function handleThumbClick(memory) {
     if (lockMode) {
       toggleLockSelect(memory.id)
@@ -1050,6 +1071,9 @@ export default function TempoScreen({ pendingMemories }) {
       }
     }
   }
+
+  // Mantém ref sempre atualizada (usada em listeners nativos para evitar closures stale)
+  handleThumbClickRef.current = handleThumbClick
 
   // ── Share / Download ───────────────────────────────────────────────────────
 
@@ -1776,9 +1800,6 @@ export default function TempoScreen({ pendingMemories }) {
                 <div
                   className={styles.yearGrid}
                   onTouchStart={onContainerTouchStart}
-                  onTouchMove={onContainerTouchMove}
-                  onTouchEnd={onContainerTouchEnd}
-                  onTouchCancel={onContainerTouchEnd}
                   onMouseDown={onContainerMouseDown}
                   style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                 >
