@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" fill="none">
+  <!-- Corpo da câmera/celular -->
+  <rect x="7" y="9" width="16" height="13" rx="2.5" fill="#FF6B35" opacity="0.2" stroke="#FF6B35" stroke-width="1.4"/>
+  <!-- Lente -->
+  <circle cx="15" cy="15.5" r="4" fill="#FF6B35" opacity="0.15" stroke="#FF6B35" stroke-width="1.3"/>
+  <circle cx="15" cy="15.5" r="2" fill="#FF6B35" opacity="0.3"/>
+  <!-- Flash -->
+  <rect x="10" y="11" width="3" height="2" rx="0.8" fill="#FF6B35" opacity="0.55"/>
+  <!-- Botão topo -->
+  <path d="M11 9 L13 7 L17 7 L19 9" stroke="#FF6B35" stroke-width="1.3" fill="none" stroke-linejoin="round"/>
+</svg>

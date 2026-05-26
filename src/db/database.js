@@ -189,17 +189,17 @@ export async function searchMemories(query) {
 
 // ─── Pastas fixas do sistema (sempre existem) ────────────────────────────
 export const SYSTEM_FOLDERS = [
-  { id: 'favoritos', name: 'Favoritos', icon: '⭐', folderType: 'system', rule: 'isHighlight' },
-  { id: 'trancados', name: 'Trancados', icon: '🔒', folderType: 'system', rule: 'isLocked'    },
+  { id: 'favoritos', name: 'Favoritos', icon: '/icons/pasta-favoritos.svg', folderType: 'system', rule: 'isHighlight' },
+  { id: 'trancados', name: 'Trancados', icon: '/icons/pasta-trancados.svg', folderType: 'system', rule: 'isLocked'    },
 ]
 
 // ─── Pastas de IA (classificação automática por tags) ───────────────────
 export const AI_FOLDERS = [
-  { id: 'ai_comida',    name: 'Comida',    icon: '🍕', folderType: 'ai', tag: 'comida'    },
-  { id: 'ai_pets',      name: 'Pets',      icon: '🐾', folderType: 'ai', tag: 'pets'      },
-  { id: 'ai_festa',     name: 'Festa',     icon: '🎉', folderType: 'ai', tag: 'festa'     },
-  { id: 'ai_natureza',  name: 'Natureza',  icon: '🌿', folderType: 'ai', tag: 'natureza'  },
-  { id: 'ai_selfies',   name: 'Selfies',   icon: '🤳', folderType: 'ai', tag: 'selfie'    },
+  { id: 'ai_comida',    name: 'Comida',    icon: '/icons/pasta-comida.svg',   folderType: 'ai', tag: 'comida'    },
+  { id: 'ai_pets',      name: 'Pets',      icon: '/icons/pasta-pets.svg',     folderType: 'ai', tag: 'pets'      },
+  { id: 'ai_festa',     name: 'Festa',     icon: '/icons/pasta-festa.svg',    folderType: 'ai', tag: 'festa'     },
+  { id: 'ai_natureza',  name: 'Natureza',  icon: '/icons/pasta-natureza.svg', folderType: 'ai', tag: 'natureza'  },
+  { id: 'ai_selfies',   name: 'Selfies',   icon: '/icons/pasta-selfies.svg',  folderType: 'ai', tag: 'selfie'    },
 ]
 
 // ─── Pastas fixas do usuário (pré-criadas no DB) ─────────────────────────

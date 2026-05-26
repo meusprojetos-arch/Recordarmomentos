@@ -1408,7 +1408,6 @@ export default function TempoScreen({ pendingMemories }) {
                   ← Voltar para pastas
                 </button>
                 <h3 className={styles.folderViewTitle}>
-                  <img src={openFolder.emoji} alt="" width={24} height={24} style={{ marginRight: 8, verticalAlign: 'middle' }} />
                   {openFolder.name}
                 </h3>
                 {folderLoading && <p style={{ textAlign: 'center', color: '#999', padding: 20 }}>Carregando...</p>}

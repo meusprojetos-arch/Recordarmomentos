@@ -13,3 +13,22 @@ cd "C:\Users\Admi\Desktop\Recordar"
 git add -A
 git commit -m "fix: IAP carrega produtos StoreKit antes de comprar + página de suporte"
 git push
+
+
+
+pode apagar, adicionar.svg
+circulo-familiar.svg
+filtro-texto.svg
+lembrete.svg
+local.svg
+pasta-aniversarios.svg
+pasta-anonovo.svg
+pasta-destaques.svg
+pasta-historias.svg
+pasta-maes.svg
+pasta-namorados.svg
+pasta-natal.svg
+pasta-pais.svg
+pasta-pascoa.svg
+pastas.svg
+Nova pasta (a pasta vazia)
