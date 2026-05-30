@@ -14,6 +14,7 @@ import { v4 as uuid } from 'uuid'
 import { isPremium, canUpload, addStorageUsage } from './planService.js'
 import { db as localDb } from '../db/database.js'
 import { smartCompress } from '../utils/imageCompressor.js'
+import { classifyImageBlob } from '../plugins/ImageLabelingPlugin.js'
 
 const memoriesCol = (uid) => collection(firestore, 'users', uid, 'memories')
 
@@ -130,6 +131,19 @@ export function addMemory(memoryData, file = null) {
       }
       const docRef = await addDoc(memoriesCol(uid), docData)
       if (localId) localDb.fileBlobs.update(localId, { firestoreId: docRef.id }).catch(() => {})
+
+      // 4. Classificar a imagem e atualizar tags no Firestore (background, non-blocking)
+      //    Apenas fotos — vídeos e áudios não são classificados.
+      //    Nenhum arquivo é duplicado: só o campo `tags` é atualizado no doc já existente.
+      if (blob && memoryData.type === 'photo') {
+        classifyImageBlob(blob).then(tags => {
+          if (tags.length > 0) {
+            updateDoc(doc(firestore, 'users', uid, 'memories', docRef.id), { tags })
+              .catch(() => {})
+          }
+        }).catch(() => {})
+      }
+
     } catch (e) { console.warn('addMemory background error:', e.message) }
   })()
 
@@ -207,6 +221,17 @@ export async function addMemoryAndWait(memoryData, file = null) {
   }
   const docRef = await addDoc(memoriesCol(uid), docData)
   if (localId) localDb.fileBlobs.update(localId, { firestoreId: docRef.id }).catch(() => {})
+
+  // Classificar a imagem e atualizar tags no Firestore (background, non-blocking)
+  // Não duplica nenhum arquivo — só atualiza o campo `tags` no doc já criado.
+  if (blob && memoryData.type === 'photo') {
+    classifyImageBlob(blob).then(tags => {
+      if (tags.length > 0) {
+        updateDoc(doc(firestore, 'users', uid, 'memories', docRef.id), { tags })
+          .catch(() => {})
+      }
+    }).catch(() => {})
+  }
 
   return { id: docRef.id, fileUrl, filePath, fileSize, backedUp: !!fileUrl }
 }

@@ -157,9 +157,12 @@ export default function SignupScreen({ onGoLogin, onGoWelcome }) {
             />
             <label htmlFor="acceptTerms" className={styles.termsLabel}>
               Li e aceito os{' '}
-              <span className={styles.termsLink} onClick={e => { e.preventDefault(); setShowTerms(true) }}>Termos de Uso</span>
-              {' '}e a{' '}
+              <span className={styles.termsLink} onClick={e => { e.preventDefault(); setShowTerms(true) }}>Termos de Uso do Recordar</span>
+              {', o '}
+              <span className={styles.termsLink} onClick={e => { e.preventDefault(); window.open('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/', '_blank') }}>EULA da Apple</span>
+              {' e a '}
               <span className={styles.termsLink} onClick={e => { e.preventDefault(); window.open('https://recordarmomentos.vercel.app/privacidade.html', '_blank') }}>Política de Privacidade</span>
+              {'.'}
             </label>
           </div>
         </form>

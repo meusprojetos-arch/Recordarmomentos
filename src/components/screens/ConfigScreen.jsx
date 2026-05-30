@@ -29,105 +29,187 @@ const TERMS_CONTENT = `Termos de Uso — Recordar
 Ao criar uma conta e utilizar o Recordar, você concorda com os seguintes termos:
 
 1. Sobre o Serviço
-O Recordar é um aplicativo de memórias pessoais e legado familiar. Nosso objetivo é ajudar você a guardar e organizar momentos importantes da sua vida.
+
+O Recordar é um aplicativo de memórias pessoais e legado familiar. Nosso objetivo é ajudar você a guardar, organizar e preservar momentos importantes da sua vida de forma segura e privada.
 
 2. Sua Conta
+
 • Você deve fornecer informações verdadeiras ao criar sua conta.
-• Cada pessoa deve ter apenas uma conta pessoal.
-• Você é responsável por manter sua senha e PIN seguros.
+
+• Cada pessoa deve possuir apenas uma conta pessoal.
+
+• Você é responsável por manter sua senha, PIN e credenciais de acesso seguros.
+
+• Você é responsável pelas atividades realizadas em sua conta.
+
 • Menores de 13 anos não podem criar conta.
 
 3. Seu Conteúdo
+
 • Suas memórias são privadas por padrão.
+
 • Você mantém todos os direitos sobre o conteúdo que armazena.
-• Não armazene conteúdo ilegal ou que viole direitos de terceiros.
-• Não utilize o app para spam, assédio ou atividades maliciosas.
+
+• Não armazene conteúdo ilegal, fraudulento ou que viole direitos de terceiros.
+
+• Não utilize o aplicativo para spam, assédio, abuso ou atividades maliciosas.
+
+• Você é integralmente responsável pelo conteúdo armazenado em sua conta.
 
 4. Armazenamento
-• Oferecemos armazenamento local (no dispositivo) e na nuvem conforme seu plano.
+
+• Oferecemos armazenamento local (no dispositivo) e armazenamento em nuvem conforme o plano contratado.
+
 • O armazenamento local depende do espaço disponível no seu dispositivo.
-• Não garantimos recuperação de dados perdidos no armazenamento local.
-• Dados na nuvem são protegidos com criptografia em trânsito.
+
+• Não garantimos a recuperação de dados perdidos armazenados exclusivamente no dispositivo.
+
+• Dados sincronizados na nuvem são protegidos por medidas de segurança apropriadas e criptografia em trânsito.
 
 5. Planos e Pagamento
-• O plano gratuito tem limitações de armazenamento na nuvem.
-• Planos pagos podem ser cancelados a qualquer momento.
-• Não há reembolso por períodos parciais de uso.
+
+• O plano gratuito possui limitações de armazenamento.
+
+• Assinaturas pagas são renovadas automaticamente até serem canceladas.
+
+• O pagamento será processado pela Apple através da conta do usuário.
+
+• O gerenciamento e cancelamento das assinaturas podem ser realizados nas configurações da conta Apple ID.
+
+• O cancelamento impede futuras cobranças, mas não gera reembolso de períodos já utilizados.
 
 6. Cancelamento e Exclusão
+
 • Você pode excluir sua conta a qualquer momento.
-• Ao excluir, seus dados na nuvem serão removidos em até 30 dias.
-• Dados no armazenamento local permanecem no dispositivo até você removê-los.
+
+• Ao excluir sua conta, os dados armazenados na nuvem poderão ser removidos em até 30 dias.
+
+• Dados armazenados localmente permanecem no dispositivo até sua remoção pelo usuário.
 
 7. Limitação de Responsabilidade
-• O Recordar é fornecido "como está", sem garantias.
-• Não nos responsabilizamos por perda de dados armazenados localmente.
+
+• O Recordar é fornecido "como está", sem garantias de disponibilidade contínua ou ausência de falhas.
+
+• Não nos responsabilizamos por perda de dados armazenados exclusivamente no dispositivo do usuário.
+
 • Recomendamos manter backup das memórias importantes.
 
 8. Alterações nos Termos
+
 • Podemos atualizar estes termos quando necessário.
-• Você será notificado sobre mudanças significativas.
-• O uso continuado após alterações constitui aceitação.
+
+• Você será notificado sobre mudanças significativas quando aplicável.
+
+• O uso continuado do aplicativo após alterações constitui aceitação dos novos termos.
 
 9. Contato
-Para dúvidas sobre estes termos: suporte@recordar.com`
+
+Para dúvidas sobre estes termos:
+
+Email: [suporte@recordar.com](mailto:suporte@recordar.com)`
 
 const PRIVACY_CONTENT = `Política de Privacidade — Recordar
 
 Última atualização: 13 de maio de 2026
 
-Sua privacidade é fundamental para nós. Esta política explica como coletamos, usamos e protegemos seus dados.
+Sua privacidade é fundamental para nós. Esta política explica como coletamos, usamos, armazenamos e protegemos seus dados ao utilizar o aplicativo Recordar.
 
 1. Dados que Coletamos
-• Informações de conta: nome, email, data de nascimento, nome de usuário.
-• Conteúdo: fotos, vídeos, áudios e textos que você escolhe salvar.
-• Dados técnicos: tipo de dispositivo, versão do app, logs de erro.
-• Não coletamos dados de localização, contatos ou histórico de navegação.
 
-2. Como Usamos seus Dados
-• Para fornecer e manter o serviço do aplicativo.
-• Para personalizar sua experiência (pastas automáticas, lembretes).
-• Para backup e sincronização na nuvem (se ativado).
-• Nunca vendemos, alugamos ou compartilhamos seus dados pessoais com terceiros.
+• Informações de conta: nome, e-mail, data de nascimento e nome de usuário.
+
+• Conteúdo armazenado pelo usuário: fotos, vídeos, áudios, textos e memórias que você optar por salvar.
+
+• Dados técnicos: modelo do dispositivo, sistema operacional, versão do aplicativo e registros de erro necessários para o funcionamento do serviço.
+
+• Não coletamos dados de localização em tempo real, lista de contatos ou histórico de navegação.
+
+2. Como Utilizamos seus Dados
+
+• Para criar e manter sua conta.
+
+• Para fornecer os recursos do aplicativo.
+
+• Para organizar e gerenciar suas memórias.
+
+• Para realizar backup e sincronização na nuvem quando ativados pelo usuário.
+
+• Para melhorar a estabilidade, desempenho e segurança do aplicativo.
+
+• Nunca vendemos, alugamos ou comercializamos seus dados pessoais.
 
 3. Armazenamento e Segurança
-• Dados locais ficam no seu dispositivo, protegidos pelo sistema operacional.
-• Dados na nuvem são armazenados no Firebase (Google Cloud) com criptografia.
-• Sua senha é armazenada com hash seguro (nunca em texto plano).
-• O PIN da pasta Trancadas é armazenado apenas localmente.
 
-4. Privacidade do Perfil
-• Por padrão, seu perfil é privado — ninguém além de você pode ver suas memórias.
-• Você controla o que é visível para outros usuários nas configurações.
-• Memórias na pasta "Trancadas" têm camada extra de proteção (PIN).
+• Os dados locais permanecem armazenados no seu dispositivo.
 
-5. Compartilhamento
-• Só compartilhamos dados quando exigido por lei (ordem judicial).
-• Não usamos seus dados para publicidade.
-• Não temos integrações com redes sociais que acessem seu conteúdo.
+• Dados sincronizados na nuvem são armazenados em serviços do Firebase (Google Cloud).
+
+• Utilizamos medidas de segurança apropriadas para proteger seus dados durante a transmissão e armazenamento.
+
+• Sua senha é gerenciada por sistemas seguros de autenticação e nunca é armazenada em texto simples.
+
+• O PIN da pasta Trancados permanece armazenado apenas localmente no dispositivo.
+
+4. Privacidade das Memórias
+
+• Todas as memórias armazenadas no Recordar são privadas por padrão.
+
+• Suas fotos, vídeos, áudios e textos são acessíveis apenas por você através da sua conta.
+
+• O aplicativo não possui feed público, perfis públicos, comentários, seguidores ou recursos de rede social.
+
+• O Recordar não exibe suas memórias para outros usuários sem sua ação direta.
+
+• Memórias armazenadas na pasta Trancados possuem uma camada adicional de proteção por PIN.
+
+5. Compartilhamento de Dados
+
+• Não compartilhamos seus dados pessoais com terceiros para fins publicitários.
+
+• Seus dados somente poderão ser divulgados quando exigido por lei ou por determinação judicial válida.
+
+• Quando você optar por compartilhar uma memória utilizando aplicativos externos (como WhatsApp, e-mail ou outros serviços do dispositivo), o compartilhamento ocorrerá sob sua responsabilidade.
 
 6. Seus Direitos
-• Acesso: você pode ver todos os dados que temos sobre você.
-• Correção: pode editar suas informações a qualquer momento.
-• Exclusão: pode apagar sua conta e todos os dados associados.
-• Exportação: pode exportar todas as suas memórias em formato ZIP.
 
-7. Cookies e Rastreamento
-• Não usamos cookies de rastreamento.
-• Não usamos ferramentas de analytics que identificam usuários.
-• Coletamos apenas dados anônimos de uso para melhorar o app.
+• Acessar seus dados.
+
+• Corrigir informações da conta.
+
+• Atualizar ou excluir conteúdos armazenados.
+
+• Excluir sua conta.
+
+• Solicitar a exportação de suas memórias quando disponível.
+
+7. Cookies e Tecnologias Semelhantes
+
+• Não utilizamos cookies de rastreamento para publicidade.
+
+• Não realizamos venda de dados pessoais.
+
+• Dados técnicos anônimos podem ser utilizados para melhorar o funcionamento do aplicativo.
 
 8. Menores de Idade
+
 • O Recordar não é destinado a menores de 13 anos.
-• Se identificarmos conta de menor, ela será removida.
+
+• Caso identifiquemos uma conta criada por menor de 13 anos, poderemos removê-la.
 
 9. Alterações nesta Política
-• Atualizaremos esta política quando necessário.
-• Mudanças significativas serão comunicadas via app.
+
+• Esta política poderá ser atualizada periodicamente.
+
+• Alterações relevantes poderão ser comunicadas aos usuários através do aplicativo.
+
+• O uso continuado do serviço após alterações representa concordância com a versão atualizada.
 
 10. Contato
-Para dúvidas sobre privacidade ou para exercer seus direitos:
-• Email: suporte@recordar.com
+
+Para dúvidas sobre privacidade ou exercício de direitos:
+
+• E-mail: [suporte@recordar.com](mailto:suporte@recordar.com)
+
 • WhatsApp: (13) 99663-6898`
 
 // ─── Ícones ──────────────────────────────────────────────────────────────────

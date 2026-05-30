@@ -29,7 +29,7 @@ function getCoverSlug(folder) {
   return NAME_TO_SLUG[folder.name] || null
 }
 
-export default function FolderGrid({ onOpenFolder, memoryCounts = {} }) {
+export default function FolderGrid({ onOpenFolder, memoryCounts = {}, folderCovers = {} }) {
   const { user } = useAuth()
   const [showInput, setShowInput] = useState(false)
   const [newName, setNewName] = useState('')
@@ -78,25 +78,29 @@ export default function FolderGrid({ onOpenFolder, memoryCounts = {} }) {
 
         {/* 1. Favoritos */}
         <FolderItem folder={favoritos} count={memoryCounts['favoritos'] || 0}
-          onClick={() => onOpenFolder?.({ ...favoritos })} />
+          onClick={() => onOpenFolder?.({ ...favoritos })}
+          dynamicCover={folderCovers['favoritos']} />
 
         {/* 2. Família, Viagens, Amigos, Trabalho + custom */}
         {visibleUserFolders.map(f => (
           <FolderItem key={f.id} folder={{ ...f, folderType: 'user' }}
             count={memoryCounts[f.id] || 0}
-            onClick={() => onOpenFolder?.({ ...f, folderType: 'user' })} />
+            onClick={() => onOpenFolder?.({ ...f, folderType: 'user' })}
+            dynamicCover={folderCovers[f.id]} />
         ))}
 
         {/* 3. Comida, Pets, Festa, Natureza, Selfies */}
         {AI_FOLDERS.map(f => (
           <FolderItem key={f.id} folder={f}
             count={memoryCounts[f.id] || 0}
-            onClick={() => onOpenFolder?.({ ...f })} />
+            onClick={() => onOpenFolder?.({ ...f })}
+            dynamicCover={folderCovers[f.id]} />
         ))}
 
         {/* 4. Trancados */}
         <FolderItem folder={trancados} count={memoryCounts['trancados'] || 0}
-          onClick={() => onOpenFolder?.({ ...trancados })} />
+          onClick={() => onOpenFolder?.({ ...trancados })}
+          dynamicCover={folderCovers['trancados']} />
 
         {/* 5. Nova Pasta */}
         <div className={`${styles.item} ${styles.addItem}`} onClick={handleNewFolder}>
@@ -140,13 +144,16 @@ export default function FolderGrid({ onOpenFolder, memoryCounts = {} }) {
   )
 }
 
-function FolderItem({ folder, count, onClick }) {
+function FolderItem({ folder, count, onClick, dynamicCover }) {
   const slug = getCoverSlug(folder)
-  const coverSrc = slug ? `/icons/capa-${slug}.png` : null
+  const staticCover = slug ? `/icons/capa-${slug}.png` : null
   const fallbackIcon = folder.icon || folder.emoji || '/icons/pasta-generica.svg'
 
-  const coverStyle = coverSrc
-    ? { backgroundImage: `url(${coverSrc})` }
+  // Prioridade: foto real da memória → PNG estático → ícone SVG
+  const effectiveCover = dynamicCover || staticCover
+
+  const coverStyle = effectiveCover
+    ? { backgroundImage: `url(${effectiveCover})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : {}
 
   return (
@@ -159,7 +166,7 @@ function FolderItem({ folder, count, onClick }) {
         className={styles.coverWrap}
         style={coverStyle}
       >
-        {!coverSrc && (
+        {!effectiveCover && (
           <img src={fallbackIcon} alt="" width={32} height={32} />
         )}
       </div>

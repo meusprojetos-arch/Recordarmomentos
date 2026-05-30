@@ -94,6 +94,10 @@ export default function TempoScreen({ pendingMemories }) {
   // Contagem de memórias por pasta (para FolderGrid)
   const [memoryCounts, setMemoryCounts] = useState({})
 
+  // Capa dinâmica das pastas: folderId → URL da primeira foto
+  const [folderCovers, setFolderCovers] = useState({})
+  const folderCoverObjUrls = useRef([]) // objectURLs criados para blobs locais (cleanup)
+
   // Modo trancar
   const [lockMode, setLockMode]         = useState(false)
   const [lockSelectedIds, setLockSelectedIds] = useState(new Set())
@@ -155,6 +159,65 @@ export default function TempoScreen({ pendingMemories }) {
       // 'trancados' não conta aqui (itens trancados já foram filtrados)
 
       setMemoryCounts(countMap)
+
+      // ── Capas dinâmicas das pastas ─────────────────────────────────────
+      // Revogar objectURLs antigos antes de criar novos
+      for (const u of folderCoverObjUrls.current) {
+        try { URL.revokeObjectURL(u) } catch {}
+      }
+      folderCoverObjUrls.current = []
+
+      const coverMap = {}
+
+      // Helper: retorna uma URL usável para uma memória
+      const getMemUrl = (m) => {
+        if (m.fileUrl) return m.fileUrl
+        if (m.fileBlob instanceof Blob) {
+          const u = URL.createObjectURL(m.fileBlob)
+          folderCoverObjUrls.current.push(u)
+          return u
+        }
+        return null
+      }
+
+      // Só fotos e vídeos têm capa visual
+      const photoMems = all.filter(m => m.type === 'photo' || m.type === 'video')
+
+      for (const m of photoMems) {
+        // Pastas de usuário — folderId (legado)
+        if (m.folderId && !coverMap[m.folderId]) {
+          const u = getMemUrl(m)
+          if (u) coverMap[m.folderId] = u
+        }
+        // Pastas de usuário — folderIds (multi-pasta)
+        if (Array.isArray(m.folderIds)) {
+          for (const fid of m.folderIds) {
+            if (!coverMap[fid]) {
+              const u = getMemUrl(m)
+              if (u) coverMap[fid] = u
+            }
+          }
+        }
+        // Pastas de IA — por tags
+        for (const f of AI_FOLDERS) {
+          if (!coverMap[f.id] && Array.isArray(m.tags) && m.tags.includes(f.tag)) {
+            const u = getMemUrl(m)
+            if (u) coverMap[f.id] = u
+          }
+        }
+        // Favoritos
+        if (!coverMap['favoritos'] && m.isHighlight) {
+          const u = getMemUrl(m)
+          if (u) coverMap['favoritos'] = u
+        }
+        // Trancados
+        if (!coverMap['trancados'] && m.isLocked) {
+          const u = getMemUrl(m)
+          if (u) coverMap['trancados'] = u
+        }
+      }
+
+      setFolderCovers(coverMap)
     } catch (e) {
       console.error(e)
     }
@@ -1425,7 +1488,7 @@ export default function TempoScreen({ pendingMemories }) {
         {activeTab === 'pastas' && (
           <div style={{ marginTop: 12 }}>
             {!openFolder ? (
-              <FolderGrid onOpenFolder={handleOpenFolder} memoryCounts={memoryCounts} />
+              <FolderGrid onOpenFolder={handleOpenFolder} memoryCounts={memoryCounts} folderCovers={folderCovers} />
             ) : (
               <div className={styles.folderView}>
                 <button className={styles.folderBackBtn} onClick={() => setOpenFolder(null)}>
