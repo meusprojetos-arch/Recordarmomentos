@@ -812,8 +812,6 @@ export default function TempoScreen({ pendingMemories }) {
     lastX: 0,
     lastY: 0,
     scrollRaf: null,
-    pendingToggleId: null,           // id toggled instantly on touchstart (selectMode)
-    pendingToggleWasSelected: false, // state before that toggle
   })
 
   function getMemoryIdFromPoint(x, y) {
@@ -903,7 +901,16 @@ export default function TempoScreen({ pendingMemories }) {
     drag.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
   }
 
-  // Handlers que vão no CONTAINER do grid
+  // ── Handlers do container do grid ────────────────────────────────────────────
+  //
+  // Estratégia:
+  //  • Fora do selectMode  → scroll nativo (rápido), long-press de 600ms entra no modo
+  //  • Em selectMode       → touch-action:none no container (veja JSX abaixo),
+  //                          então o browser não interfere e o drag funciona em
+  //                          QUALQUER direção sem precisar de e.preventDefault().
+  //                          Tap curto (< 500ms, < 10px) → toggle no touchend.
+  //                          Movimento > 10px → drag-to-select imediato.
+  //
   function onContainerTouchStart(e) {
     const t = e.touches[0]
     if (!t) return
@@ -911,34 +918,24 @@ export default function TempoScreen({ pendingMemories }) {
     if (!id) return
 
     drag.current.touchActive = true
-    drag.current.startX = t.clientX
-    drag.current.startY = t.clientY
-    drag.current.lastX = t.clientX
-    drag.current.lastY = t.clientY
+    drag.current.startX    = t.clientX
+    drag.current.startY    = t.clientY
+    drag.current.lastX     = t.clientX
+    drag.current.lastY     = t.clientY
     drag.current.startTime = Date.now()
-    drag.current.startId = id
-    drag.current.moved = false
+    drag.current.startId   = id
+    drag.current.moved     = false
     drag.current.dragActive = false
-    drag.current.pendingToggleId = null
-    drag.current.pendingToggleWasSelected = false
 
     if (selectModeRef.current) {
-      // ── Já em selectMode: toggle IMEDIATO — sem delay ──────────────────────
-      // Snapshot do estado pré-toggle (usado para reverter se virar drag/scroll)
-      drag.current.preSelection = new Set(selectedIdsRef.current)
-      const wasSelected = selectedIdsRef.current.has(id)
-      drag.current.pendingToggleId = id
-      drag.current.pendingToggleWasSelected = wasSelected
+      // Em selectMode: guarda snapshot da seleção para uso no drag
+      drag.current.preSelection  = new Set(selectedIdsRef.current)
       drag.current.longPressArmed = false
-      setSelectedIds(prev => {
-        const next = new Set(prev)
-        wasSelected ? next.delete(id) : next.add(id)
-        return next
-      })
+      // Sem toggle antecipado — o toggle acontece no touchend (tap intencional)
     } else {
-      // ── Fora do selectMode: long-press para entrar ──────────────────────────
+      // Fora do selectMode: long-press entra no modo e inicia drag
       drag.current.longPressArmed = true
-      drag.current.preSelection = new Set()
+      drag.current.preSelection   = new Set()
       clearTimeout(drag.current.longPressTimer)
       drag.current.longPressTimer = setTimeout(() => {
         if (!drag.current.longPressArmed) return
@@ -959,91 +956,65 @@ export default function TempoScreen({ pendingMemories }) {
     drag.current.lastY = t.clientY
 
     if (drag.current.dragActive) {
-      // Drag já ativo — bloqueia scroll e atualiza seleção
-      e.preventDefault()
+      // Drag ativo em selectMode: touch-action:none já bloqueou o scroll nativo.
+      // Fora do selectMode (long-press drag): precisa de preventDefault.
+      if (!selectModeRef.current) e.preventDefault()
       dragCheckCurrentPoint()
       return
     }
 
-    const dx = Math.abs(t.clientX - drag.current.startX)
-    const dy = Math.abs(t.clientY - drag.current.startY)
+    const dx   = Math.abs(t.clientX - drag.current.startX)
+    const dy   = Math.abs(t.clientY - drag.current.startY)
+    const dist = Math.sqrt(dx * dx + dy * dy)
 
-    if (selectModeRef.current && drag.current.pendingToggleId) {
-      // ── Em selectMode: classificar gesto (scroll vs drag-to-select) ──────────
-      if (dx < 8 && dy < 8) return // movimento pequeno demais — ainda não decidir
-
-      drag.current.moved = true
-      const pid = drag.current.pendingToggleId
-      const wasSelected = drag.current.pendingToggleWasSelected
-      drag.current.pendingToggleId = null
-
-      if (dy > dx * 1.5) {
-        // Predominantemente vertical → scroll natural
-        // Reverte o toggle e sai do tracking: o browser cuida do scroll
-        setSelectedIds(prev => {
-          const next = new Set(prev)
-          wasSelected ? next.add(pid) : next.delete(pid)
-          return next
-        })
-        drag.current.touchActive = false // deixa o browser rolar livremente
-      } else {
-        // Horizontal/diagonal → drag-to-select
-        // preventDefault AQUI, no primeiro evento de movimento horizontal
-        // para que o browser não trave como scroll nos próximos eventos
-        e.preventDefault()
-        const id = drag.current.startId
-        const mems = filteredMemoriesRef.current
-        const startIdx = mems.findIndex(m => m.id === id)
-
-        drag.current.dragActive = true
-        drag.current.startIndex = startIdx
-        drag.current.mode = wasSelected ? 'remove' : 'add'
-
-        setSelectedIds(() => {
-          const next = new Set(drag.current.preSelection)
-          if (drag.current.mode === 'add') next.add(id)
-          else next.delete(id)
-          return next
-        })
-        try { navigator.vibrate?.(15) } catch {}
-        if (!drag.current.scrollRaf) {
-          drag.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
-        }
-        dragCheckCurrentPoint()
+    if (selectModeRef.current) {
+      // Em selectMode com touch-action:none: qualquer movimento > 10px inicia drag
+      // (o browser não vai rolar, então não precisamos distinguir direção)
+      if (dist > 10) {
+        drag.current.moved = true
+        startDragMode(drag.current.startId)
       }
       return
     }
 
-    // Fora do selectMode: cancela long-press se moveu
-    if (dx > 8 || dy > 6) {
-      drag.current.moved = true
+    // Fora do selectMode: cancela long-press se o dedo se moveu
+    if (dist > 10) {
+      drag.current.moved     = true
       drag.current.longPressArmed = false
       clearTimeout(drag.current.longPressTimer)
     }
-    // sem drag ainda — deixa scroll natural
   }
 
   function onContainerTouchEnd(e) {
+    const elapsed    = Date.now() - drag.current.startTime
     const wasShortTap = drag.current.touchActive
-                     && !drag.current.moved
-                     && !drag.current.dragActive
-                     && (Date.now() - drag.current.startTime < 300)
+                      && !drag.current.moved
+                      && !drag.current.dragActive
+                      && elapsed < 500
 
-    // Cancela long-press pendente
     drag.current.longPressArmed = false
     clearTimeout(drag.current.longPressTimer)
-    drag.current.pendingToggleId = null // toggle já foi aplicado no touchstart
 
-    // Em selectMode: toggle já foi aplicado no touchstart — nada a fazer aqui.
-    // Fora de selectMode, tap curto = abre viewer
+    if (wasShortTap && selectModeRef.current && drag.current.startId) {
+      // Tap intencional em selectMode → toggle
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        next.has(drag.current.startId)
+          ? next.delete(drag.current.startId)
+          : next.add(drag.current.startId)
+        return next
+      })
+    }
+
     if (wasShortTap && !selectModeRef.current && drag.current.startId) {
+      // Tap fora do selectMode → abre viewer
       const mem = memoriesRef.current.find(m => m.id === drag.current.startId)
       if (mem) handleThumbClickRef.current?.(mem)
     }
 
     drag.current.touchActive = false
-    drag.current.dragActive = false
-    drag.current.startIndex = -1
+    drag.current.dragActive  = false
+    drag.current.startIndex  = -1
     drag.current.preSelection = new Set()
     if (drag.current.scrollRaf) {
       cancelAnimationFrame(drag.current.scrollRaf)
@@ -1068,8 +1039,8 @@ export default function TempoScreen({ pendingMemories }) {
     const onStart  = (e) => touchHandlersRef.current.start(e)
     const onMove   = (e) => touchHandlersRef.current.move(e)
     const onEnd    = (e) => touchHandlersRef.current.end(e)
-    container.addEventListener('touchstart',  onStart,  { passive: false })
-    container.addEventListener('touchmove',   onMove,   { passive: false })
+    container.addEventListener('touchstart',  onStart,  { passive: true  }) // passive: não precisa de preventDefault no touchstart
+    container.addEventListener('touchmove',   onMove,   { passive: false }) // passive:false para bloquear scroll no long-press drag
     container.addEventListener('touchend',    onEnd,    { passive: false })
     container.addEventListener('touchcancel', onEnd,    { passive: false })
     return () => {
@@ -1534,7 +1505,11 @@ export default function TempoScreen({ pendingMemories }) {
         subtitle={`${mediaMemories.length} memória${mediaMemories.length !== 1 ? 's' : ''}`}
       />
 
-      <div className={styles.scroll} ref={scrollRef}>
+      <div
+        className={styles.scroll}
+        ref={scrollRef}
+        style={selectMode ? { touchAction: 'none' } : undefined}
+      >
 
         {/* ── Tabs: Galeria | Pastas | Lixeira ── */}
         <div className={styles.tabs}>
