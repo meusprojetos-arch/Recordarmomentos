@@ -808,6 +808,8 @@ export default function TempoScreen({ pendingMemories }) {
     lastX: 0,
     lastY: 0,
     scrollRaf: null,
+    pendingToggleId: null,           // id toggled instantly on touchstart (selectMode)
+    pendingToggleWasSelected: false, // state before that toggle
   })
 
   function getMemoryIdFromPoint(x, y) {
@@ -912,22 +914,37 @@ export default function TempoScreen({ pendingMemories }) {
     drag.current.startTime = Date.now()
     drag.current.startId = id
     drag.current.moved = false
-    drag.current.longPressArmed = true
+    drag.current.dragActive = false
+    drag.current.pendingToggleId = null
+    drag.current.pendingToggleWasSelected = false
 
-    // Timer de long-press — delay maior evita disparo durante scroll acidental
-    clearTimeout(drag.current.longPressTimer)
-    const delay = selectModeRef.current ? 400 : 600
-    drag.current.longPressTimer = setTimeout(() => {
-      if (!drag.current.longPressArmed) return
-      // Long-press completou — ativa selectMode (se não tava) e inicia drag
-      if (!selectModeRef.current) {
+    if (selectModeRef.current) {
+      // ── Já em selectMode: toggle IMEDIATO — sem delay ──────────────────────
+      // Snapshot do estado pré-toggle (usado para reverter se virar drag/scroll)
+      drag.current.preSelection = new Set(selectedIdsRef.current)
+      const wasSelected = selectedIdsRef.current.has(id)
+      drag.current.pendingToggleId = id
+      drag.current.pendingToggleWasSelected = wasSelected
+      drag.current.longPressArmed = false
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        wasSelected ? next.delete(id) : next.add(id)
+        return next
+      })
+    } else {
+      // ── Fora do selectMode: long-press para entrar ──────────────────────────
+      drag.current.longPressArmed = true
+      drag.current.preSelection = new Set()
+      clearTimeout(drag.current.longPressTimer)
+      drag.current.longPressTimer = setTimeout(() => {
+        if (!drag.current.longPressArmed) return
         setLockMode(false)
         setLockSelectedIds(new Set())
         setSelectMode(true)
         setSelectedIds(new Set([id]))
-      }
-      startDragMode(id)
-    }, delay)
+        startDragMode(id)
+      }, 600)
+    }
   }
 
   function onContainerTouchMove(e) {
@@ -937,11 +954,55 @@ export default function TempoScreen({ pendingMemories }) {
     drag.current.lastX = t.clientX
     drag.current.lastY = t.clientY
 
-    // Se ainda não ativou drag, verifica se cancela long-press (movimento = scroll)
     if (!drag.current.dragActive) {
       const dx = Math.abs(t.clientX - drag.current.startX)
       const dy = Math.abs(t.clientY - drag.current.startY)
-      // Threshold baixo: 6px vertical já indica intenção de rolar → cancela long-press
+
+      if (selectModeRef.current && drag.current.pendingToggleId) {
+        // ── Em selectMode com toggle pendente ──────────────────────────────────
+        if (dx > 8 || dy > 8) {
+          drag.current.moved = true
+          const pid = drag.current.pendingToggleId
+          const wasSelected = drag.current.pendingToggleWasSelected
+          drag.current.pendingToggleId = null
+
+          if (dy > dx * 1.5) {
+            // Movimento predominantemente vertical → scroll: reverte o toggle
+            setSelectedIds(prev => {
+              const next = new Set(prev)
+              wasSelected ? next.add(pid) : next.delete(pid)
+              return next
+            })
+            // Deixa o scroll natural acontecer
+          } else {
+            // Movimento horizontal/diagonal → drag-to-select
+            // Reverte o toggle via preSelection, depois inicia drag do zero
+            const id = drag.current.startId
+            const mems = filteredMemoriesRef.current
+            const startIdx = mems.findIndex(m => m.id === id)
+
+            drag.current.dragActive = true
+            drag.current.startIndex = startIdx
+            drag.current.mode = wasSelected ? 'remove' : 'add'
+            // preSelection já está salvo no touchstart (estado antes do toggle)
+
+            // Aplica âncora a partir do estado pré-toggle
+            setSelectedIds(() => {
+              const next = new Set(drag.current.preSelection)
+              if (drag.current.mode === 'add') next.add(id)
+              else next.delete(id)
+              return next
+            })
+            try { navigator.vibrate?.(15) } catch {}
+            if (!drag.current.scrollRaf) {
+              drag.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
+            }
+          }
+        }
+        return
+      }
+
+      // Fora do selectMode (ou sem pending toggle): cancela long-press se moveu
       if (dx > 8 || dy > 6) {
         drag.current.moved = true
         drag.current.longPressArmed = false
@@ -964,17 +1025,10 @@ export default function TempoScreen({ pendingMemories }) {
     // Cancela long-press pendente
     drag.current.longPressArmed = false
     clearTimeout(drag.current.longPressTimer)
+    drag.current.pendingToggleId = null // toggle já foi aplicado no touchstart
 
-    // Tap rápido em selectMode = toggle
-    if (wasShortTap && selectModeRef.current && drag.current.startId) {
-      setSelectedIds(prev => {
-        const next = new Set(prev)
-        next.has(drag.current.startId) ? next.delete(drag.current.startId) : next.add(drag.current.startId)
-        return next
-      })
-    }
-
-    // Tap rápido fora de selectMode = abre viewer
+    // Em selectMode: toggle já foi aplicado no touchstart — nada a fazer aqui.
+    // Fora de selectMode, tap curto = abre viewer
     if (wasShortTap && !selectModeRef.current && drag.current.startId) {
       const mem = memoriesRef.current.find(m => m.id === drag.current.startId)
       if (mem) handleThumbClickRef.current?.(mem)
