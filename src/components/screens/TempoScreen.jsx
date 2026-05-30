@@ -792,6 +792,10 @@ export default function TempoScreen({ pendingMemories }) {
   // Ref para filteredMemories — necessário para range-select por índice
   const filteredMemoriesRef = useRef([])
 
+  // Ref que sempre aponta para os handlers atuais — permite useEffect([], []) estável
+  // enquanto os handlers lêem estado reativo via closure frescos a cada render.
+  const touchHandlersRef = useRef({})
+
   const drag = useRef({
     touchActive: false,
     startX: 0,
@@ -954,66 +958,69 @@ export default function TempoScreen({ pendingMemories }) {
     drag.current.lastX = t.clientX
     drag.current.lastY = t.clientY
 
-    if (!drag.current.dragActive) {
-      const dx = Math.abs(t.clientX - drag.current.startX)
-      const dy = Math.abs(t.clientY - drag.current.startY)
-
-      if (selectModeRef.current && drag.current.pendingToggleId) {
-        // ── Em selectMode com toggle pendente ──────────────────────────────────
-        if (dx > 8 || dy > 8) {
-          drag.current.moved = true
-          const pid = drag.current.pendingToggleId
-          const wasSelected = drag.current.pendingToggleWasSelected
-          drag.current.pendingToggleId = null
-
-          if (dy > dx * 1.5) {
-            // Movimento predominantemente vertical → scroll: reverte o toggle
-            setSelectedIds(prev => {
-              const next = new Set(prev)
-              wasSelected ? next.add(pid) : next.delete(pid)
-              return next
-            })
-            // Deixa o scroll natural acontecer
-          } else {
-            // Movimento horizontal/diagonal → drag-to-select
-            // Reverte o toggle via preSelection, depois inicia drag do zero
-            const id = drag.current.startId
-            const mems = filteredMemoriesRef.current
-            const startIdx = mems.findIndex(m => m.id === id)
-
-            drag.current.dragActive = true
-            drag.current.startIndex = startIdx
-            drag.current.mode = wasSelected ? 'remove' : 'add'
-            // preSelection já está salvo no touchstart (estado antes do toggle)
-
-            // Aplica âncora a partir do estado pré-toggle
-            setSelectedIds(() => {
-              const next = new Set(drag.current.preSelection)
-              if (drag.current.mode === 'add') next.add(id)
-              else next.delete(id)
-              return next
-            })
-            try { navigator.vibrate?.(15) } catch {}
-            if (!drag.current.scrollRaf) {
-              drag.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
-            }
-          }
-        }
-        return
-      }
-
-      // Fora do selectMode (ou sem pending toggle): cancela long-press se moveu
-      if (dx > 8 || dy > 6) {
-        drag.current.moved = true
-        drag.current.longPressArmed = false
-        clearTimeout(drag.current.longPressTimer)
-      }
-      return // sem drag ainda, deixa scroll natural
+    if (drag.current.dragActive) {
+      // Drag já ativo — bloqueia scroll e atualiza seleção
+      e.preventDefault()
+      dragCheckCurrentPoint()
+      return
     }
 
-    // Drag ativo: IMPEDE scroll (funciona porque listener é { passive: false })
-    e.preventDefault()
-    dragCheckCurrentPoint()
+    const dx = Math.abs(t.clientX - drag.current.startX)
+    const dy = Math.abs(t.clientY - drag.current.startY)
+
+    if (selectModeRef.current && drag.current.pendingToggleId) {
+      // ── Em selectMode: classificar gesto (scroll vs drag-to-select) ──────────
+      if (dx < 8 && dy < 8) return // movimento pequeno demais — ainda não decidir
+
+      drag.current.moved = true
+      const pid = drag.current.pendingToggleId
+      const wasSelected = drag.current.pendingToggleWasSelected
+      drag.current.pendingToggleId = null
+
+      if (dy > dx * 1.5) {
+        // Predominantemente vertical → scroll natural
+        // Reverte o toggle e sai do tracking: o browser cuida do scroll
+        setSelectedIds(prev => {
+          const next = new Set(prev)
+          wasSelected ? next.add(pid) : next.delete(pid)
+          return next
+        })
+        drag.current.touchActive = false // deixa o browser rolar livremente
+      } else {
+        // Horizontal/diagonal → drag-to-select
+        // preventDefault AQUI, no primeiro evento de movimento horizontal
+        // para que o browser não trave como scroll nos próximos eventos
+        e.preventDefault()
+        const id = drag.current.startId
+        const mems = filteredMemoriesRef.current
+        const startIdx = mems.findIndex(m => m.id === id)
+
+        drag.current.dragActive = true
+        drag.current.startIndex = startIdx
+        drag.current.mode = wasSelected ? 'remove' : 'add'
+
+        setSelectedIds(() => {
+          const next = new Set(drag.current.preSelection)
+          if (drag.current.mode === 'add') next.add(id)
+          else next.delete(id)
+          return next
+        })
+        try { navigator.vibrate?.(15) } catch {}
+        if (!drag.current.scrollRaf) {
+          drag.current.scrollRaf = requestAnimationFrame(autoScrollLoop)
+        }
+        dragCheckCurrentPoint()
+      }
+      return
+    }
+
+    // Fora do selectMode: cancela long-press se moveu
+    if (dx > 8 || dy > 6) {
+      drag.current.moved = true
+      drag.current.longPressArmed = false
+      clearTimeout(drag.current.longPressTimer)
+    }
+    // sem drag ainda — deixa scroll natural
   }
 
   function onContainerTouchEnd(e) {
@@ -1044,19 +1051,32 @@ export default function TempoScreen({ pendingMemories }) {
     }
   }
 
+  // ── Atualiza o ref com os handlers desta renderização ───────────────────────
+  // Os wrappers estáveis no useEffect chamam sempre a versão mais recente.
+  touchHandlersRef.current.start  = onContainerTouchStart
+  touchHandlersRef.current.move   = onContainerTouchMove
+  touchHandlersRef.current.end    = onContainerTouchEnd
+
   // ── Listeners nativos no scrollRef com { passive: false } ───────────────────
-  // O React registra onTouchMove como passive:true, o que impede e.preventDefault().
-  // Solução: adicionar os listeners diretamente no DOM com passive:false.
+  // Todos os quatro eventos ficam no mesmo elemento e no mesmo modo passivo,
+  // eliminando qualquer discrepância entre React synthetic events e DOM events.
   useEffect(() => {
     const container = scrollRef.current
     if (!container) return
-    container.addEventListener('touchmove',   onContainerTouchMove,   { passive: false })
-    container.addEventListener('touchend',    onContainerTouchEnd,    { passive: false })
-    container.addEventListener('touchcancel', onContainerTouchEnd,    { passive: false })
+    // Wrappers estáveis — a referência da função nunca muda, mas o handler
+    // chamado internamente é sempre o da renderização mais recente.
+    const onStart  = (e) => touchHandlersRef.current.start(e)
+    const onMove   = (e) => touchHandlersRef.current.move(e)
+    const onEnd    = (e) => touchHandlersRef.current.end(e)
+    container.addEventListener('touchstart',  onStart,  { passive: false })
+    container.addEventListener('touchmove',   onMove,   { passive: false })
+    container.addEventListener('touchend',    onEnd,    { passive: false })
+    container.addEventListener('touchcancel', onEnd,    { passive: false })
     return () => {
-      container.removeEventListener('touchmove',   onContainerTouchMove)
-      container.removeEventListener('touchend',    onContainerTouchEnd)
-      container.removeEventListener('touchcancel', onContainerTouchEnd)
+      container.removeEventListener('touchstart',  onStart)
+      container.removeEventListener('touchmove',   onMove)
+      container.removeEventListener('touchend',    onEnd)
+      container.removeEventListener('touchcancel', onEnd)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   // ─────────────────────────────────────────────────────────────────────────────
@@ -1916,7 +1936,6 @@ export default function TempoScreen({ pendingMemories }) {
                     Mais robusto: um único ponto controla tudo via elementFromPoint. */}
                 <div
                   className={styles.yearGrid}
-                  onTouchStart={onContainerTouchStart}
                   onMouseDown={onContainerMouseDown}
                   style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
                 >
